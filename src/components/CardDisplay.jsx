@@ -1,7 +1,7 @@
 import { imageFilename } from '../utils/deck';
 
 export default function CardDisplay({ card, position }) {
-  const imgSrc = `/images/systemsTarot/${imageFilename(card)}`;
+  const imgSrc = `${import.meta.env.BASE_URL}images/systemsTarot/${imageFilename(card)}`;
   const isMajor = card.cardType === 'Major';
 
   return (
