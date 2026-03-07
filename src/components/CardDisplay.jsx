@@ -3,6 +3,7 @@ import { imageFilename } from '../utils/deck';
 export default function CardDisplay({ card, position }) {
   const imgSrc = `${import.meta.env.BASE_URL}images/systemsTarot/${imageFilename(card)}`;
   const isMajor = card.cardType === 'Major';
+  const { inverted } = card;
 
   return (
     <div className="flex flex-col bg-gray-900 rounded-2xl overflow-hidden shadow-xl border border-gray-700">
@@ -18,7 +19,7 @@ export default function CardDisplay({ card, position }) {
         <img
           src={imgSrc}
           alt={card.name}
-          className="rounded-xl object-contain max-h-72 w-auto shadow-lg"
+          className={`rounded-xl object-contain max-h-72 w-auto shadow-lg${inverted ? ' rotate-180' : ''}`}
           onError={e => { e.currentTarget.style.display = 'none'; }}
         />
       </div>
@@ -27,15 +28,17 @@ export default function CardDisplay({ card, position }) {
       <div className="p-4 flex flex-col gap-3">
         {/* Card name + type */}
         <div>
-          <h2 className="text-white text-lg font-bold leading-tight">{card.name}</h2>
+          <h2 className="text-white text-lg font-bold leading-tight">
+            {card.name}{inverted ? ', Inverted.' : ''}
+          </h2>
           <p className="text-indigo-400 text-xs font-medium mt-0.5">
             {isMajor ? 'Major Arcana' : `${card.cardType} · ${card.number}`}
           </p>
         </div>
 
         {/* Pattern */}
-        <p className="text-gray-300 text-sm leading-relaxed italic border-l-2 border-indigo-500 pl-3">
-          {card.pattern}
+        <p className={`text-sm leading-relaxed italic border-l-2 pl-3 ${inverted ? 'text-amber-300/90 border-amber-500' : 'text-gray-300 border-indigo-500'}`}>
+          {inverted ? card.invertedPattern : card.pattern}
         </p>
 
         {/* Questions */}

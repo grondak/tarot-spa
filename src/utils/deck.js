@@ -22,7 +22,10 @@ export function shuffleAndDraw(n) {
     const j = Math.floor(Math.random() * (i + 1));
     [deck[i], deck[j]] = [deck[j], deck[i]];
   }
-  return deck.slice(0, n);
+  return deck.slice(0, n).map(card => ({
+    ...card,
+    inverted: Math.random() < 0.5,
+  }));
 }
 
 export const SPREADS = {
