@@ -1,6 +1,18 @@
+import { useState } from 'react';
 import { SPREADS } from '../utils/deck';
 
-export default function SpreadSelector({ onSelect }) {
+export default function SpreadSelector({ onSelect, onLoadCode }) {
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    if (!code.trim()) return;
+    const ok = onLoadCode(code.trim());
+    if (!ok) setError('Unrecognized draw code.');
+    else setError('');
+  }
+
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-4 py-12">
       {/* Title */}
@@ -32,6 +44,31 @@ export default function SpreadSelector({ onSelect }) {
             </span>
           </button>
         ))}
+      </div>
+
+      {/* Load a draw */}
+      <div className="w-full max-w-xl mt-10">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex-1 border-t border-gray-800" />
+          <span className="text-gray-600 text-xs uppercase tracking-wider">or load a draw</span>
+          <div className="flex-1 border-t border-gray-800" />
+        </div>
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <input
+            type="text"
+            value={code}
+            onChange={e => { setCode(e.target.value); setError(''); }}
+            placeholder="e.g. three:041221671"
+            className="flex-1 bg-gray-900 border border-gray-700 focus:border-indigo-500 text-white text-sm font-mono rounded-lg px-3 py-2 outline-none placeholder-gray-600 transition-colors"
+          />
+          <button
+            type="submit"
+            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm font-medium rounded-lg transition-colors"
+          >
+            Load
+          </button>
+        </form>
+        {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
       </div>
     </div>
   );

@@ -28,6 +28,33 @@ export function shuffleAndDraw(n) {
   }));
 }
 
+export function encodeDraw(spreadKey, cards) {
+  const cardStr = cards.map(c => {
+    const idx = FULL_DECK.findIndex(d => d.name === c.name);
+    return String(idx).padStart(2, '0') + (c.inverted ? '1' : '0');
+  }).join('');
+  return `${spreadKey}:${cardStr}`;
+}
+
+export function decodeDraw(raw) {
+  const code = (raw || '').trim().toLowerCase();
+  const colon = code.indexOf(':');
+  if (colon === -1) return null;
+  const spreadKey = code.slice(0, colon);
+  const cardStr = code.slice(colon + 1);
+  if (!SPREADS[spreadKey]) return null;
+  const expected = SPREADS[spreadKey].positions.length;
+  if (cardStr.length !== expected * 3) return null;
+  const cards = [];
+  for (let i = 0; i < cardStr.length; i += 3) {
+    const idx = parseInt(cardStr.slice(i, i + 2), 10);
+    const inverted = cardStr[i + 2] === '1';
+    if (isNaN(idx) || idx < 0 || idx >= FULL_DECK.length) return null;
+    cards.push({ ...FULL_DECK[idx], inverted });
+  }
+  return { spreadKey, cards };
+}
+
 export const SPREADS = {
   single: {
     label: 'Single Card',

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { SPREADS, shuffleAndDraw } from './utils/deck';
+import { SPREADS, shuffleAndDraw, encodeDraw, decodeDraw } from './utils/deck';
 import SpreadSelector from './components/SpreadSelector';
 import SpreadView from './components/SpreadView';
 
@@ -23,16 +23,25 @@ export default function App() {
     setCards([]);
   }
 
+  function handleLoadCode(code) {
+    const result = decodeDraw(code);
+    if (!result) return false;
+    setCards(result.cards);
+    setSpreadKey(result.spreadKey);
+    return true;
+  }
+
   if (spreadKey) {
     return (
       <SpreadView
         spread={SPREADS[spreadKey]}
         cards={cards}
+        drawCode={encodeDraw(spreadKey, cards)}
         onDrawAgain={handleDrawAgain}
         onBack={handleBack}
       />
     );
   }
 
-  return <SpreadSelector onSelect={handleSelect} />;
+  return <SpreadSelector onSelect={handleSelect} onLoadCode={handleLoadCode} />;
 }
