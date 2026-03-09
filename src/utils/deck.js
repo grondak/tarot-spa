@@ -9,10 +9,10 @@ export function slugify(text) {
 
 export function imageFilename(card) {
   if (card.cardType === 'Major') {
-    return `major_${String(card.number).padStart(2, '0')}_${slugify(card.name)}.png`;
+    return `major_${String(card.number).padStart(2, '0')}_${slugify(card.name)}.webp`;
   }
   const suit = card.cardType.toLowerCase();
-  return `${suit}_${String(card.number).padStart(2, '0')}_${slugify(card.name)}.png`;
+  return `${suit}_${String(card.number).padStart(2, '0')}_${slugify(card.name)}.webp`;
 }
 
 export function shuffleAndDraw(n) {
