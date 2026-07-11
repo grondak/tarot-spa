@@ -7,7 +7,7 @@ sources:
   - _bmad-output/planning-artifacts/prds/prd-tarot-spa-2026-07-06/review-adversarial-general.md
   - _bmad-output/planning-artifacts/prds/prd-tarot-spa-2026-07-06/review-rubric.md
   - _bmad-output/planning-artifacts/prds/prd-tarot-spa-2026-07-06/review-edge-case.md
-updated: '2026-07-10'
+updated: '2026-07-11'
 ---
 
 # Systems Thinking Tarot — Experience Spine
@@ -22,6 +22,8 @@ Single-surface responsive web — React 19 + Vite + Tailwind CSS v4, no componen
 |---|---|---|
 | Public Landing | Root URL, unauthenticated; marketing links (LinkedIn article) | PR-FAQ pitch + public Quick Draw (no login) + Request Access form. Mock: [`mockups/public-landing.html`](mockups/public-landing.html) |
 | Sign Up / Redeem Invite Key | "I have an Invite Key" on Public Landing | Redeem an Invite Key and create a Cognito account. Spine-only (no mock) — covered by Component/State Patterns below |
+| Log In | "Log In" on Public Landing | Authenticate an existing Account holder, distinct from the redemption path above. Spine-only (no mock) — standard Cognito email/password sign-in, no new visual pattern beyond the existing Input component |
+| Log Out | Account/profile area, any authenticated surface | End the session, return to Public Landing. Spine-only (no mock) — a single action, no new visual pattern |
 | Context Entry ("Help Me Orient") | Authenticated home | Enter Context, pick a Spread, trigger Orientation Guide generation. Mock: [`mockups/context-entry.html`](mockups/context-entry.html) |
 | Orientation Guide Results | After Context Entry submit succeeds | Drawn cards, Current Events, and the Lens applied to the user's Context (FR-8's five-part Guide structure, in essay form); redraw actions. Mock: [`mockups/orientation-guide-results.html`](mockups/orientation-guide-results.html) |
 | Quick Draw (authenticated) | Authenticated home, alternate entry to Context Entry | Same as the public Quick Draw: pick a Spread, draw cards, no LLM, no limit. Spine-only (no mock) — pixel-identical to the public Quick Draw section in the Public Landing mock, and already exists in the live app |

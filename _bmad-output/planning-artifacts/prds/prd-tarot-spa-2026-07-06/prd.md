@@ -2,7 +2,7 @@
 title: 'tarot-spa Multiuser + LLM Orientation Guide'
 status: draft
 created: '2026-07-06'
-updated: '2026-07-09'
+updated: '2026-07-11'
 ---
 
 # PRD: tarot-spa Multiuser + LLM Orientation Guide
@@ -116,10 +116,11 @@ Tony can generate and issue new First-Gen Invite Keys directly (to friends, or i
 
 #### FR-4: Public landing page
 
-Any visitor, unauthenticated, can view a public landing page presenting the PR-FAQ content.
+Any visitor, unauthenticated, can view a public landing page presenting the PR-FAQ content, and use the full Quick Draw capability (Spread selection, cards, Draw Again, load-a-draw-code — no Context, no LLM, no account required). Tony's framing: "Nobody should be bereft of a good tarot reading if it's all done in their browser."
 
 **Consequences (testable):**
-- Landing page is reachable without authentication and exposes no Session or Account functionality.
+- Landing page is reachable without authentication and exposes no Session or Account functionality (Quick Draw itself is not a Session per the Glossary — no Context or Orientation Guide is involved).
+- The full Quick Draw experience (identical to today's live v1.0 app) is available on this page without an Invite Key.
 
 #### FR-5: Request-access form
 
@@ -192,7 +193,7 @@ An authenticated user with remaining Daily Orientation Limit can trigger a Draw 
 The system enforces a configurable maximum number of Orientation Guide requests per Account per calendar day.
 
 **Consequences (testable):**
-- Requests beyond the configured cap are rejected with a clear, explicit message (not a silent failure, not a degraded/free response).
+- Requests beyond the configured cap gracefully degrade to the free, unlimited Quick Draw experience with a short playful inline note, rather than a hard rejection message — the entire Context Entry screen becomes Quick Draw for the remainder of the calendar day (see EXPERIENCE.md's Rate-Limited Intake state; this supersedes an earlier draft's "hard rejection, not a degraded/free response" wording, now reconciled here).
 - `[ASSUMPTION]` The cap value is adjustable by Tony without a code deployment.
 
 **Feature-specific NFRs:**

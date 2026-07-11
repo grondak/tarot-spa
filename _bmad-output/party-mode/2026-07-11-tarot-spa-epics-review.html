@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Room That Reviewed tarot-spa — 2026-07-11</title>
+<style>
+  :root {
+    --surface: #030712;
+    --surface-container: #111827;
+    --surface-container-high: #1f2937;
+    --outline: #374151;
+    --on-surface: #ffffff;
+    --on-surface-variant: #d1d5db;
+    --on-surface-muted: #9ca3af;
+    --on-surface-faint: #4b5563;
+    --primary: #6366f1;
+    --primary-strong: #4f46e5;
+    --primary-container: rgba(49,46,129,0.6);
+    --on-primary-container: #a5b4fc;
+    --amber: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--surface);
+    color: var(--on-surface-variant);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.6;
+  }
+  .page {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 64px 24px 96px;
+  }
+  header {
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  header .eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--on-surface-muted);
+  }
+  header h1 {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--on-surface);
+    margin: 10px 0 6px;
+  }
+  header .sub {
+    font-size: 14px;
+    color: var(--on-surface-muted);
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 40px 0;
+    color: var(--on-surface-faint);
+  }
+  .divider .rule { flex: 1; height: 1px; background: var(--outline); }
+  .divider .glyph { font-size: 20px; color: var(--on-surface-muted); }
+
+  .scene {
+    background: var(--surface-container);
+    border: 1px solid var(--outline);
+    border-radius: 16px;
+    padding: 20px 22px;
+    font-size: 14.5px;
+    color: var(--on-surface-variant);
+    font-style: italic;
+    margin-bottom: 8px;
+  }
+
+  .beat {
+    display: flex;
+    gap: 14px;
+    margin: 22px 0;
+    align-items: flex-start;
+  }
+  .beat .icon {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--surface-container-high);
+    border: 1px solid var(--outline);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 19px;
+  }
+  .beat .content { flex: 1; padding-top: 2px; }
+  .beat .who {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--on-primary-container);
+    margin-bottom: 3px;
+  }
+  .beat .who .title {
+    font-weight: 400;
+    color: var(--on-surface-muted);
+    margin-left: 6px;
+  }
+  .beat .line {
+    font-size: 15px;
+    color: var(--on-surface-variant);
+  }
+  .beat .line em { color: var(--amber); font-style: italic; }
+  .beat .stage {
+    font-size: 13px;
+    color: var(--on-surface-faint);
+    font-style: italic;
+    margin-top: 2px;
+  }
+  .beat.highlight .content {
+    background: var(--primary-container);
+    border-radius: 10px;
+    padding: 10px 14px;
+  }
+  .beat.highlight .line { color: var(--on-surface); }
+
+  .section-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--on-surface-muted);
+    margin: 44px 0 18px;
+    text-align: center;
+  }
+
+  .tally {
+    background: var(--surface-container);
+    border: 1px solid var(--outline);
+    border-radius: 16px;
+    padding: 24px 26px;
+    margin-top: 20px;
+  }
+  .tally h2 {
+    font-size: 16px;
+    color: var(--on-surface);
+    margin: 0 0 14px;
+  }
+  .tally ul { margin: 0; padding-left: 20px; }
+  .tally li { margin-bottom: 8px; font-size: 14.5px; }
+  .tally .num { color: var(--primary-container-text, var(--on-primary-container)); font-weight: 700; }
+
+  .credits {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .credit {
+    background: var(--surface-container-high);
+    border: 1px solid var(--outline);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 12.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .credit .n { color: var(--on-surface); font-weight: 600; }
+
+  footer {
+    text-align: center;
+    margin-top: 56px;
+    font-size: 12px;
+    color: var(--on-surface-faint);
+  }
+
+  @media (max-width: 480px) {
+    .page { padding: 40px 16px 64px; }
+    header h1 { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="eyebrow">Party Mode &middot; Installed Room</div>
+    <h1>The Room That Reviewed tarot-spa</h1>
+    <div class="sub">The software-development crew, gathered around a freshly-drafted <code>epics.md</code> — four epics, and by the end of it, fourteen stories. 2026-07-11.</div>
+  </header>
+
+  <div class="divider"><div class="rule"></div><div class="glyph">&#10086;</div><div class="rule"></div></div>
+
+  <div class="scene">The room is Mary, John, Sally, Winston, Amelia, Murat, and Paige — the epics document is open on the table, freshly approved. Nobody's ready to just close it.</div>
+
+  <div class="beat">
+    <div class="icon">📋</div>
+    <div class="content">
+      <div class="who">John <span class="title">Product Manager</span></div>
+      <div class="line">Four epics, eleven stories, every FR mapped. Clean value ladder — accounts, then the funnel, then the actual product, then Tony's own tooling.</div>
+    </div>
+  </div>
+
+  <div class="beat">
+    <div class="icon">💻</div>
+    <div class="content">
+      <div class="who">Amelia <span class="title">Senior Software Engineer</span></div>
+      <div class="line">Fight less, look harder. Story 3.2 has nine ACs. That's not one dev session, Winston, that's a week.</div>
+    </div>
+  </div>
+
+  <div class="beat">
+    <div class="icon">🏗️</div>
+    <div class="content">
+      <div class="who">Winston <span class="title">System Architect</span></div>
+      <div class="line">It's one atomic mechanism, Amelia. Split it and now there's a window where one PR's merged and the other isn't.</div>
+    </div>
+  </div>
+
+  <div class="beat">
+    <div class="icon">🧪</div>
+    <div class="content">
+      <div class="who">Murat <span class="title">Test Architect</span></div>
+      <div class="line">Different complaint. <em>"Demonstrably weaves in specific details from the user's own Context."</em> Tell me how I automate that. That's a vibe check, not a test.</div>
+    </div>
+  </div>
+
+  <div class="section-label">Tony steps in</div>
+
+  <div class="beat highlight">
+    <div class="icon">🧪</div>
+    <div class="content">
+      <div class="who">Murat</div>
+      <div class="line">LLM-as-judge. Second, cheaper call — Haiku, not Opus — reads the Context and the essay, pulls out every claim, checks whether it anchors to something specific in the Context or just floats. Score it, trend it, put it on the dashboard.</div>
+    </div>
+  </div>
+
+  <div class="beat">
+    <div class="icon">🎨</div>
+    <div class="content">
+      <div class="who">Sally <span class="title">UX Designer</span></div>
+      <div class="line">And <em>that's</em> the number that should show up next to spend-to-date. "Average groundedness this week" is a metric someone would actually look at.</div>
+    </div>
+  </div>
+
+  <div class="stage" style="text-align:center; margin: 18px 0;">→ Story 3.5 was born: async groundedness scoring, wired straight into the Admin Dashboard.</div>
+
+  <div class="divider"><div class="rule"></div><div class="glyph">&#10086;</div><div class="rule"></div></div>
+
+  <div class="section-label">Amelia gets her rematch</div>
+
+  <div class="beat">
+    <div class="icon">💻</div>
+    <div class="content">
+      <div class="who">Amelia</div>
+      <div class="line">Here's the cut: keep 3.2 as the backend flow only — reservation, draw, Tavily-with-timeout, Bedrock, rollback. Pull the Results screen into its own story. Pull redraw into its own story. And — <span style="color:var(--on-surface); font-weight:600;">this one's not just a size complaint</span> — Rate-Limited Intake doesn't belong in the generation story at all. That's a Context Entry state. Whoever wrote it in there bundled a screen-state bug into the wrong story.</div>
+    </div>
+  </div>
+
+  <div class="beat">
+    <div class="icon">🏗️</div>
+    <div class="content">
+      <div class="who">Winston</div>
+      <div class="line" style="font-style:italic;">(not rising to it) Noted.</div>
+    </div>
+  </div>
+
+  <div class="stage" style="text-align:center; margin: 18px 0;">→ One story became four: generation / results / redraw, plus the misplaced rate-limit AC moved home.</div>
+
+  <div class="divider"><div class="rule"></div><div class="glyph">&#10086;</div><div class="rule"></div></div>
+
+  <div class="section-label">The final gap-hunt</div>
+
+  <div class="scene">Tony asks the room to look again — not because anything was wrong, but to see if thoroughness itself had a blind spot.</div>
+
+  <div class="beat">
+    <div class="icon">🧪</div>
+    <div class="content">
+      <div class="who">Murat</div>
+      <div class="line">Story 1.1's own AC tests a revoked Invite Key — but nothing anywhere <em>creates</em> one. We wrote a test for a state nothing can produce.</div>
+    </div>
+  </div>
+
+  <div class="beat">
+    <div class="icon">💻</div>
+    <div class="content">
+      <div class="who">Amelia</div>
+      <div class="line">There's no logout anywhere. The kind of thing you only miss by not looking for it.</div>
+    </div>
+  </div>
+
+  <div class="beat">
+    <div class="icon">🎨</div>
+    <div class="content">
+      <div class="who">Sally</div>
+      <div class="line">EXPERIENCE.md literally has a row for it — Quick Draw as a deliberate "alternate entry," not just the rate-limited fallback. Nobody wrote the "I choose this on purpose" version.</div>
+    </div>
+  </div>
+
+  <div class="beat">
+    <div class="icon">📋</div>
+    <div class="content">
+      <div class="who">John</div>
+      <div class="line">Three real ones. None of them break what's already built. Gaps, not contradictions.</div>
+    </div>
+  </div>
+
+  <div class="divider"><div class="rule"></div><div class="glyph">&#10086;</div><div class="rule"></div></div>
+
+  <div class="tally">
+    <h2>Final tally</h2>
+    <ul>
+      <li><span class="num">4</span> epics, <span class="num">14</span> stories — up from 11</li>
+      <li><span class="num">3</span> stories this room added that weren't in the original PRD: groundedness scoring, logout, revoke-a-key, plus authenticated Quick Draw as its own path</li>
+      <li><span class="num">1</span> misplaced AC found and relocated (Rate-Limited Intake: Results screen &rarr; Context Entry)</li>
+      <li><span class="num">2</span> for <span class="num">2</span> — Amelia was right twice in one session, and made sure everyone knew it</li>
+    </ul>
+  </div>
+
+  <div class="section-label">In the room</div>
+  <div class="credits">
+    <div class="credit"><span>📊</span><span class="n">Mary</span></div>
+    <div class="credit"><span>📋</span><span class="n">John</span></div>
+    <div class="credit"><span>🎨</span><span class="n">Sally</span></div>
+    <div class="credit"><span>🏗️</span><span class="n">Winston</span></div>
+    <div class="credit"><span>💻</span><span class="n">Amelia</span></div>
+    <div class="credit"><span>🧪</span><span class="n">Murat</span></div>
+    <div class="credit"><span>📚</span><span class="n">Paige</span></div>
+  </div>
+
+  <footer>tarot-spa &middot; epics &amp; stories review &middot; 2026-07-11</footer>
+
+</div>
+</body>
+</html>
