@@ -1,0 +1,300 @@
+<style>
+/*
+  Key Screen: Public Landing Page
+
+  Governing spine sections:
+  - EXPERIENCE.md > Information Architecture > "Public Landing" row
+  - EXPERIENCE.md > Component Patterns > Spread Selector, Request Access Form
+  - EXPERIENCE.md > State Patterns > "Request Access form invalid" / "success" rows
+  - EXPERIENCE.md > Key Flows > New Flow (Priya, growth-funnel / UJ-3-style journey)
+  - prd.md > 1. Vision (PR-FAQ source text, real vision paragraph quoted below)
+  - prd.md > FR-4 (public landing page), FR-5 (request-access form)
+  - DESIGN.md > Colors, Typography (display/headline/body), Components
+    (button-primary/secondary, input, spread-selector)
+
+  Per DESIGN.md's Do's and Don'ts and Component Patterns table, the ornamental
+  divider is reserved for the two LLM-touching screens only (Context Entry,
+  Orientation Guide Results) — deliberately absent here.
+
+  PR-FAQ content below is representative, not a fabricated full PR-FAQ: the
+  headline/subhead and JTBD bullets are quoted/paraphrased directly from
+  prd.md §1 Vision and §2.1 Jobs To Be Done — the only PR-FAQ-sourced text
+  available in the doc workspace.
+
+  Quick Draw section reuses the Spread Selector pattern from
+  src/components/SpreadSelector.jsx, shown collapsed/summarized per the
+  parent brief (same component as key-context-entry.html, not re-specified).
+
+  Inline CSS only, system-ui font stack only, no JS, no network calls,
+  renders fully offline. Fluid/responsive layout.
+*/
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #e5e7eb;
+  color: #1f2937;
+  padding: 32px 16px;
+}
+
+.page-note {
+  max-width: 1024px;
+  margin: 0 auto 20px auto;
+  color: #374151;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.page-note strong { color: #111827; }
+
+.browser-frame {
+  max-width: 1024px;
+  margin: 0 auto 40px auto;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+  background: #030712;
+}
+.browser-chrome {
+  background: #111827;
+  border-bottom: 1px solid #1f2937;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chrome-dot { width: 11px; height: 11px; border-radius: 50%; }
+.chrome-dot.red { background: #f87171; }
+.chrome-dot.yellow { background: #fbbf24; }
+.chrome-dot.green { background: #34d399; }
+.chrome-url {
+  margin-left: 12px;
+  background: #1f2937;
+  color: #9ca3af;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  flex: 1;
+  max-width: 320px;
+}
+
+.app-surface {
+  background: #030712;
+  color: #ffffff;
+  padding: 56px 24px;
+}
+.wide-col {
+  max-width: 880px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ---------- PR-FAQ hero ---------- */
+.hero { text-align: center; margin-bottom: 64px; }
+.hero-title {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-bottom: 16px;
+}
+.hero-lede {
+  font-size: 18px;
+  color: #d1d5db;
+  max-width: 640px;
+  margin: 0 auto 32px auto;
+  line-height: 1.6;
+}
+.jtbd-row {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.jtbd-pill {
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 12px;
+  padding: 14px 18px;
+  font-size: 13px;
+  color: #9ca3af;
+  max-width: 220px;
+  text-align: left;
+  line-height: 1.5;
+}
+.jtbd-pill strong { display: block; color: #a5b4fc; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+
+/* ---------- section separators (plain rule, no ornamental motif here) ---------- */
+.plain-section-rule {
+  border-top: 1px solid #1f2937;
+  margin: 0 0 48px 0;
+}
+
+.section-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  margin-bottom: 16px;
+}
+.section-heading {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.section-sub {
+  font-size: 14px;
+  color: #9ca3af;
+  margin-bottom: 20px;
+}
+
+/* ---------- Quick Draw, collapsed/summarized Spread Selector ---------- */
+.quick-draw-block {
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 64px;
+}
+.spread-grid-collapsed {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.spread-chip {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.spread-chip .name { color: #ffffff; font-weight: 600; font-size: 13px; }
+.spread-chip .desc { color: #9ca3af; font-size: 12px; margin-top: 2px; }
+.quick-draw-note {
+  font-size: 12px;
+  color: #6b7280;
+  border-top: 1px solid #1f2937;
+  padding-top: 14px;
+  margin-top: 4px;
+}
+
+/* ---------- Request Access form ---------- */
+.request-block {
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 16px;
+  padding: 32px;
+}
+.form-row { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.form-field { flex: 1; min-width: 200px; }
+.form-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  margin-bottom: 8px;
+}
+.form-input {
+  width: 100%;
+  background: #030712;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 14px;
+  padding: 10px 14px;
+}
+.form-submit-row { margin-top: 8px; display: flex; justify-content: flex-start; }
+.btn-primary {
+  background: #4f46e5;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 12px 28px;
+  border-radius: 8px;
+  border: none;
+  cursor: default;
+}
+</style>
+
+<div class="page-note">
+  <strong>Key Screen — Public Landing Page</strong> — the growth-funnel entry surface, realizing
+  the Priya flow (EXPERIENCE.md's new UX-added journey). No ornamental divider on this screen:
+  DESIGN.md reserves that motif for the two LLM-touching screens only. Desktop width shown; fluid CSS.
+</div>
+
+<div class="browser-frame">
+  <div class="browser-chrome">
+    <div class="chrome-dot red"></div>
+    <div class="chrome-dot yellow"></div>
+    <div class="chrome-dot green"></div>
+    <div class="chrome-url">systemsthinkingtarot.com</div>
+  </div>
+
+  <div class="app-surface">
+    <div class="wide-col">
+
+      <!-- ============ PR-FAQ pitch (brief, representative — sourced from prd.md Vision + JTBD) ============ -->
+      <div class="hero">
+        <div class="hero-title">Systems Thinking Tarot</div>
+        <p class="hero-lede">
+          Most bad decisions aren't made because people lack information &mdash; they're made
+          because people are oriented incorrectly before they decide. Draw your own Cards,
+          Current Events are sourced live, and an LLM applies a systems-thinking Lens to your
+          own situation in one shot &mdash; producing an Orientation Guide: not advice, not a
+          summary, a different way of seeing the decision in front of you.
+        </p>
+        <div class="jtbd-row">
+          <div class="jtbd-pill"><strong>Functional</strong>See it from a different angle &mdash; not another pro/con list you could've made yourself.</div>
+          <div class="jtbd-pill"><strong>Emotional</strong>An "oh" moment &mdash; a reframe, not an opinion or a recommendation.</div>
+          <div class="jtbd-pill"><strong>Social</strong>Something worth sharing afterward &mdash; a phrase, a line, a reframe you want to show someone else.</div>
+        </div>
+      </div>
+
+      <div class="plain-section-rule"></div>
+
+      <!-- ============ Public Quick Draw (collapsed Spread Selector) ============ -->
+      <div class="section-label">Try It Now &mdash; No Account Needed</div>
+      <div class="section-heading">Quick Draw</div>
+      <div class="section-sub">Structured randomization forcing novel combinations of systems patterns. Free, unlimited, no login.</div>
+      <div class="quick-draw-block">
+        <div class="spread-grid-collapsed">
+          <div class="spread-chip"><div class="name">Single Card</div><div class="desc">One perspective, right now.</div></div>
+          <div class="spread-chip"><div class="name">Three Card</div><div class="desc">Context &middot; Challenge &middot; Opportunity</div></div>
+          <div class="spread-chip"><div class="name">Decision</div><div class="desc">Current State &middot; Path A &middot; Path B &middot; Integration</div></div>
+          <div class="spread-chip"><div class="name">System Analysis</div><div class="desc">Structure &middot; Dynamics &middot; Agents &middot; Resources &middot; Emergence</div></div>
+        </div>
+        <div class="quick-draw-note">
+          Same Spread Selector component as the authenticated app (see key-context-entry.html)
+          &mdash; pick a Spread, draw cards, read the pattern, no Context field, no LLM, no limit.
+          Collapsed/summarized here since the full interaction is identical to the authenticated Quick Draw.
+        </div>
+      </div>
+
+      <!-- ============ Request Access form ============ -->
+      <div class="section-label">Want the Deeper Experience?</div>
+      <div class="section-heading">Request Access</div>
+      <div class="section-sub">Invite-only for now &mdash; leave your name and email and Tony will follow up personally.</div>
+      <div class="request-block">
+        <div class="form-row">
+          <div class="form-field">
+            <label class="form-label">Name</label>
+            <input class="form-input" type="text" placeholder="Priya Shah" />
+          </div>
+          <div class="form-field">
+            <label class="form-label">Email</label>
+            <input class="form-input" type="email" placeholder="priya@example.com" />
+          </div>
+        </div>
+        <div class="form-submit-row">
+          <button class="btn-primary">Request Access</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

@@ -1,0 +1,531 @@
+<style>
+/*
+  Key Screen: Context Entry (+ Rate-Limited Intake alternate state)
+
+  Governing spine sections:
+  - EXPERIENCE.md > Information Architecture > "Context Entry" row
+  - EXPERIENCE.md > Component Patterns > Context Textarea, Spread Selector,
+    "Help Me Orient" CTA, Ornamental Divider
+  - EXPERIENCE.md > State Patterns > "Daily Orientation Limit exhausted" row
+  - EXPERIENCE.md > Voice and Tone (hint copy, rate-limit register)
+  - EXPERIENCE.md > Key Flows > UJ-1 (Erica, Decision Spread, promotion decision)
+  - DESIGN.md > Colors, Typography, Components (card-container, input,
+    button-primary/secondary, spread-selector, ornamental-divider placeholder)
+
+  Ornamental divider: DESIGN.md marks this component TBD ("Edwardian wingding").
+  A 3-way candidate comparison strip is rendered near the top of this file so
+  a concrete glyph can be picked. Candidate A is used as the working default
+  for the rest of this file and for key-orientation-guide-results.html.
+
+  Inline CSS only, system-ui font stack only, no JS, no network calls,
+  renders fully offline. Layout is fluid/responsive (no fixed desktop-only
+  widths on content) even though only a desktop-width browser frame is shown.
+*/
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #e5e7eb;
+  color: #1f2937;
+  padding: 32px 16px;
+}
+
+.page-note {
+  max-width: 1024px;
+  margin: 0 auto 20px auto;
+  color: #374151;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.page-note strong { color: #111827; }
+
+/* ---------- Browser frame ---------- */
+.browser-frame {
+  max-width: 1024px;
+  margin: 0 auto 40px auto;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+  background: #030712;
+}
+.browser-chrome {
+  background: #111827;
+  border-bottom: 1px solid #1f2937;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chrome-dot { width: 11px; height: 11px; border-radius: 50%; }
+.chrome-dot.red { background: #f87171; }
+.chrome-dot.yellow { background: #fbbf24; }
+.chrome-dot.green { background: #34d399; }
+.chrome-url {
+  margin-left: 12px;
+  background: #1f2937;
+  color: #9ca3af;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  flex: 1;
+  max-width: 320px;
+}
+
+/* ---------- App surface (Context Entry) ---------- */
+.app-surface {
+  background: #030712;
+  color: #ffffff;
+  padding: 48px 24px;
+}
+.content-col {
+  max-width: 640px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ---------- Ornamental divider candidates ---------- */
+.candidate-strip {
+  background: #111827;
+  border-bottom: 1px solid #1f2937;
+  padding: 20px 24px 28px 24px;
+}
+.candidate-strip-heading {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  margin-bottom: 4px;
+}
+.candidate-strip-sub {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 18px;
+  max-width: 640px;
+  line-height: 1.5;
+}
+.candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+.candidate-card {
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 20px 16px;
+}
+.candidate-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a5b4fc;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.candidate-default-tag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(49,46,129,0.6);
+  color: #a5b4fc;
+  padding: 2px 7px;
+  border-radius: 9999px;
+}
+.candidate-preview {
+  padding: 18px 4px;
+}
+.candidate-caption {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 12px;
+  line-height: 1.45;
+}
+
+/* Divider rule + glyph mechanics, shared */
+.ornamental-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #4b5563;
+}
+.ornamental-divider .rule {
+  flex: 1;
+  height: 1px;
+  background: #374151;
+}
+.ornamental-divider .glyph {
+  font-size: 18px;
+  color: #6b7280;
+  line-height: 1;
+}
+.ornamental-divider.plain .glyph { display: none; }
+.ornamental-divider.plain .rule { background: #1f2937; }
+
+/* Real section dividers (Candidate A applied) */
+.section-divider {
+  margin: 44px 0;
+}
+
+/* ---------- Hero title ---------- */
+.screen-title {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-bottom: 8px;
+}
+.screen-sub {
+  font-size: 14px;
+  color: #9ca3af;
+  margin-bottom: 8px;
+}
+
+/* ---------- Context textarea ---------- */
+.field-block { margin-bottom: 12px; }
+.field-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  display: block;
+  margin-bottom: 10px;
+}
+.context-textarea {
+  width: 100%;
+  min-height: 160px;
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 14px 16px;
+  resize: vertical;
+}
+.context-textarea:focus-within { border-color: #6366f1; }
+.context-textarea.filled { color: #e5e7eb; }
+.context-textarea .placeholder-hint {
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* ---------- Spread Selector (reused pattern) ---------- */
+.spread-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+}
+@media (max-width: 560px) {
+  .spread-grid { grid-template-columns: 1fr; }
+}
+.spread-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 20px;
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 16px;
+  text-align: left;
+}
+.spread-option.selected {
+  border-color: #6366f1;
+  background: #1f2937;
+}
+.spread-option .spread-name {
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 16px;
+}
+.spread-option.selected .spread-name { color: #a5b4fc; }
+.spread-option .spread-desc {
+  color: #9ca3af;
+  font-size: 14px;
+}
+.spread-option .spread-count {
+  color: #4b5563;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+/* ---------- CTA ---------- */
+.cta-row {
+  margin-top: 32px;
+  display: flex;
+  justify-content: center;
+}
+.btn-primary {
+  background: #4f46e5;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 12px 32px;
+  border-radius: 8px;
+  border: none;
+  cursor: default;
+}
+.btn-secondary {
+  background: #1f2937;
+  color: #d1d5db;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  cursor: default;
+}
+
+/* ---------- Section 2: Rate-Limited Intake ---------- */
+.alt-state-heading-bar {
+  background: #111827;
+  border-top: 1px solid #1f2937;
+  border-bottom: 1px solid #1f2937;
+  padding: 14px 24px;
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.alt-state-heading-bar span.tag {
+  color: #fcd34d;
+  margin-right: 8px;
+}
+
+.rate-limit-note {
+  background: rgba(49,46,129,0.35);
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 14px 16px;
+  color: #d1d5db;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 28px;
+}
+.rate-limit-note strong { color: #ffffff; }
+
+.load-draw-row {
+  margin-top: 32px;
+}
+.load-draw-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.load-draw-divider .rule { flex: 1; height: 1px; background: #1f2937; }
+.load-draw-divider span {
+  color: #4b5563;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.load-draw-form {
+  display: flex;
+  gap: 8px;
+}
+.load-draw-input {
+  flex: 1;
+  background: #111827;
+  border: 1px solid #374151;
+  color: #ffffff;
+  font-family: monospace;
+  font-size: 14px;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.load-draw-btn {
+  background: #374151;
+  color: #e5e7eb;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: none;
+}
+</style>
+
+<div class="page-note">
+  <strong>Key Screen — Context Entry</strong> — canonical state (top) and the load-bearing
+  Rate-Limited Intake alternate state (bottom section). Desktop width (~1024px) shown;
+  layout is fluid CSS, the same markup reflows to phone width without a second frame.
+</div>
+
+<div class="browser-frame">
+  <div class="browser-chrome">
+    <div class="chrome-dot red"></div>
+    <div class="chrome-dot yellow"></div>
+    <div class="chrome-dot green"></div>
+    <div class="chrome-url">app.systemsthinkingtarot.com/orient</div>
+  </div>
+
+  <!-- ============ ORNAMENTAL DIVIDER — CONFIRMED ============ -->
+  <div class="candidate-strip">
+    <div class="candidate-strip-heading">Ornamental Divider — Confirmed: Candidate A</div>
+    <div class="candidate-strip-sub">
+      Hedera / fleuron printer's ornament (❦, U+2766), flanked by thin hairline rules —
+      confirmed by Tony. Two alternatives were considered and rejected: a repeated
+      diamond dingbat (plainer/more geometric), and a plain rule with no glyph at all
+      (safest against drifting mystical, but loses the ritual wink). See DESIGN.md.Components
+      for the resolved token spec.
+    </div>
+    <div class="candidate-grid" style="grid-template-columns: minmax(220px, 320px);">
+      <div class="candidate-card">
+        <div class="candidate-label">Candidate A <span class="candidate-default-tag">Confirmed</span></div>
+        <div class="candidate-preview">
+          <div class="ornamental-divider">
+            <div class="rule"></div>
+            <div class="glyph">&#10086;</div>
+            <div class="rule"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ============ END ============ -->
+
+  <!-- ============ SECTION 1: Context Entry, canonical state ============ -->
+  <div class="app-surface">
+    <div class="content-col">
+
+      <!-- Ornamental divider, top (Candidate A applied) -->
+      <div class="ornamental-divider">
+        <div class="rule"></div>
+        <div class="glyph">&#10086;</div>
+        <div class="rule"></div>
+      </div>
+
+      <div class="section-divider">
+        <div class="screen-title">Help Me Orient</div>
+        <div class="screen-sub">Systems Thinking Tarot</div>
+      </div>
+
+      <div class="field-block">
+        <label class="field-label">Context</label>
+        <div class="context-textarea filled">
+          I got offered the VP job. On paper it's obviously the move — more scope, more pay,
+          finally leading the team instead of just being the best individual player on it. But
+          I keep running the pros/cons list and landing nowhere. I'd be managing Bob and Jayden,
+          both of whom outgrew their current roles months ago and I never did anything about it.
+          My manager keeps dropping hints she wants me to take it. I like my life right now —
+          I have time for things outside work — and I'm not sure this is actually what I want
+          versus what I'm supposed to want at this point in my career.
+        </div>
+      </div>
+
+      <div style="margin: 32px 0 16px 0;">
+        <label class="field-label">Spread</label>
+      </div>
+      <div class="spread-grid">
+        <div class="spread-option">
+          <span class="spread-name">Single Card</span>
+          <span class="spread-desc">One perspective, right now.</span>
+          <span class="spread-count">1 card</span>
+        </div>
+        <div class="spread-option">
+          <span class="spread-name">Three Card</span>
+          <span class="spread-desc">Context · Challenge · Opportunity</span>
+          <span class="spread-count">3 cards</span>
+        </div>
+        <div class="spread-option selected">
+          <span class="spread-name">Decision</span>
+          <span class="spread-desc">Current State · Path A · Path B · Integration</span>
+          <span class="spread-count">4 cards</span>
+        </div>
+        <div class="spread-option">
+          <span class="spread-name">System Analysis</span>
+          <span class="spread-desc">Structure · Dynamics · Agents · Resources · Emergence</span>
+          <span class="spread-count">5 cards</span>
+        </div>
+      </div>
+
+      <div class="cta-row">
+        <button class="btn-primary">Help Me Orient</button>
+      </div>
+
+      <!-- Ornamental divider, bottom (Candidate A applied) -->
+      <div class="section-divider" style="margin-bottom: 0;">
+        <div class="ornamental-divider">
+          <div class="rule"></div>
+          <div class="glyph">&#10086;</div>
+          <div class="rule"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <!-- ============ END SECTION 1 ============ -->
+
+  <!-- ============ SECTION 2: Rate-Limited Intake, alternate state ============ -->
+  <div class="alt-state-heading-bar">
+    <span class="tag">&#9679;</span>Alternate State — Daily Orientation Limit exhausted (Rate-Limited Intake)
+  </div>
+  <div class="app-surface">
+    <div class="content-col">
+
+      <!-- No ornamental divider here: this is the degraded Quick Draw view, not an
+           LLM-touching screen (EXPERIENCE.md Component Patterns: Ornamental Divider
+           row — "Never appears on Quick Draw"). Context textarea and CTA are gone too. -->
+
+      <div style="margin-bottom: 24px;">
+        <div class="screen-title" style="font-size: 28px;">Quick Draw</div>
+        <div class="screen-sub">Structured randomization forcing novel combinations of systems patterns.</div>
+      </div>
+
+      <div class="rate-limit-note">
+        <strong>You're tapped out on Orientation Guides for today</strong> — but the cards
+        themselves are always free and unlimited. Draw away, no LLM, no limit. Your
+        Orient-o-meter refills tomorrow.
+      </div>
+
+      <label class="field-label">Spread</label>
+      <div class="spread-grid" style="margin-top: 10px;">
+        <div class="spread-option">
+          <span class="spread-name">Single Card</span>
+          <span class="spread-desc">One perspective, right now.</span>
+          <span class="spread-count">1 card</span>
+        </div>
+        <div class="spread-option">
+          <span class="spread-name">Three Card</span>
+          <span class="spread-desc">Context · Challenge · Opportunity</span>
+          <span class="spread-count">3 cards</span>
+        </div>
+        <div class="spread-option">
+          <span class="spread-name">Decision</span>
+          <span class="spread-desc">Current State · Path A · Path B · Integration</span>
+          <span class="spread-count">4 cards</span>
+        </div>
+        <div class="spread-option">
+          <span class="spread-name">System Analysis</span>
+          <span class="spread-desc">Structure · Dynamics · Agents · Resources · Emergence</span>
+          <span class="spread-count">5 cards</span>
+        </div>
+      </div>
+
+      <div class="load-draw-row">
+        <div class="load-draw-divider">
+          <div class="rule"></div>
+          <span>or load a draw</span>
+          <div class="rule"></div>
+        </div>
+        <div class="load-draw-form">
+          <div class="load-draw-input">e.g. three:041221671</div>
+          <div class="load-draw-btn">Load</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <!-- ============ END SECTION 2 ============ -->
+
+</div>

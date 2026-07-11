@@ -1,0 +1,396 @@
+<style>
+/*
+  Key Screen: Orientation Guide Results (hero / most complex screen)
+
+  Governing spine sections:
+  - EXPERIENCE.md > Information Architecture > "Orientation Guide Results" row
+  - EXPERIENCE.md > Component Patterns > Card Display, Orientation Guide Essay,
+    Ornamental Divider, Redraw Actions
+  - EXPERIENCE.md > Voice and Tone (Erica's actual Guide line, UJ-1)
+  - EXPERIENCE.md > Key Flows > UJ-1 (Erica, promotion decision, Resources /
+    "misplaced resources" reframe, "four-star lemonade" shareable line)
+  - DESIGN.md > Colors, Typography (body-essay + constrained reading measure),
+    Components (card-container, position-label, ornamental-divider default:
+    Candidate A, chosen in key-context-entry.html), Layout & Spacing (section-gap)
+  - prd.md FR-8 (five-part Guide structure: pattern-in-situation, what's missing,
+    framing challenge, counterintuitive implication, better questions — rendered
+    as one continuous essay, not headed sub-sections, per Component Patterns table)
+
+  NOTE on Spread shown: renders the Decision Spread (4 positions: Current State/
+  Path A/Path B/Integration), matching EXPERIENCE.md's UJ-1 exactly. "Resources"
+  is not a position label here — it's a Minor Arcana suit in src/data/systemsTarot.js
+  (cards numbered 1-14, e.g. "Resources, 9"), independent of Spread/position names,
+  so a Resources-suit card can be drawn into any position in any Spread. Confirmed
+  against source data — no discrepancy between prd.md and EXPERIENCE.md after all.
+
+  Card content (name/pattern/questions/examples) is sourced verbatim from
+  src/data/systemsTarot.js for all 5 drawn cards. Card art itself is not
+  available to this renderer — a colored placeholder rectangle with the card
+  name stands in for CardDisplay's <img>, everything else in CardDisplay's
+  layout (position label, pattern, questions, examples) is reused as-is.
+
+  Inline CSS only, system-ui font stack only, no JS, no network calls,
+  renders fully offline. Fluid/responsive layout.
+*/
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #e5e7eb;
+  color: #1f2937;
+  padding: 32px 16px;
+}
+
+.page-note {
+  max-width: 1024px;
+  margin: 0 auto 20px auto;
+  color: #374151;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.page-note strong { color: #111827; }
+
+.browser-frame {
+  max-width: 1024px;
+  margin: 0 auto 40px auto;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+  background: #030712;
+}
+.browser-chrome {
+  background: #111827;
+  border-bottom: 1px solid #1f2937;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chrome-dot { width: 11px; height: 11px; border-radius: 50%; }
+.chrome-dot.red { background: #f87171; }
+.chrome-dot.yellow { background: #fbbf24; }
+.chrome-dot.green { background: #34d399; }
+.chrome-url {
+  margin-left: 12px;
+  background: #1f2937;
+  color: #9ca3af;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  flex: 1;
+  max-width: 320px;
+}
+
+.app-surface {
+  background: #030712;
+  color: #ffffff;
+  padding: 40px 24px 56px 24px;
+}
+.wide-col {
+  max-width: 960px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.screen-header {
+  margin-bottom: 32px;
+}
+.screen-title { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+.screen-sub { font-size: 14px; color: #9ca3af; }
+
+/* ---------- Section label ---------- */
+.section-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  margin-bottom: 16px;
+}
+
+/* ---------- Card Display (reused pattern) ---------- */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+  margin-bottom: 48px;
+}
+.card-container {
+  display: flex;
+  flex-direction: column;
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 12px 24px rgba(0,0,0,0.35);
+}
+.position-label {
+  padding: 8px 16px;
+  background: rgba(49,46,129,0.6);
+  color: #a5b4fc;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+.card-art-placeholder {
+  margin: 12px;
+  height: 150px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.3;
+}
+.card-body { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.card-name { font-size: 16px; font-weight: 700; color: #ffffff; }
+.card-type { font-size: 11px; color: #818cf8; margin-top: 2px; }
+.card-pattern {
+  font-size: 13px;
+  font-style: italic;
+  color: #d1d5db;
+  border-left: 2px solid #6366f1;
+  padding-left: 10px;
+  line-height: 1.5;
+}
+.card-sub-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9ca3af;
+  margin-bottom: 4px;
+}
+.card-questions, .card-examples { list-style: none; }
+.card-questions li, .card-examples li {
+  font-size: 12px;
+  color: #d1d5db;
+  display: flex;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+.card-examples li { color: #9ca3af; font-size: 11px; }
+.card-questions li .bullet { color: #818cf8; }
+.card-examples li .bullet { color: #4b5563; }
+
+/* ---------- Current Events rundown ---------- */
+.illustrative-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7280;
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 9999px;
+  padding: 2px 9px;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+.events-list {
+  margin-bottom: 48px;
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 12px;
+  padding: 20px 24px;
+}
+.events-list li {
+  list-style: none;
+  font-size: 14px;
+  color: #d1d5db;
+  line-height: 1.6;
+  padding: 10px 0;
+  border-bottom: 1px solid #1f2937;
+  display: flex;
+  gap: 10px;
+}
+.events-list li:last-child { border-bottom: none; }
+.events-list li .bullet { color: #6366f1; flex-shrink: 0; }
+
+/* ---------- Orientation Guide Essay ---------- */
+.essay-wrap {
+  max-width: 65ch;
+  margin: 0 auto 48px auto;
+}
+.essay-label { margin-bottom: 16px; }
+.essay-body {
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.75;
+  color: #e5e7eb;
+}
+.essay-body p { margin-bottom: 20px; }
+.essay-body p:last-child { margin-bottom: 0; }
+
+/* ---------- Ornamental divider (Candidate A, per key-context-entry.html) ---------- */
+.ornamental-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #4b5563;
+  margin: 0 auto 48px auto;
+  max-width: 65ch;
+}
+.ornamental-divider .rule { flex: 1; height: 1px; background: #374151; }
+.ornamental-divider .glyph { font-size: 18px; color: #6b7280; line-height: 1; }
+
+/* ---------- Redraw actions ---------- */
+.redraw-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.btn-secondary {
+  background: #1f2937;
+  color: #d1d5db;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid #374151;
+  cursor: default;
+}
+</style>
+
+<div class="page-note">
+  <strong>Key Screen — Orientation Guide Results</strong> — the hero screen of the release.
+  Realizes UJ-1 (Erica, promotion decision). Desktop width shown; fluid CSS reflows to phone width.
+</div>
+
+<div class="browser-frame">
+  <div class="browser-chrome">
+    <div class="chrome-dot red"></div>
+    <div class="chrome-dot yellow"></div>
+    <div class="chrome-dot green"></div>
+    <div class="chrome-url">app.systemsthinkingtarot.com/orient/results</div>
+  </div>
+
+  <div class="app-surface">
+    <div class="wide-col">
+
+      <div class="screen-header">
+        <div class="screen-title">Your Orientation Guide</div>
+        <div class="screen-sub">Decision Spread &middot; Current State &middot; Path A &middot; Path B &middot; Integration</div>
+      </div>
+
+      <!-- ============ Drawn Cards ============ -->
+      <div class="section-label">Your Draw</div>
+      <div class="cards-grid">
+
+        <div class="card-container">
+          <div class="position-label">Current State</div>
+          <div class="card-art-placeholder" style="background:#0f766e;">Resources &middot; 9</div>
+          <div class="card-body">
+            <div>
+              <div class="card-name">Resources, 9</div>
+              <div class="card-type">Resources &middot; 9</div>
+            </div>
+            <p class="card-pattern">Resource abundance &mdash; more than enough.</p>
+            <div>
+              <div class="card-sub-label">Questions to ask</div>
+              <ul class="card-questions">
+                <li><span class="bullet">&bull;</span><span>What abundance exists?</span></li>
+                <li><span class="bullet">&bull;</span><span>Am I recognizing what I have?</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-container">
+          <div class="position-label">Path A</div>
+          <div class="card-art-placeholder" style="background:#4338ca;">The Boundary</div>
+          <div class="card-body">
+            <div>
+              <div class="card-name">The Boundary</div>
+              <div class="card-type">Major Arcana</div>
+            </div>
+            <p class="card-pattern">Edges between domains where different rules apply &mdash; operating at interfaces.</p>
+          </div>
+        </div>
+
+        <div class="card-container">
+          <div class="position-label">Path B</div>
+          <div class="card-art-placeholder" style="background:#1d4ed8;">The Network</div>
+          <div class="card-body">
+            <div>
+              <div class="card-name">The Network</div>
+              <div class="card-type">Major Arcana</div>
+            </div>
+            <p class="card-pattern">Distributed intelligence emerging from local connections without central control.</p>
+          </div>
+        </div>
+
+        <div class="card-container">
+          <div class="position-label">Integration</div>
+          <div class="card-art-placeholder" style="background:#5b21b6;">The Stewardship</div>
+          <div class="card-body">
+            <div>
+              <div class="card-name">The Stewardship</div>
+              <div class="card-type">Major Arcana</div>
+            </div>
+            <p class="card-pattern">Tending systems without controlling &mdash; creating conditions for emergence.</p>
+            <div>
+              <div class="card-sub-label">Questions to ask</div>
+              <ul class="card-questions">
+                <li><span class="bullet">&bull;</span><span>What am I controlling that I should be stewarding?</span></li>
+                <li><span class="bullet">&bull;</span><span>What conditions enable natural growth?</span></li>
+              </ul>
+            </div>
+            <div>
+              <div class="card-sub-label">Examples across domains</div>
+              <ul class="card-examples">
+                <li><span class="bullet">&#9702;</span><span>Leadership: Enabling teams rather than micromanaging</span></li>
+                <li><span class="bullet">&#9702;</span><span>Gardening: Providing conditions, not forcing growth</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ============ Current Events rundown ============ -->
+      <div class="section-label">Current Events <span class="illustrative-tag">Illustrative &mdash; LLM-sourced at runtime</span></div>
+      <ul class="events-list">
+        <li><span class="bullet">&#9642;</span><span>A widely cited workforce report this quarter finds most internal promotions still happen only after an employee has one foot out the door &mdash; reallocation via attrition, not intention.</span></li>
+        <li><span class="bullet">&#9642;</span><span>Several large employers' return-to-office pushes are being read by industry analysts as a resourcing move: reshuffling underused senior staff into visible leadership gaps instead of hiring externally.</span></li>
+        <li><span class="bullet">&#9642;</span><span>A management newsletter piece getting passed around this month argues most "talent shortages" are really talent-allocation problems &mdash; the skills already exist inside the org, just parked in the wrong seat.</span></li>
+      </ul>
+
+      <!-- ============ Orientation Guide Essay ============ -->
+      <div class="essay-wrap">
+        <div class="section-label essay-label">Your Orientation Guide</div>
+        <div class="essay-body">
+          <p>The pattern in your situation isn't really about whether you want the title. It's sitting one level down, in Bob and Jayden &mdash; two people whose skills have been sitting on a resume instead of getting used daily for months now. That's the Resources card showing up literally: you already have misplaced resources on your team, and you've been treating that as background noise instead of the actual signal.</p>
+          <p>What you're missing is that you've been running this as a personal cost-benefit ledger &mdash; more scope, more pay, less time &mdash; when the more useful ledger is the one sitting in front of you already: who on your team is outgrowing their seat, and how long you're willing to let that keep happening whether or not you take this job. The VP title is almost beside the point. The question underneath it is a stewardship question, not a promotion question.</p>
+          <p>So the frame worth challenging is "do I want to be VP." The better version is closer to: whose day-to-day already doesn't fit the resources they're bringing to it, and what's actually stopping you from doing something about that today, title or no title. That reframes the decision from ambition versus lifestyle into something else entirely &mdash; you're not choosing whether to want more, you're choosing whether to keep sitting on resources you already know are misallocated.</p>
+          <p>Here's the counterintuitive part: the job might matter less for what you'd gain than for what it would finally let you stop tolerating. You're making four-star lemonade because you've got the best lemons on the continent &mdash; the ingredients for a good outcome are already on your team, unused, and the title is mostly a permission slip to go use them.</p>
+          <p>Questions worth asking instead of "should I take it": What would Bob's and Jayden's next six months look like if nothing about your role changes? What's the actual cost of leaving misplaced resources in place another quarter? And if you took this job purely to fix that one thing &mdash; not for the scope, not for the pay &mdash; would it still be worth it?</p>
+        </div>
+      </div>
+
+      <!-- ============ Ornamental divider, bottom only (Candidate A) ============ -->
+      <div class="ornamental-divider">
+        <div class="rule"></div>
+        <div class="glyph">&#10086;</div>
+        <div class="rule"></div>
+      </div>
+
+      <!-- ============ Redraw Actions ============ -->
+      <div class="redraw-row">
+        <button class="btn-secondary">Provide another observation</button>
+        <button class="btn-secondary">Tweak existing observation</button>
+      </div>
+
+    </div>
+  </div>
+</div>
