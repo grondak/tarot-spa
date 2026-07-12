@@ -1,0 +1,175 @@
+import { Stack } from 'aws-cdk-lib';
+import { defineBackend } from '@aws-amplify/backend';
+import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { StringParameter } from 'aws-cdk-lib/aws-ssm';
+import { CfnWebACL, CfnWebACLAssociation } from 'aws-cdk-lib/aws-wafv2';
+import { auth } from './auth/resource';
+import { data } from './data/resource';
+import { postConfirmation } from './auth/post-confirmation/resource';
+import { checkInviteKey } from './functions/check-invite-key/resource';
+
+const backend = defineBackend({
+  auth,
+  data,
+  postConfirmation,
+  checkInviteKey,
+});
+
+const accountTable = backend.data.resources.tables.Account;
+const inviteKeyTable = backend.data.resources.tables.InviteKey;
+const redemptionLambda = backend.postConfirmation.resources.lambda;
+const checkInviteKeyLambda = backend.checkInviteKey.resources.lambda;
+
+// checkInviteKey lives in the same nested stack as `data` (resourceGroupName: 'data' on
+// both), so this is a same-stack reference — safe to grant directly, no cycle risk.
+inviteKeyTable.grantReadData(checkInviteKeyLambda);
+backend.checkInviteKey.addEnvironment('INVITE_KEY_TABLE_NAME', inviteKeyTable.tableName);
+
+// redemptionLambda (postConfirmation) lives in the `auth` nested stack. `data` already
+// depends on `auth` (owner-based authorization needs the User Pool). Referencing
+// accountTable/inviteKeyTable's live CDK tokens (tableArn/tableName getters) directly from
+// here would add the reverse edge auth -> data, producing a CloudFormation circular
+// nested-stack dependency (confirmed via `npx ampx sandbox`:
+// CloudformationStackCircularDependencyError between [auth, data]).
+//
+// `Stack.exportValue`/`Fn::ImportValue` looks like the fix but ISN'T: it only defers the
+// failure from synth-time (a clear cycle error) to deploy-time (confirmed: "No export named
+// ...AccountTableName found", because `data` hasn't deployed yet when `auth` tries to import
+// it — `data` can't deploy first either, since it needs `auth`'s User Pool for owner-auth).
+// Hardcoding custom physical table names isn't viable either (confirmed via a failed fresh
+// deploy: Amplify's own table-manager role is only authorized for `dynamodb:CreateTable` on
+// Amplify's default table names, so a custom-named `Custom::AmplifyDynamoDBTable` fails with
+// an IAM error). The two stacks have a genuine mutual deploy-time dependency.
+//
+// The fix: break the dependency at *runtime* instead of deploy time. The data stack writes
+// its real (default-named) table names to SSM parameters at fixed paths both stacks can
+// compute as plain strings; the Lambda reads them once at cold start. No cross-stack
+// references, nothing to order at deploy time. Amplify's default table names already embed
+// the per-environment AppSync API id, so `staging`/`main`/sandboxes can't collide.
+const backendNamespace = accountTable.node.tryGetContext('amplify-backend-namespace');
+const backendName = accountTable.node.tryGetContext('amplify-backend-name');
+if (!backendNamespace || !backendName) {
+  // The SSM paths must be unique per environment. Silently falling back to a fixed string
+  // would let two environments read each other's table names — fail synth instead.
+  throw new Error(
+    'Missing amplify-backend-namespace/amplify-backend-name CDK context — refusing to fall back to a shared SSM path.',
+  );
+}
+const ssmPrefix = `/${backendNamespace}/${backendName}`;
+const accountTableParam = `${ssmPrefix}/account-table-name`;
+const inviteKeyTableParam = `${ssmPrefix}/invite-key-table-name`;
+
+// Same-stack live refs (table -> parameter, both in `data`) — no cycle risk.
+const dataStack = Stack.of(accountTable);
+new StringParameter(dataStack, 'AccountTableNameParam', {
+  parameterName: accountTableParam,
+  stringValue: accountTable.tableName,
+});
+new StringParameter(dataStack, 'InviteKeyTableNameParam', {
+  parameterName: inviteKeyTableParam,
+  stringValue: inviteKeyTable.tableName,
+});
+
+// The Lambda gets the SSM *paths* (plain strings) and resolves the names at cold start.
+backend.postConfirmation.addEnvironment('ACCOUNT_TABLE_PARAM', accountTableParam);
+backend.postConfirmation.addEnvironment('INVITE_KEY_TABLE_PARAM', inviteKeyTableParam);
+
+// IAM, all built from plain strings/patterns (Stack pseudo-parameters only, no construct
+// attributes — see the User Pool ARN note below for why):
+// - SSM read on this environment's parameter path.
+// - DynamoDB actions on `table/Account-*`/`table/InviteKey-*`: Amplify's default physical
+//   names are `<Model>-<apiId>-NONE`, and the apiId isn't knowable here as a plain string,
+//   so match on the model-name prefix. Slightly broader than one exact table (it matches
+//   any table with that prefix in this account/region), accepted for the same reason as
+//   the User Pool wildcard below.
+const authStack = Stack.of(redemptionLambda);
+redemptionLambda.addToRolePolicy(new PolicyStatement({
+  actions: ['ssm:GetParameter'],
+  resources: [
+    authStack.formatArn({ service: 'ssm', resource: 'parameter', resourceName: `${backendNamespace}/${backendName}/*` }),
+  ],
+}));
+redemptionLambda.addToRolePolicy(new PolicyStatement({
+  actions: [
+    'dynamodb:GetItem',
+    'dynamodb:PutItem',
+    'dynamodb:UpdateItem',
+    'dynamodb:ConditionCheckItem',
+  ],
+  resources: [
+    authStack.formatArn({ service: 'dynamodb', resource: 'table', resourceName: 'Account-*' }),
+    authStack.formatArn({ service: 'dynamodb', resource: 'table', resourceName: 'InviteKey-*' }),
+  ],
+}));
+
+// Referencing `backend.auth.resources.userPool.userPoolArn` directly here creates a
+// same-stack circular resource dependency: the User Pool needs this Lambda as its
+// postConfirmation trigger (Pool -> Lambda), and the Lambda's IAM policy would need the
+// Pool's ARN attribute (Lambda -> Pool) — CloudFormation can't order two resources that
+// each depend on the other (confirmed via deploy: CloudformationResourceCircularDependencyError
+// among amplifyAuthUserPool/UserPoolPostConfirmationCognito/redeeminvitekeylambda*). Build
+// the ARN as a template string (Stack pseudo-parameters, not a construct attribute) instead —
+// this doesn't create a construct-to-construct dependency edge. Scoped to this stack's own
+// account/region, but NOT to this specific User Pool — Cognito assigns the physical pool id
+// and there's no plain-string prefix to narrow on (the DynamoDB grants above at least narrow
+// to the `Account-*`/`InviteKey-*` model-name prefixes). Accepted residual risk: this grants
+// `AdminDeleteUser` against any User Pool in this account/region, not just this stack's own.
+// Mitigated by scope (single action, single Lambda, only invoked from this one trigger) but
+// not eliminated — revisit if this account ever hosts an unrelated Cognito pool.
+const userPoolArnPattern = authStack.formatArn({
+  service: 'cognito-idp',
+  resource: 'userpool',
+  resourceName: '*',
+});
+
+redemptionLambda.addToRolePolicy(new PolicyStatement({
+  actions: ['cognito-idp:AdminDeleteUser'],
+  resources: [userPoolArnPattern],
+}));
+
+// Loose rate limiting on `checkInviteKey` specifically — scoped via a scope-down statement
+// so it only counts requests naming that operation, not all GraphQL traffic on this API
+// (Account/InviteKey otherwise require owner auth or IAM, but later stories will add
+// ordinary authenticated GraphQL calls that shouldn't share this budget). Traffic here is
+// expected to be humans typing codes plus occasional test runs, not bots, so this uses AWS
+// WAF's practical minimum rate-based threshold rather than anything strict.
+const inviteKeyRateLimit = new CfnWebACL(dataStack, 'ApiRateLimit', {
+  scope: 'REGIONAL',
+  defaultAction: { allow: {} },
+  visibilityConfig: {
+    sampledRequestsEnabled: true,
+    cloudWatchMetricsEnabled: true,
+    metricName: 'tarotSpaApiDefault',
+  },
+  rules: [
+    {
+      name: 'RateLimitPerIp',
+      priority: 0,
+      action: { block: {} },
+      statement: {
+        rateBasedStatement: {
+          limit: 100,
+          aggregateKeyType: 'IP',
+          scopeDownStatement: {
+            byteMatchStatement: {
+              searchString: 'checkInviteKey',
+              fieldToMatch: { body: { oversizeHandling: 'MATCH' } },
+              textTransformations: [{ priority: 0, type: 'NONE' }],
+              positionalConstraint: 'CONTAINS',
+            },
+          },
+        },
+      },
+      visibilityConfig: {
+        sampledRequestsEnabled: true,
+        cloudWatchMetricsEnabled: true,
+        metricName: 'tarotSpaApiRateLimit',
+      },
+    },
+  ],
+});
+
+new CfnWebACLAssociation(dataStack, 'ApiRateLimitAssociation', {
+  resourceArn: backend.data.resources.graphqlApi.arn,
+  webAclArn: inviteKeyRateLimit.attrArn,
+});
