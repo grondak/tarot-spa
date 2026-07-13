@@ -1,5 +1,6 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 import { checkInviteKey } from '../functions/check-invite-key/resource';
+import { inviteKeyMint } from '../functions/invite-key-mint/resource';
 
 const schema = a.schema({
   Account: a
@@ -35,6 +36,11 @@ const schema = a.schema({
     .returns(a.string())
     .authorization((allow) => [allow.publicApiKey()])
     .handler(a.handler.function(checkInviteKey)),
+  mintOnwardKey: a
+    .mutation()
+    .returns(a.string())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(inviteKeyMint)),
 });
 
 export type Schema = ClientSchema<typeof schema>;

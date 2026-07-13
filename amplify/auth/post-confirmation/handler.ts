@@ -109,6 +109,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
       }
 
       try {
+        const timestamp = new Date().toISOString();
         await deps.dynamo.send(new TransactWriteCommand({
           TransactItems: [
             {
@@ -133,6 +134,8 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
                   owner: accountId,
                   generation: keyResult.Item.generation,
                   onwardKeyGenerated: false,
+                  createdAt: timestamp,
+                  updatedAt: timestamp,
                 },
                 ConditionExpression: 'attribute_not_exists(id)',
               },

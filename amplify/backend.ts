@@ -7,23 +7,31 @@ import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { postConfirmation } from './auth/post-confirmation/resource';
 import { checkInviteKey } from './functions/check-invite-key/resource';
+import { inviteKeyMint } from './functions/invite-key-mint/resource';
 
 const backend = defineBackend({
   auth,
   data,
   postConfirmation,
   checkInviteKey,
+  inviteKeyMint,
 });
 
 const accountTable = backend.data.resources.tables.Account;
 const inviteKeyTable = backend.data.resources.tables.InviteKey;
 const redemptionLambda = backend.postConfirmation.resources.lambda;
 const checkInviteKeyLambda = backend.checkInviteKey.resources.lambda;
+const inviteKeyMintLambda = backend.inviteKeyMint.resources.lambda;
 
 // checkInviteKey lives in the same nested stack as `data` (resourceGroupName: 'data' on
 // both), so this is a same-stack reference — safe to grant directly, no cycle risk.
 inviteKeyTable.grantReadData(checkInviteKeyLambda);
 backend.checkInviteKey.addEnvironment('INVITE_KEY_TABLE_NAME', inviteKeyTable.tableName);
+
+accountTable.grantWriteData(inviteKeyMintLambda);
+inviteKeyTable.grantWriteData(inviteKeyMintLambda);
+backend.inviteKeyMint.addEnvironment('ACCOUNT_TABLE_NAME', accountTable.tableName);
+backend.inviteKeyMint.addEnvironment('INVITE_KEY_TABLE_NAME', inviteKeyTable.tableName);
 
 // redemptionLambda (postConfirmation) lives in the `auth` nested stack. `data` already
 // depends on `auth` (owner-based authorization needs the User Pool). Referencing

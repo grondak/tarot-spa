@@ -49,6 +49,10 @@ describe('post-confirmation handler', () => {
       generation: 'FirstGen',
       onwardKeyGenerated: false,
     });
+    expect(transaction.TransactItems[1].Put.Item.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(transaction.TransactItems[1].Put.Item.updatedAt).toBe(
+      transaction.TransactItems[1].Put.Item.createdAt,
+    );
     expect(deps.cognito.send).not.toHaveBeenCalled();
   });
 
