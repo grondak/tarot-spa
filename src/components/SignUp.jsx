@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { confirmSignUp, signIn, signUp } from 'aws-amplify/auth';
 import { checkInviteKey } from '../utils/inviteKeys';
+import Field from './Field';
 
 const KEY_ERRORS = {
   invalid: "This key isn't valid",
@@ -27,6 +28,7 @@ export default function SignUp({
   confirmSignUpFn = confirmSignUp,
   signInFn = signIn,
   onConfirmed = () => {},
+  onShowLogIn = () => {},
 }) {
   const [inviteKeyCode, setInviteKeyCode] = useState('');
   const [email, setEmail] = useState('');
@@ -169,26 +171,18 @@ export default function SignUp({
               Back — I need to fix my email
             </button>
           )}
+          {!needsConfirmation && (
+            <button
+              type="button"
+              onClick={onShowLogIn}
+              disabled={busy}
+              className="w-full text-center text-sm text-gray-400 underline-offset-2 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-wait disabled:opacity-60"
+            >
+              Already have an account? Log in
+            </button>
+          )}
         </form>
       </section>
     </main>
-  );
-}
-
-function Field({ label, type = 'text', value, onChange, autoComplete }) {
-  const id = label.toLowerCase().replaceAll(' ', '-');
-  return (
-    <div className="text-left">
-      <label htmlFor={id} className="mb-2 block text-sm font-medium text-gray-300">{label}</label>
-      <input
-        id={id}
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        autoComplete={autoComplete}
-        required
-        className="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-3 text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/50"
-      />
-    </div>
   );
 }

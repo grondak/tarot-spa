@@ -5,11 +5,13 @@ import { SPREADS, shuffleAndDraw, encodeDraw, decodeDraw } from './utils/deck';
 import SpreadSelector from './components/SpreadSelector';
 import SpreadView from './components/SpreadView';
 import SignUp from './components/SignUp';
+import LogIn from './components/LogIn';
 import GrantInviteKey from './components/GrantInviteKey';
 import { getMyAccount } from './utils/account';
 
 export default function App() {
   const [authState, setAuthState] = useState('loading');
+  const [authScreen, setAuthScreen] = useState('signup');
   const [spreadKey, setSpreadKey] = useState(null);
   const [cards, setCards] = useState([]);
 
@@ -56,7 +58,17 @@ export default function App() {
   }
 
   if (authState === 'unauthenticated') {
-    return <SignUp onConfirmed={() => setAuthState('authenticated')} />;
+    return authScreen === 'login' ? (
+      <LogIn
+        onSignedIn={() => setAuthState('authenticated')}
+        onShowSignUp={() => setAuthScreen('signup')}
+      />
+    ) : (
+      <SignUp
+        onConfirmed={() => setAuthState('authenticated')}
+        onShowLogIn={() => setAuthScreen('login')}
+      />
+    );
   }
 
   return (

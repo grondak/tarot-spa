@@ -4,7 +4,7 @@ baseline_commit: be6ba6c080fa7b6f2fd19deed6a7d58827109b45
 
 # Story 1.3: Log in to an existing Account
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -43,31 +43,35 @@ The `CONFIRM_SIGN_UP` copy deliberately does **not** tell the user to sign up ag
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Extract the shared `Field` component** (AC: 1, 2 — prerequisite refactor)
-  - [ ] `SignUp.jsx` has an unexported `Field` helper (label + input, exact dark-token classes, focus ring, `id` derived from label). It now has two consumers → extract to `src/components/Field.jsx` (default export, PascalCase, flat), **byte-identical classes and behavior**, and update `SignUp.jsx` to import it.
-  - [ ] No visual change anywhere. All existing SignUp tests must pass untouched (they query by label, not internals).
-- [ ] **Task 2: Build `src/components/LogIn.jsx`** (AC: 1, 2)
-  - [ ] Plain custom form (email + password `Field`s) calling `signIn` from `aws-amplify/auth` — mirror `SignUp.jsx`'s structure: DI props (`signInFn = signIn`, `onSignedIn = () => {}`), `useState` fields, `busy` + `useRef` double-submit guard, `role="alert"` error line, same card/container/button classes (`bg-gray-950` page, `bg-gray-900` card, `border-gray-700`, indigo primary button, visible focus rings, labels on every input — the AC7 baseline from 1.1). Heading + subtext per the Copy table.
-  - [ ] **`autoComplete` differs from SignUp — do not blind-mirror:** email field → `autoComplete="email"`, password field → `autoComplete="current-password"` (SignUp uses `new-password`; copying that here breaks password-manager autofill on the one screen where autofill matters most). The extracted `Field` already takes the prop.
-  - [ ] Trim the email before calling `signIn` (`email.trim()`) — a trailing mobile-autocorrect space plus the deliberately vague error copy is a real lockout.
-  - [ ] On `signIn` resolving: call `onSignedIn()` **only if `result.isSignedIn === true`** (1.1's hard rule: never fake an authenticated state). If `isSignedIn` is false, map `result.nextStep.signInStep` per the Copy table: `'CONFIRM_SIGN_UP'` → the never-finished-setup copy; anything else — MFA variants (none configured) and `'RESET_PASSWORD'` (reachable via an admin-forced reset; the fallback intentionally covers it, it is not dead code) → the generic fallback copy.
-  - [ ] Error mapping (follow `SignUp.jsx`'s `AUTH_ERROR_MESSAGES` map-with-fallback pattern, local to this file), per the Copy table. Special case: `UserAlreadyAuthenticatedException` → shouldn't be reachable (App gates on auth state), but if hit, call `onSignedIn()` — a live session IS the success condition.
-  - [ ] Voice/tone: plain and specific (EXPERIENCE.md); **no Ornamental Divider** (exclusive to the two LLM-touching screens); no "forgot password" link — password reset is in no story and out of v1 scope; do not scaffold it.
-- [ ] **Task 3: Wire the unauthenticated toggle in `App.jsx`** (AC: 1)
-  - [ ] The unauthenticated branch currently renders `<SignUp>` only. Add a local screen state (e.g. `const [authScreen, setAuthScreen] = useState('signup')`) rendering `SignUp` or `LogIn`. Default stays `'signup'` (current behavior; Story 2.1's Public Landing later becomes the real front door with distinct "I have an Invite Key" / "Log In" entries — this toggle is the interim path between the two screens).
-  - [ ] Cross-links per the Copy table, rendered as quiet text-button affordances (match the "Back — I need to fix my email" treatment in `SignUp.jsx`). Pass the switch handlers as props (prop-drilling per convention — no context, no router).
-  - [ ] **SignUp's link renders only on the initial-fields step, not during the confirmation-code step** — switching screens mid-confirmation would strand an in-flight redemption. Disable both links while `busy`, same as the existing back affordance (`SignUp.jsx`'s back button).
-  - [ ] `LogIn`'s `onSignedIn` → `setAuthState('authenticated')`, same as SignUp's `onConfirmed`. (The `Hub.listen('auth')` in `App.jsx` will also fire on `signedIn` — benign race, both set the same state; keep the explicit callback for determinism and testability.)
-  - [ ] **Preserve untouched:** the authenticated branch (AccountBar + SpreadView/SpreadSelector and every handler), the `loading` gate, and `AccountBar`'s retry states — `App.test.jsx` pins some of this and must keep passing.
-- [ ] **Task 4: Tests** (AC: all)
-  - [ ] `src/components/LogIn.test.jsx` (mirror `SignUp.test.jsx`'s style — DI mocks, label queries, `findByText` for async): valid credentials → `signInFn` called with `{ username, password }` (trimmed email), `onSignedIn` fired (AC 1); `NotAuthorizedException` rejection → "Incorrect email or password." visible, `onSignedIn` NOT called (AC 2); `UserNotFoundException` → identical copy (existence-leak pin); `isSignedIn: false` + `CONFIRM_SIGN_UP` nextStep → its copy shown, no `onSignedIn`; `UserAlreadyAuthenticatedException` rejection → `onSignedIn` IS called; `LimitExceededException` → its copy; double-click fires exactly one `signInFn` call.
-  - [ ] App-level toggle test — **component-level link-callback tests do not satisfy this** (they never prove App actually switches screens). Render `<App />` with `aws-amplify/auth` mocked (`getCurrentUser` rejecting → unauthenticated) and `aws-amplify/utils` mocked (`Hub.listen` returning a no-op unsubscribe): SignUp renders by default → click "Already have an account? Log in" → LogIn renders → click "Have an invite key? Create your account" → SignUp again. (`App.test.jsx` currently only tests the exported `AccountBar` and mocks only `./utils/account` — this is a new test block, not a modification of those.)
-  - [ ] Full suite green: all 32 existing tests + new ones; `npm run lint`, `npm run typecheck`, `npm run build` all pass.
-- [ ] **Task 5: Live sandbox verification** (AC: 1, 2, 3)
-  - [ ] No backend deploy needed (nothing under `amplify/` changes) — `npm run dev` against the existing `tonyreynolds` sandbox.
-  - [ ] In an incognito window (no stored session — Log Out is Story 1.4, so a normal window may still hold Tony's session): land on SignUp → toggle to Log In → wrong password first (see "Incorrect email or password.", stay unauthenticated — AC 2) → then correct credentials for Tony's real account → land on the authenticated home with the AccountBar showing the already-granted key state (AC 1).
-  - [ ] **Live-error expectations:** Cognito's default "prevent user existence errors" behavior means a nonexistent email also surfaces as `NotAuthorizedException` (the `UserNotFoundException` map entry is a defensive pin the live path won't normally produce), and repeated wrong passwords surface as `NotAuthorizedException` with "Password attempts exceeded" text rather than `LimitExceededException`. Same user-visible copy either way — don't chase a phantom mismatch.
-  - [ ] Reload the page in that same window: authenticated view restores with no login prompt (AC 3).
+- [x] **Task 1: Extract the shared `Field` component** (AC: 1, 2 — prerequisite refactor)
+  - [x] `SignUp.jsx` has an unexported `Field` helper (label + input, exact dark-token classes, focus ring, `id` derived from label). It now has two consumers → extract to `src/components/Field.jsx` (default export, PascalCase, flat), **byte-identical classes and behavior**, and update `SignUp.jsx` to import it.
+  - [x] No visual change anywhere. All existing SignUp tests must pass untouched (they query by label, not internals).
+- [x] **Task 2: Build `src/components/LogIn.jsx`** (AC: 1, 2)
+  - [x] Plain custom form (email + password `Field`s) calling `signIn` from `aws-amplify/auth` — mirror `SignUp.jsx`'s structure: DI props (`signInFn = signIn`, `onSignedIn = () => {}`), `useState` fields, `busy` + `useRef` double-submit guard, `role="alert"` error line, same card/container/button classes (`bg-gray-950` page, `bg-gray-900` card, `border-gray-700`, indigo primary button, visible focus rings, labels on every input — the AC7 baseline from 1.1). Heading + subtext per the Copy table.
+  - [x] **`autoComplete` differs from SignUp — do not blind-mirror:** email field → `autoComplete="email"`, password field → `autoComplete="current-password"` (SignUp uses `new-password`; copying that here breaks password-manager autofill on the one screen where autofill matters most). The extracted `Field` already takes the prop.
+  - [x] Trim the email before calling `signIn` (`email.trim()`) — a trailing mobile-autocorrect space plus the deliberately vague error copy is a real lockout.
+  - [x] On `signIn` resolving: call `onSignedIn()` **only if `result.isSignedIn === true`** (1.1's hard rule: never fake an authenticated state). If `isSignedIn` is false, map `result.nextStep.signInStep` per the Copy table: `'CONFIRM_SIGN_UP'` → the never-finished-setup copy; anything else — MFA variants (none configured) and `'RESET_PASSWORD'` (reachable via an admin-forced reset; the fallback intentionally covers it, it is not dead code) → the generic fallback copy.
+  - [x] Error mapping (follow `SignUp.jsx`'s `AUTH_ERROR_MESSAGES` map-with-fallback pattern, local to this file), per the Copy table. Special case: `UserAlreadyAuthenticatedException` → shouldn't be reachable (App gates on auth state), but if hit, call `onSignedIn()` — a live session IS the success condition.
+  - [x] Voice/tone: plain and specific (EXPERIENCE.md); **no Ornamental Divider** (exclusive to the two LLM-touching screens); no "forgot password" link — password reset is in no story and out of v1 scope; do not scaffold it.
+- [x] **Task 3: Wire the unauthenticated toggle in `App.jsx`** (AC: 1)
+  - [x] The unauthenticated branch currently renders `<SignUp>` only. Add a local screen state (e.g. `const [authScreen, setAuthScreen] = useState('signup')`) rendering `SignUp` or `LogIn`. Default stays `'signup'` (current behavior; Story 2.1's Public Landing later becomes the real front door with distinct "I have an Invite Key" / "Log In" entries — this toggle is the interim path between the two screens).
+  - [x] Cross-links per the Copy table, rendered as quiet text-button affordances (match the "Back — I need to fix my email" treatment in `SignUp.jsx`). Pass the switch handlers as props (prop-drilling per convention — no context, no router).
+  - [x] **SignUp's link renders only on the initial-fields step, not during the confirmation-code step** — switching screens mid-confirmation would strand an in-flight redemption. Disable both links while `busy`, same as the existing back affordance (`SignUp.jsx`'s back button).
+  - [x] `LogIn`'s `onSignedIn` → `setAuthState('authenticated')`, same as SignUp's `onConfirmed`. (The `Hub.listen('auth')` in `App.jsx` will also fire on `signedIn` — benign race, both set the same state; keep the explicit callback for determinism and testability.)
+  - [x] **Preserve untouched:** the authenticated branch (AccountBar + SpreadView/SpreadSelector and every handler), the `loading` gate, and `AccountBar`'s retry states — `App.test.jsx` pins some of this and must keep passing.
+- [x] **Task 4: Tests** (AC: all)
+  - [x] `src/components/LogIn.test.jsx` (mirror `SignUp.test.jsx`'s style — DI mocks, label queries, `findByText` for async): valid credentials → `signInFn` called with `{ username, password }` (trimmed email), `onSignedIn` fired (AC 1); `NotAuthorizedException` rejection → "Incorrect email or password." visible, `onSignedIn` NOT called (AC 2); `UserNotFoundException` → identical copy (existence-leak pin); `isSignedIn: false` + `CONFIRM_SIGN_UP` nextStep → its copy shown, no `onSignedIn`; `UserAlreadyAuthenticatedException` rejection → `onSignedIn` IS called; `LimitExceededException` → its copy; double-click fires exactly one `signInFn` call.
+  - [x] App-level toggle test — **component-level link-callback tests do not satisfy this** (they never prove App actually switches screens). Render `<App />` with `aws-amplify/auth` mocked (`getCurrentUser` rejecting → unauthenticated) and `aws-amplify/utils` mocked (`Hub.listen` returning a no-op unsubscribe): SignUp renders by default → click "Already have an account? Log in" → LogIn renders → click "Have an invite key? Create your account" → SignUp again. (`App.test.jsx` currently only tests the exported `AccountBar` and mocks only `./utils/account` — this is a new test block, not a modification of those.)
+  - [x] Full suite green: all 32 existing tests + new ones; `npm run lint`, `npm run typecheck`, `npm run build` all pass.
+- [x] **Task 5: Live sandbox verification** (AC: 1, 2, 3)
+  - [x] No backend deploy needed (nothing under `amplify/` changes) — `npm run dev` against the existing `tonyreynolds` sandbox.
+  - [x] In an incognito window (no stored session — Log Out is Story 1.4, so a normal window may still hold Tony's session): land on SignUp → toggle to Log In → wrong password first (see "Incorrect email or password.", stay unauthenticated — AC 2) → then correct credentials for Tony's real account → land on the authenticated home with the AccountBar showing the already-granted key state (AC 1).
+  - [x] **Live-error expectations:** Cognito's default "prevent user existence errors" behavior means a nonexistent email also surfaces as `NotAuthorizedException` (the `UserNotFoundException` map entry is a defensive pin the live path won't normally produce), and repeated wrong passwords surface as `NotAuthorizedException` with "Password attempts exceeded" text rather than `LimitExceededException`. Same user-visible copy either way — don't chase a phantom mismatch.
+  - [x] Reload the page in that same window: authenticated view restores with no login prompt (AC 3).
+
+### Review Findings
+
+- [x] [Review][Patch] Guard non-Error authentication rejections so the generic fallback message still renders [src/components/LogIn.jsx:43]
 
 ## Dev Notes
 
@@ -116,8 +120,44 @@ The `CONFIRM_SIGN_UP` copy deliberately does **not** tell the user to sign up ag
 
 ### Agent Model Used
 
+GPT-5 Codex
+
+### Implementation Plan
+
+- Extract the shared dark-token Field without changing SignUp behavior.
+- Add a custom Cognito LogIn form with explicit success gating and existence-safe error mapping.
+- Add the interim unauthenticated SignUp/LogIn toggle while leaving authenticated flows untouched.
+- Cover component behavior and the App-level toggle, then verify session behavior in the live sandbox.
+
 ### Debug Log References
+
+- 2026-07-12: Red phase confirmed LogIn was missing and App exposed no login toggle.
+- 2026-07-12: Green phase passed all targeted LogIn, App-toggle, and unchanged SignUp tests.
+- 2026-07-12: Full regression suite passed 41/41; typecheck, lint, and production build passed.
+- 2026-07-12: Tony live-verified the SignUp/LogIn toggle, incorrect-password handling, successful login, and authenticated session restoration after reload.
+- 2026-07-12: Code review patch guarded non-Error sign-in rejections; final suite passed 42/42 with typecheck, lint, and build green.
 
 ### Completion Notes List
 
+- Extracted reusable Field with byte-identical input behavior/classes.
+- Added custom LogIn with trimmed email, correct autocomplete, double-submit protection, exact error copy, and real-session-only success.
+- Added SignUp/LogIn cross-links and App-level unauthenticated screen switching.
+- Added eight LogIn tests and one App-level toggle test; all 41 tests pass.
+- Live sandbox verification passed all four checks, covering AC 1–3.
+- Resolved the sole code-review finding with optional error-name access and regression coverage.
+
 ### File List
+
+_bmad-output/implementation-artifacts/1-3-log-in-to-an-existing-account.md
+_bmad-output/implementation-artifacts/sprint-status.yaml
+src/App.jsx
+src/AppAuth.test.jsx
+src/components/Field.jsx
+src/components/LogIn.jsx
+src/components/LogIn.test.jsx
+src/components/SignUp.jsx
+
+## Change Log
+
+- 2026-07-12: Implemented Story 1.3 login, authentication-screen switching, shared Field extraction, automated coverage, and live session verification; moved to review.
+- 2026-07-12: Applied code-review error-guard patch and marked Story 1.3 done.
