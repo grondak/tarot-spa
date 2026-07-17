@@ -1,6 +1,6 @@
 # Story 2.2: Request access via the form
 
-Status: in-progress
+Status: review
 baseline_commit: 40985965b13a1a492d59d16bbb1a3801549aa8bf
 
 ## Story
@@ -101,10 +101,10 @@ Section copy is quoted from the governing mockup (`mockups/public-landing.html`)
   - [x] One real submission with test values → acknowledgment renders on-page (AC 1, 4); **confirm the email actually arrives** at the cutout inbox with the submitted name and email in the body (AC 1 — the whole point of retro action item #2's success criteria: "delivers on first live test"). ⚠️ If the send fails with an address error or CloudWatch shows `CUTOUT_EMAIL` as an unresolved SSM placeholder, apply Task 1's secret-resolution fallback (typed `$amplify/env` import + tsconfig `paths`) and redeploy.
   - [x] Verify no residue: no DynamoDB record anywhere, no confirmation email to the submitted address (AC 4).
   - [x] `npm run test:e2e` passes against the dev server. Narrow-viewport eyeball: fields wrap to one column, no horizontal scroll.
-- [ ] **Task 8: Close out (Definition of Done — Epic 1 retro action item #4)**
+- [x] **Task 8: Close out (Definition of Done — Epic 1 retro action item #4)**
   - [x] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e`.
   - [x] Sweep the diff and this story file for live credentials/keys/secrets — ⚠️ this story's specific trap: **the real cutout email address must not appear in code, comments, tests, or this story file** (it lives only in the secret store); test submissions use obviously fake values.
-  - [ ] Commit and push to `main`.
+  - [x] Commit and push to `main`.
 
 ## Dev Notes
 
@@ -194,6 +194,7 @@ GPT-5 Codex
 - Live sandbox verification completed: validation states passed, the mutation acknowledgment rendered, Lambda/SES completed without error, and Tony confirmed the message arrived in the cutout mailbox.
 - The original same-address sender was accepted by the mailbox provider but silently filtered. With Tony's approval, the implementation now uses `ACCESS_FROM_EMAIL` from a verified Route 53 domain with SES DKIM `SUCCESS`; the private cutout address remains only in `CUTOUT_EMAIL`.
 - No request-access data model or DynamoDB writes exist, and requester addresses appear only in the email body; no confirmation email is sent to the requester.
+- Implementation committed and pushed to `main` as `87b128d`.
 
 ### File List
 
