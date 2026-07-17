@@ -1,6 +1,6 @@
 # Story 2.1: View the public landing page with a free Quick Draw
 
-Status: in-progress
+Status: review
 baseline_commit: 9c6e8be5f7bfc73e27a9ebbe1e06f4ea93bbba3a
 
 ## Story
@@ -85,10 +85,10 @@ The mockup also shows a Request Access form — that is **Story 2.2, do not buil
     5. Click `← Back` (after a fresh draw) → landing pitch visible again
   - [x] Add `test-results/` and `playwright-report/` to `.gitignore`.
   - [x] This makes live UI verification an agent-runnable script — the whole point of the retro action item. Run it and make it pass before Task 6's manual pass.
-- [ ] **Task 6: Live sandbox verification** (AC: all)
+- [x] **Task 6: Live sandbox verification** (AC: all)
   - [x] No backend deploy (nothing under `amplify/` changes) — `npm run dev` against the existing `tonyreynolds` sandbox, incognito window (no stored session).
   - [x] Root URL → landing with pitch, no account UI (AC 1). Quick Draw: pick each of a couple of Spreads, draw, Draw Again, Back, load a draw code (AC 2–4).
-  - [ ] `I have an Invite Key` → Story 1.1's SignUp screen; back via reload; `Log In` → Story 1.3's login (AC 5–6). Log in with Tony's real account → authenticated home unchanged (AccountBar with already-granted state — expected from 1.2's mint; that key is now `revoked`, also expected). Log Out → **lands on the public landing** (the 1.4 destination change), draw state cleared. Reload while logged out → landing again.
+  - [x] `I have an Invite Key` → Story 1.1's SignUp screen; back via reload; `Log In` → Story 1.3's login (AC 5–6). Log in with Tony's real account → authenticated home unchanged (AccountBar with already-granted state — expected from 1.2's mint; that key is now `revoked`, also expected). Log Out → **lands on the public landing** (the 1.4 destination change), draw state cleared. Reload while logged out → landing again.
   - [x] Narrow-viewport eyeball: hero, pills row wrap, auth-entry header wrap, embedded selector grid — no clipping or horizontal scroll.
 
 ### Review Findings
@@ -181,6 +181,7 @@ GPT-5 Codex
 - Committed and pushed the implementation to `main` as `6adfb9f`.
 - Code review resolved all four findings: restored the story audit trail, covered Hub-driven auth loss, labeled the draw-code input, and removed the embedded background panel. All 56 tests and browser/quality gates pass.
 - Second code review cleared draw state on Hub-detected session loss and corrected the verification record. Real-account sandbox verification remains open.
+- Tony completed the real-account sandbox round trip on 2026-07-17. The initial account query showed `Account couldn’t load`; `Retry account` recovered to `You've already granted your key`, and login/logout/reload behavior verified successfully.
 
 ### File List
 
@@ -205,3 +206,4 @@ GPT-5 Codex
 - 2026-07-16: Added the public landing and free Quick Draw, updated auth entry/logout routing, and established Playwright browser coverage.
 - 2026-07-16: Resolved four code-review findings and marked the story done.
 - 2026-07-17: Resolved three second-pass findings and returned the story to in-progress pending real-account sandbox verification.
+- 2026-07-17: Completed real-account sandbox verification and returned the story to review.
