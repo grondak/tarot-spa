@@ -14,7 +14,7 @@ export default function SpreadSelector({ onSelect, onLoadCode, embedded = false 
   }
 
   return (
-    <div className={embedded ? 'bg-gray-950 flex flex-col items-center' : 'min-h-screen bg-gray-950 flex flex-col items-center justify-center px-4 py-12'}>
+    <div className={embedded ? '' : 'min-h-screen bg-gray-950 flex flex-col items-center justify-center px-4 py-12'}>
       {/* Title */}
       {!embedded && <div className="text-center mb-12">
         <h1 className="text-4xl font-bold text-white tracking-tight mb-3">
@@ -55,6 +55,7 @@ export default function SpreadSelector({ onSelect, onLoadCode, embedded = false 
         </div>
         <form onSubmit={handleSubmit} className="flex gap-2">
           <input
+            aria-label="Draw code"
             type="text"
             value={code}
             onChange={e => { setCode(e.target.value); setError(''); }}

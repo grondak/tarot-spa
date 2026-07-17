@@ -39,13 +39,13 @@ describe('PublicLanding', () => {
     const { unmount } = render(<PublicLanding />);
     const code = encodeDraw('single', [{ ...FULL_DECK[0], inverted: false }]);
 
-    fireEvent.change(screen.getByPlaceholderText('e.g. three:041221671'), { target: { value: code } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Draw code' }), { target: { value: code } });
     fireEvent.click(screen.getByRole('button', { name: 'Load' }));
     expect(screen.getByText(code)).toBeVisible();
 
     unmount();
     render(<PublicLanding />);
-    fireEvent.change(screen.getByPlaceholderText('e.g. three:041221671'), { target: { value: 'not-a-code' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Draw code' }), { target: { value: 'not-a-code' } });
     fireEvent.click(screen.getByRole('button', { name: 'Load' }));
     expect(screen.getByText('Unrecognized draw code.')).toBeVisible();
   });

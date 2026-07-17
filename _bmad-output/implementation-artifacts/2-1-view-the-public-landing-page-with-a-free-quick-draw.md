@@ -1,6 +1,6 @@
 # Story 2.1: View the public landing page with a free Quick Draw
 
-Status: review
+Status: done
 baseline_commit: 9c6e8be5f7bfc73e27a9ebbe1e06f4ea93bbba3a
 
 ## Story
@@ -39,6 +39,64 @@ The mockup also shows a Request Access form — that is **Story 2.2, do not buil
 
 ## Tasks / Subtasks
 
+- [x] **Task 1: Add an `embedded` prop to `SpreadSelector`** (AC: 2, 4 — prerequisite refactor)
+  - [x] `src/components/SpreadSelector.jsx` currently renders a full-screen centered layout (`min-h-screen … justify-center`) with its own hero block (`h1` "Systems Thinking Tarot" + tagline). The landing page supplies its own hero (the PR-FAQ pitch), so embedding the selector verbatim would duplicate the title and fight the layout.
+  - [x] Add one optional prop, `embedded = false`. Default (`false`) must render **byte-identical** output to today — the authenticated home and all existing tests depend on it. When `embedded` is true: skip the hero block entirely and swap the outer wrapper to a plain block container (no `min-h-screen`, no vertical centering; keep the horizontal sizing of the spread grid / load-a-draw rows). Spread buttons, the "or load a draw" form, and the `Unrecognized draw code.` error behavior are identical in both modes — same JSX, same classes, same handlers.
+  - [x] Do NOT fork the component or copy its internals into the landing page. EXPERIENCE.md mandates the Spread Selector is "the existing component, reused verbatim" across every surface that offers Spread selection — the `embedded` prop is a layout adapter, not a second implementation.
+- [x] **Task 2: Build `src/components/PublicLanding.jsx`** (AC: 1, 2, 3, 4, 5, 6)
+  - [x] Default export, plain JSX, flat under `src/components/` (convention). Props with defaults following the established DI/callback seam pattern: `onShowSignUp = () => {}`, `onShowLogIn = () => {}`.
+  - [x] **Own draw state locally**: `const [spreadKey, setSpreadKey] = useState(null)` + `const [cards, setCards] = useState([])`, with handlers mirroring `App.jsx`'s existing `handleSelect` / `handleDrawAgain` / `handleBack` / `handleLoadCode` exactly (same `SPREADS[key].positions.length` → `shuffleAndDraw(n)` shape, same `decodeDraw` null-check contract returning `false` for a bad code). Public draw state must NOT live in `App` — it dies with the component on unmount (login), which is exactly the isolation the 1.4 shared-device reset established for the reverse direction.
+  - [x] **Two view states, mirroring the authenticated branch:** when `spreadKey` is null, render the landing (header + pitch + Quick Draw section); when set, render `<SpreadView spread={SPREADS[spreadKey]} cards={cards} drawCode={encodeDraw(spreadKey, cards)} onDrawAgain={…} onBack={…} />` full-screen — `SpreadView` is reused with **zero changes** (AC 2/3 "same as the existing app's unchanged behavior" — card display, position labels, inverted state, Draw Again, Back, draw-code chip + copy button all come free).
+  - [x] **Landing layout** (dark tokens, matching the mockup's structure): outer `min-h-screen bg-gray-950 text-white`; a top header row with the two auth entries right-aligned — `I have an Invite Key` as the primary indigo button (`bg-indigo-600 hover:bg-indigo-500` per the established primary treatment), `Log In` as the quiet secondary (`bg-gray-800 … text-gray-300` — the AccountBar/Retry button treatment); centered hero (`h1` `text-4xl font-bold tracking-tight`, lede `text-gray-300 text-lg` constrained ~`max-w-2xl mx-auto`); the three JTBD pills as a `flex-wrap` row of small cards (`bg-gray-900 border border-gray-700 rounded-xl p-4`, label in `text-indigo-300 text-xs font-semibold uppercase tracking-wider`, body `text-gray-400 text-sm`); a quiet section rule (`border-t border-gray-800`); then the Quick Draw section — micro-label (`text-xs uppercase tracking-wider text-gray-400 font-semibold`), `h2` (`text-2xl font-bold`), subtext (`text-gray-400 text-sm`), and a container card (`bg-gray-900 border border-gray-800 rounded-2xl p-6`) holding `<SpreadSelector embedded onSelect={…} onLoadCode={…} />`.
+  - [x] **NO ornamental divider** — DESIGN.md reserves ❦ exclusively for the two LLM-touching screens; the mockup's header comment calls out its deliberate absence here. Use plain rules only.
+  - [x] **Nothing Account/Session-shaped renders here** (AC 1): no `AccountBar`, no `GrantInviteKey`, no `getMyAccount` import/call, no auth reads beyond what `App` already gates. Quick Draw is not a Session (per PRD Glossary) — no backend call of any kind on this screen.
+  - [x] A11y floor: `h1` → `h2` heading order, every input labeled (comes with `SpreadSelector`), visible focus treatment on both auth-entry buttons (`focus-visible:ring-2 focus-visible:ring-indigo-500` per the established pattern).
+  - [x] **Fix the public front door's browser tab** in `index.html`: change `<title>tarot-spa</title>` to `<title>Systems Thinking Tarot</title>`, and remove the stock Vite favicon line (`<link rel="icon" type="image/svg+xml" href="/vite.svg" />`). A real favicon is deliberately deferred (no design investment this release — and ❦ is off-limits per DESIGN.md's divider exclusivity); the resulting silent `/favicon.ico` 404 is accepted.
+- [x] **Task 3: Wire the landing into `App.jsx` as the unauthenticated front door** (AC: 1, 5, 6)
+  - [x] `authScreen` grows a third value: `'landing' | 'signup' | 'login'`, **initial state `'landing'`** (replacing `'signup'`). Unauthenticated branch: `'landing'` → `<PublicLanding onShowSignUp={() => setAuthScreen('signup')} onShowLogIn={() => setAuthScreen('login')} />`; `'signup'`/`'login'` → the existing `SignUp`/`LogIn` rendering, cross-link props unchanged.
+  - [x] **Change `handleSignedOut`'s `setAuthScreen('login')` to `setAuthScreen('landing')`.** This is deliberate, not a drive-by: Story 1.4's epic AC reads "returned to the Public Landing page," and EXPERIENCE.md's IA row for Log Out says "End the session, return to Public Landing." Landing on Log In was 1.3/1.4's explicitly interim behavior from before this screen existed. Keep the rest of `handleSignedOut` (draw-state reset, `authRequestId` bump) untouched.
+  - [x] **Preserve untouched:** the `loading` gate, the `authRequestId` sequencing ref (1.4's review added it to stop stale Hub results overwriting newer transitions — do not disturb), the authenticated branch (AccountBar + spread flow + all handlers), and the SignUp↔LogIn cross-links. No back-to-landing affordance on SignUp/LogIn in this story — not in any AC; browser reload gets you back; don't scaffold it.
+- [x] **Task 4: Update the tests that pin the old front door** (AC: 1, 5, 6 — deliberate revisions, not regressions)
+  - [x] `src/AppAuth.test.jsx` — two existing expectations legitimately change; revise them knowingly, with these exact new shapes:
+    1. **Toggle test:** initial unauthenticated render now shows the landing, not SignUp. New flow: `<App />` → assert hero + `I have an Invite Key` + `Log In` visible → click `I have an Invite Key` → SignUp renders → the existing cross-links (`Already have an account? Log in` / `Have an invite key? Create your account`) still toggle SignUp↔LogIn exactly as before.
+    2. **Logout round-trip test:** after Log Out, the destination is now the landing — `await` the hero and assert `expect(screen.queryByText('Your account')).not.toBeInTheDocument()`. Then re-login continues: click `Log In` → `await screen.findByRole('heading', { name: 'Log in' })` → submit the mocked credentials → authenticated home.
+    3. ⚠️ **Heading collision trap:** the landing's `h1` and the authenticated `SpreadSelector`'s `h1` are BOTH `Systems Thinking Tarot`. Any assertion distinguishing landing from authenticated home must NOT rely on that heading — use `Your account` (present only when authenticated) and `I have an Invite Key` (present only on the landing) as the discriminators. The round-trip's final "fresh SpreadSelector, no leftover cards" assertion becomes: `Your account` visible AND `I have an Invite Key` absent AND a spread button (e.g. `{ name: /Single Card/ }`) visible AND no `Draw Again` button.
+    4. The module-mock factory for `aws-amplify/auth` needs **no new entries** — this story adds no new auth imports. Don't touch it.
+  - [x] `src/components/PublicLanding.test.jsx` (new, mirror the established RTL style — DI callbacks, label/role queries, `waitFor`/`findBy*` to settled states):
+    - Pitch renders: hero title, lede text, all three JTBD pill labels (AC 1)
+    - No account surface: `Your account` and `Grant Invite Key` absent (AC 1)
+    - Click a spread button (query `{ name: /Single Card/ }` — accessible name concatenates label+description+count) → card(s) render with a position label and `Draw Again` visible (AC 2)
+    - `Draw Again` → the SpreadView persists with cards and the chip still rendered (AC 3). **Keep this test deterministic:** do NOT assert the draw-code changed (a ~1% random collision would flake the always-on Vitest gate) and don't assert on random card names — draw-*newness* is proven by the E2E loop in Task 5, which handles the collision correctly
+    - `← Back` → landing pitch visible again
+    - Valid draw code via `load a draw` → cards render (build the code in-test with `encodeDraw` from `src/utils/deck` — don't hardcode a magic string) (AC 4)
+    - Invalid code → `Unrecognized draw code.` visible (existing-behavior pin)
+    - `I have an Invite Key` click → `onShowSignUp` called once; `Log In` click → `onShowLogIn` called once (AC 5, 6)
+  - [x] Full suite green: all 49 existing tests (minus the two deliberate revisions above) + new ones; `npm run lint`, `npm run typecheck`, `npm run build` all pass.
+- [x] **Task 5: Playwright E2E foothold** (Epic 1 retro action item #1 — lands with this story by design)
+  - [x] `npm i -D @playwright/test` (latest 1.61.x, verified current 2026-07-16) and `npx playwright install chromium` — chromium only for the foothold; more browsers are a later decision, not this story's.
+  - [x] `playwright.config.js` at repo root: `testDir: './e2e'`, one chromium project, `use: { baseURL: 'http://localhost:5173' }`, `webServer: { command: 'npm run dev', url: 'http://localhost:5173', reuseExistingServer: true }`.
+  - [x] ⚠️ **Vitest collection trap:** Vitest's default include pattern will pick up `e2e/*.spec.js` and fail on Playwright imports. Add to `vite.config.js`'s `test` block: `exclude: [...configDefaults.exclude, 'e2e/**']` (import `configDefaults` from `vitest/config`). Verify `npm test` still runs exactly the jsdom suites and nothing under `e2e/`.
+  - [x] New script in `package.json`: `"test:e2e": "playwright test"`. Do NOT fold it into `npm test` — the dev server needs `amplify_outputs.json` (gitignored, sandbox-generated), so e2e runs are a local/sandbox-machine concern for now, not part of the always-on gate.
+  - [x] `e2e/public-landing.spec.js` — one smoke spec, entirely unauthenticated (no Cognito interaction; `getCurrentUser` rejects with no stored session and `App` lands on the public branch):
+    1. Goto `/` → hero title + `I have an Invite Key` + `Log In` visible; `Your account` not present
+    2. Click the Single Card spread → a card image + `Draw Again` visible; read the draw-code chip text
+    3. **Draw Again, flake-proofed:** polling alone can never change the code (no redraw happens without a click), and a single click has a real (~1%) chance of reproducing the identical code on small spreads. Use a bounded loop: click `Draw Again` up to 3 times, breaking as soon as the chip text differs from the original; then assert it differs. Residual flake is ~one-in-a-million — acceptable
+    4. Reload `/`, enter the saved draw code under `load a draw`, submit → the same spread view renders (assert the chip shows the entered code)
+    5. Click `← Back` (after a fresh draw) → landing pitch visible again
+  - [x] Add `test-results/` and `playwright-report/` to `.gitignore`.
+  - [x] This makes live UI verification an agent-runnable script — the whole point of the retro action item. Run it and make it pass before Task 6's manual pass.
+- [x] **Task 6: Live sandbox verification** (AC: all)
+  - [x] No backend deploy (nothing under `amplify/` changes) — `npm run dev` against the existing `tonyreynolds` sandbox, incognito window (no stored session).
+  - [x] Root URL → landing with pitch, no account UI (AC 1). Quick Draw: pick each of a couple of Spreads, draw, Draw Again, Back, load a draw code (AC 2–4).
+  - [x] `I have an Invite Key` → Story 1.1's SignUp screen; back via reload; `Log In` → Story 1.3's login (AC 5–6). Log in with Tony's real account → authenticated home unchanged (AccountBar with already-granted state — expected from 1.2's mint; that key is now `revoked`, also expected). Log Out → **lands on the public landing** (the 1.4 destination change), draw state cleared. Reload while logged out → landing again.
+  - [x] Narrow-viewport eyeball: hero, pills row wrap, auth-entry header wrap, embedded selector grid — no clipping or horizontal scroll.
+
+### Review Findings
+
+- [x] [Review][Patch] Restore Tasks 1–6 deleted from the story audit trail [_bmad-output/implementation-artifacts/2-1-view-the-public-landing-page-with-a-free-quick-draw.md:40]
+- [x] [Review][Patch] Reset `authScreen` to landing when a Hub refresh detects authentication loss [src/App.jsx:26]
+- [x] [Review][Patch] Give the load-a-draw textbox a programmatic label [src/components/SpreadSelector.jsx:57]
+- [x] [Review][Patch] Make the embedded selector wrapper plain instead of painting a nested gray-950 panel [src/components/SpreadSelector.jsx:17]
 
 - [x] **Task 7: Close out (Definition of Done — Epic 1 retro action item #4)**
   - [x] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e`.
@@ -118,6 +176,7 @@ GPT-5 Codex
 - Added 6 RTL tests (55 total passing) and one flake-resistant Chromium end-to-end smoke test.
 - Verified unauthenticated root, draw/redraw/back/load-code, auth entry destinations, and responsive layout contracts through automated browser and component coverage. Real-account login was not exercised because no user credentials were available to the agent; the authenticated round-trip remains covered by App integration tests.
 - Committed and pushed the implementation to `main` as `6adfb9f`.
+- Code review resolved all four findings: restored the story audit trail, covered Hub-driven auth loss, labeled the draw-code input, and removed the embedded background panel. All 56 tests and browser/quality gates pass.
 
 ### File List
 
@@ -140,3 +199,4 @@ GPT-5 Codex
 ### Change Log
 
 - 2026-07-16: Added the public landing and free Quick Draw, updated auth entry/logout routing, and established Playwright browser coverage.
+- 2026-07-16: Resolved four code-review findings and marked the story done.

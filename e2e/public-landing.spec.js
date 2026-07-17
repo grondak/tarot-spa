@@ -22,7 +22,7 @@ test('visitor can draw, redraw, reload a code, and return to the landing', async
   expect(newCode).not.toBe(originalCode);
 
   await page.goto('/');
-  await page.getByPlaceholder('e.g. three:041221671').fill(newCode);
+  await page.getByRole('textbox', { name: 'Draw code' }).fill(newCode);
   await page.getByRole('button', { name: 'Load' }).click();
   await expect(drawCode).toHaveText(newCode);
 

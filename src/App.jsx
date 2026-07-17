@@ -24,7 +24,10 @@ export default function App() {
         await getCurrentUser();
         if (requestId === authRequestId.current) setAuthState('authenticated');
       } catch {
-        if (requestId === authRequestId.current) setAuthState('unauthenticated');
+        if (requestId === authRequestId.current) {
+          setAuthState('unauthenticated');
+          setAuthScreen('landing');
+        }
       }
     }
 

@@ -101,4 +101,15 @@ describe('App authenticated sign-out round trip', () => {
     rejectStaleRefresh(new Error('stale signed-out result'));
     await waitFor(() => expect(screen.getByText('Your account')).toBeVisible());
   });
+
+  it('returns to the landing when an auth refresh detects session loss', async () => {
+    render(<App />);
+
+    expect(await screen.findByText('Your account')).toBeVisible();
+    getCurrentUser.mockRejectedValueOnce(new Error('session expired'));
+    Hub.listen.mock.calls[0][1]();
+
+    expect(await screen.findByRole('button', { name: 'I have an Invite Key' })).toBeVisible();
+    expect(screen.queryByText('Your account')).not.toBeInTheDocument();
+  });
 });

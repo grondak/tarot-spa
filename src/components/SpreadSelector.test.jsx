@@ -15,7 +15,8 @@ describe('SpreadSelector embedded layout', () => {
 
     expect(screen.queryByRole('heading', { name: 'Systems Thinking Tarot' })).not.toBeInTheDocument();
     expect(container.firstChild).not.toHaveClass('min-h-screen');
+    expect(container.firstChild).not.toHaveClass('bg-gray-950');
     expect(screen.getByRole('button', { name: /Single Card/ })).toBeVisible();
-    expect(screen.getByPlaceholderText('e.g. three:041221671')).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'Draw code' })).toBeVisible();
   });
 });
