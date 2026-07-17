@@ -153,11 +153,11 @@ GPT-5 Codex
 - 2026-07-12: Green phase passed 24/24 full regression tests; `npm run typecheck`, `npm run lint`, and `npm run build` passed.
 - 2026-07-12: Existing sandbox watcher (PID 30832) deployed the changes; CloudFormation reached `UPDATE_COMPLETE` and generated the `invite-key-mint` Lambda.
 - 2026-07-12: Browser plugin execution was unavailable because its backend rejected required sandbox metadata, so authenticated visual UI verification could not be performed.
-- 2026-07-12: Direct live Lambda invocation for Tony's eligible FirstGen account returned `Z4MX-54WB-RGE3`; DynamoDB confirmed the Account flag changed to `true` and exactly one unredeemed SecondGen InviteKey was created.
+- 2026-07-12: Direct live Lambda invocation for Tony's eligible FirstGen account returned a key code (redacted — live invite key codes don't belong in repo artifacts); DynamoDB confirmed the Account flag changed to `true` and exactly one unredeemed SecondGen InviteKey was created.
 - 2026-07-12: A duplicate invocation and an invocation for sandbox account `story-1-2-secondgen-test` both returned `Error('not eligible')`.
 - 2026-07-12: Diagnosed the missing account affordance as Story 1.1 Account records lacking Amplify model timestamps; added a failing regression assertion, updated post-confirmation Account writes, and backfilled Tony's sandbox Account.
 - 2026-07-12: Tony confirmed the authenticated UI now renders the plain "You've already granted your key" state.
-- 2026-07-12: After the sandbox eligibility reset, Tony clicked the authenticated UI action and supplied returned code `W32D-UVPH-2QBY`; a consistent DynamoDB read confirmed that exact unredeemed SecondGen InviteKey plus Tony's Account flag and matching timestamps.
+- 2026-07-12: After the sandbox eligibility reset, Tony clicked the authenticated UI action and supplied the returned code (redacted); a consistent DynamoDB read confirmed that exact unredeemed SecondGen InviteKey plus Tony's Account flag and matching timestamps.
 
 ### Completion Notes List
 
@@ -166,7 +166,7 @@ GPT-5 Codex
 - Added same-stack write IAM/environment wiring without changing the public pre-check WAF rule.
 - Added authenticated Account lookup, grant UI, one-time copyable code display, double-submit guard, stale-race refresh, and hidden SecondGen behavior.
 - Live backend verification passed for success, duplicate rejection, and SecondGen rejection; the authenticated visual UI mint/code-display pass is also complete.
-- Code review patches hardened missing-code, refresh, clipboard, Account loading, and Amplify timestamp behavior; final UI mint returned `W32D-UVPH-2QBY` and its exact DynamoDB state was verified.
+- Code review patches hardened missing-code, refresh, clipboard, Account loading, and Amplify timestamp behavior; final UI mint returned a key code (redacted) and its exact DynamoDB state was verified.
 - Re-review patches added Lambda configuration validation, unresolved stale-race feedback, and explicit non-overlapping Account loading/retry states; 29 tests pass.
 - Third-pass patches made missing-account recovery retryable and added focused AccountBar, double-click, transaction-value, and clipboard-isolation coverage; 32 tests pass.
 - Fourth-pass patches added accessible async account/copy announcements, keyboard-selectable code, and an auditable live-verification record; 32 tests pass.

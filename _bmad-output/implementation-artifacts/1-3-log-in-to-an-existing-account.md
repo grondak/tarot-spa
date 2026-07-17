@@ -100,7 +100,7 @@ The `CONFIRM_SIGN_UP` copy deliberately does **not** tell the user to sign up ag
 
 ### Previous story intelligence (1.2, external dev agent)
 
-- Final state: 32 tests passing, five code-review passes applied, live-verified (mint `W32D-UVPH-2QBY`, Tony's account now `onwardKeyGenerated: true` in the sandbox — so the AccountBar shows the already-granted state during this story's live verification; that's expected, not a bug).
+- Final state: 32 tests passing, five code-review passes applied, live-verified (mint code redacted, Tony's account now `onwardKeyGenerated: true` in the sandbox — so the AccountBar shows the already-granted state during this story's live verification; that's expected, not a bug).
 - 1.2's reviews repeatedly hardened: retry/loading-state overlap, accessible async announcements (`role="status"`/`role="alert"`), clipboard isolation in tests, awaiting settled UI states in async tests. Write the new tests to that bar from the start — `waitFor` to settled states, no assertions mid-transition.
 - 1.2 also back-filled Amplify model timestamps (`createdAt`/`updatedAt`) onto post-confirmation Account writes after the Data client's list() silently required them — a reminder that the generated client is strict about model shape; irrelevant to this story's code but explains the `handler.ts` timestamp lines if the dev agent reads them.
 - Stories 1.1 and 1.2 are committed (`4812433`, `39476e5`); this story's `baseline_commit` is the full SHA of the dev-start HEAD, so the story diff is exactly this story's work.
