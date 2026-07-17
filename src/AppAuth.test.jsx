@@ -25,10 +25,15 @@ describe('App unauthenticated screens', () => {
     getCurrentUser.mockRejectedValue(new Error('not signed in'));
   });
 
-  it('toggles from SignUp to LogIn and back', async () => {
+  it('opens SignUp from the landing and keeps the SignUp and LogIn cross-links', async () => {
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Create your account' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Systems Thinking Tarot' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'I have an Invite Key' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Log In' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'I have an Invite Key' }));
+
+    expect(screen.getByRole('heading', { name: 'Create your account' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Already have an account? Log in' }));
 
     expect(screen.getByRole('heading', { name: 'Log in' })).toBeVisible();
@@ -51,7 +56,7 @@ describe('App authenticated sign-out round trip', () => {
     signIn.mockResolvedValue({ isSignedIn: true });
   });
 
-  it('clears the draw and returns to login before a fresh sign-in', async () => {
+  it('clears the draw and returns to the landing before a fresh sign-in', async () => {
     render(<App />);
 
     expect(await screen.findByText('Your account')).toBeVisible();
@@ -59,15 +64,21 @@ describe('App authenticated sign-out round trip', () => {
     expect(screen.getByText('Single Card')).toBeVisible();
 
     fireEvent.click(screen.getByRole('button', { name: 'Log Out' }));
-    expect(await screen.findByRole('heading', { name: 'Log in' })).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'I have an Invite Key' })).toBeVisible();
     expect(signOut).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('Your account')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log In' }));
+    expect(await screen.findByRole('heading', { name: 'Log in' })).toBeVisible();
 
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'tony@example.com' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } });
     fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
 
-    expect(await screen.findByRole('heading', { name: 'Systems Thinking Tarot' })).toBeVisible();
+    expect(await screen.findByText('Your account')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'I have an Invite Key' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Single Card/ })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Draw Again' })).not.toBeInTheDocument();
   });
 
   it('ignores an older auth refresh after logout and a fresh sign-in', async () => {
@@ -79,6 +90,8 @@ describe('App authenticated sign-out round trip', () => {
     Hub.listen.mock.calls[0][1]();
 
     fireEvent.click(screen.getByRole('button', { name: 'Log Out' }));
+    expect(await screen.findByRole('button', { name: 'I have an Invite Key' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Log In' }));
     expect(await screen.findByRole('heading', { name: 'Log in' })).toBeVisible();
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'tony@example.com' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } });

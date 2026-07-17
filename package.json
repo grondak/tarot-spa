@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "preview": "vite preview",
     "seed-invite-key": "node scripts/seed-invite-key.mjs"
   },
@@ -25,6 +26,7 @@
     "@aws-sdk/client-ssm": "^3.1085.0",
     "@aws-sdk/lib-dynamodb": "^3.1085.0",
     "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/vite": "^4.2.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

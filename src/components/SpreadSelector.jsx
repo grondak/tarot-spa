@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { SPREADS } from '../utils/deck';
 
-export default function SpreadSelector({ onSelect, onLoadCode }) {
+export default function SpreadSelector({ onSelect, onLoadCode, embedded = false }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
 
@@ -14,16 +14,16 @@ export default function SpreadSelector({ onSelect, onLoadCode }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-4 py-12">
+    <div className={embedded ? 'bg-gray-950 flex flex-col items-center' : 'min-h-screen bg-gray-950 flex flex-col items-center justify-center px-4 py-12'}>
       {/* Title */}
-      <div className="text-center mb-12">
+      {!embedded && <div className="text-center mb-12">
         <h1 className="text-4xl font-bold text-white tracking-tight mb-3">
           Systems Thinking Tarot
         </h1>
         <p className="text-gray-400 text-lg max-w-md">
           Structured randomization forcing novel combinations of systems patterns.
         </p>
-      </div>
+      </div>}
 
       {/* Spread buttons */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-xl">

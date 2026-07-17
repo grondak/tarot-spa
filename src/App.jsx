@@ -7,11 +7,12 @@ import SpreadView from './components/SpreadView';
 import SignUp from './components/SignUp';
 import LogIn from './components/LogIn';
 import GrantInviteKey from './components/GrantInviteKey';
+import PublicLanding from './components/PublicLanding';
 import { getMyAccount } from './utils/account';
 
 export default function App() {
   const [authState, setAuthState] = useState('loading');
-  const [authScreen, setAuthScreen] = useState('signup');
+  const [authScreen, setAuthScreen] = useState('landing');
   const [spreadKey, setSpreadKey] = useState(null);
   const [cards, setCards] = useState([]);
   const authRequestId = useRef(0);
@@ -58,7 +59,7 @@ export default function App() {
   function handleSignedOut() {
     authRequestId.current += 1;
     setAuthState('unauthenticated');
-    setAuthScreen('login');
+    setAuthScreen('landing');
     setSpreadKey(null);
     setCards([]);
   }
@@ -73,6 +74,15 @@ export default function App() {
   }
 
   if (authState === 'unauthenticated') {
+    if (authScreen === 'landing') {
+      return (
+        <PublicLanding
+          onShowSignUp={() => setAuthScreen('signup')}
+          onShowLogIn={() => setAuthScreen('login')}
+        />
+      );
+    }
+
     return authScreen === 'login' ? (
       <LogIn
         onSignedIn={handleSignedIn}

@@ -4,3 +4,5 @@ dist
 .DS_Store
 amplify_outputs.json
 .amplify
+test-results/
+playwright-report/
