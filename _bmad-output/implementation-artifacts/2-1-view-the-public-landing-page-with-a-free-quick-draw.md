@@ -1,6 +1,6 @@
 # Story 2.1: View the public landing page with a free Quick Draw
 
-Status: review
+Status: done
 baseline_commit: 9c6e8be5f7bfc73e27a9ebbe1e06f4ea93bbba3a
 
 ## Story
@@ -207,3 +207,4 @@ GPT-5 Codex
 - 2026-07-16: Resolved four code-review findings and marked the story done.
 - 2026-07-17: Resolved three second-pass findings and returned the story to in-progress pending real-account sandbox verification.
 - 2026-07-17: Completed real-account sandbox verification and returned the story to review.
+- 2026-07-17: Final adversarial code review passed cleanly; marked the story done.
