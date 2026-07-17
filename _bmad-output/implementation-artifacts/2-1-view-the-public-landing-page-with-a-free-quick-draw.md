@@ -1,6 +1,6 @@
 # Story 2.1: View the public landing page with a free Quick Draw
 
-Status: ready-for-dev
+Status: review
 baseline_commit: 9c6e8be5f7bfc73e27a9ebbe1e06f4ea93bbba3a
 
 ## Story
@@ -40,10 +40,10 @@ The mockup also shows a Request Access form — that is **Story 2.2, do not buil
 ## Tasks / Subtasks
 
 
-- [ ] **Task 7: Close out (Definition of Done — Epic 1 retro action item #4)**
+- [x] **Task 7: Close out (Definition of Done — Epic 1 retro action item #4)**
   - [x] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e`.
   - [x] Sweep the diff and this story file for live credentials/keys/secrets before committing (no invite-key codes, no AWS identifiers beyond what's already public convention).
-  - [ ] Commit and push to `main`. A story is not `done` until its work is committed, pushed, and swept — this is the tightened definition of done from the Epic 1 retrospective.
+  - [x] Commit and push to `main`. A story is not `done` until its work is committed, pushed, and swept — this is the tightened definition of done from the Epic 1 retrospective.
 
 ## Dev Notes
 
@@ -117,6 +117,7 @@ GPT-5 Codex
 - Updated logout to return to the public landing while preserving auth request sequencing and state resets.
 - Added 6 RTL tests (55 total passing) and one flake-resistant Chromium end-to-end smoke test.
 - Verified unauthenticated root, draw/redraw/back/load-code, auth entry destinations, and responsive layout contracts through automated browser and component coverage. Real-account login was not exercised because no user credentials were available to the agent; the authenticated round-trip remains covered by App integration tests.
+- Committed and pushed the implementation to `main` as `6adfb9f`.
 
 ### File List
 
