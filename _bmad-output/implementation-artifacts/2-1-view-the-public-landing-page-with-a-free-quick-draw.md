@@ -1,6 +1,6 @@
 # Story 2.1: View the public landing page with a free Quick Draw
 
-Status: done
+Status: in-progress
 baseline_commit: 9c6e8be5f7bfc73e27a9ebbe1e06f4ea93bbba3a
 
 ## Story
@@ -85,10 +85,10 @@ The mockup also shows a Request Access form — that is **Story 2.2, do not buil
     5. Click `← Back` (after a fresh draw) → landing pitch visible again
   - [x] Add `test-results/` and `playwright-report/` to `.gitignore`.
   - [x] This makes live UI verification an agent-runnable script — the whole point of the retro action item. Run it and make it pass before Task 6's manual pass.
-- [x] **Task 6: Live sandbox verification** (AC: all)
+- [ ] **Task 6: Live sandbox verification** (AC: all)
   - [x] No backend deploy (nothing under `amplify/` changes) — `npm run dev` against the existing `tonyreynolds` sandbox, incognito window (no stored session).
   - [x] Root URL → landing with pitch, no account UI (AC 1). Quick Draw: pick each of a couple of Spreads, draw, Draw Again, Back, load a draw code (AC 2–4).
-  - [x] `I have an Invite Key` → Story 1.1's SignUp screen; back via reload; `Log In` → Story 1.3's login (AC 5–6). Log in with Tony's real account → authenticated home unchanged (AccountBar with already-granted state — expected from 1.2's mint; that key is now `revoked`, also expected). Log Out → **lands on the public landing** (the 1.4 destination change), draw state cleared. Reload while logged out → landing again.
+  - [ ] `I have an Invite Key` → Story 1.1's SignUp screen; back via reload; `Log In` → Story 1.3's login (AC 5–6). Log in with Tony's real account → authenticated home unchanged (AccountBar with already-granted state — expected from 1.2's mint; that key is now `revoked`, also expected). Log Out → **lands on the public landing** (the 1.4 destination change), draw state cleared. Reload while logged out → landing again.
   - [x] Narrow-viewport eyeball: hero, pills row wrap, auth-entry header wrap, embedded selector grid — no clipping or horizontal scroll.
 
 ### Review Findings
@@ -97,6 +97,9 @@ The mockup also shows a Request Access form — that is **Story 2.2, do not buil
 - [x] [Review][Patch] Reset `authScreen` to landing when a Hub refresh detects authentication loss [src/App.jsx:26]
 - [x] [Review][Patch] Give the load-a-draw textbox a programmatic label [src/components/SpreadSelector.jsx:57]
 - [x] [Review][Patch] Make the embedded selector wrapper plain instead of painting a nested gray-950 panel [src/components/SpreadSelector.jsx:17]
+- [x] [Review][Patch] Clear authenticated draw state when Hub detects session loss [src/App.jsx:26]
+- [x] [Review][Patch] Reconcile the checked real-account verification task with the completion note that it was not performed [_bmad-output/implementation-artifacts/2-1-view-the-public-landing-page-with-a-free-quick-draw.md:91]
+- [x] [Review][Patch] Update the stale “55 total passing” completion evidence to 56 [_bmad-output/implementation-artifacts/2-1-view-the-public-landing-page-with-a-free-quick-draw.md:176]
 
 - [x] **Task 7: Close out (Definition of Done — Epic 1 retro action item #4)**
   - [x] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e`.
@@ -173,10 +176,11 @@ GPT-5 Codex
 - Added the exact public PR-FAQ pitch, distinct Invite Key and Log In entries, and an isolated free Quick Draw flow with draw-code loading.
 - Reused `SpreadSelector` and `SpreadView`; no backend or authenticated draw behavior changed.
 - Updated logout to return to the public landing while preserving auth request sequencing and state resets.
-- Added 6 RTL tests (55 total passing) and one flake-resistant Chromium end-to-end smoke test.
+- Added 7 RTL tests (56 total passing) and one flake-resistant Chromium end-to-end smoke test.
 - Verified unauthenticated root, draw/redraw/back/load-code, auth entry destinations, and responsive layout contracts through automated browser and component coverage. Real-account login was not exercised because no user credentials were available to the agent; the authenticated round-trip remains covered by App integration tests.
 - Committed and pushed the implementation to `main` as `6adfb9f`.
 - Code review resolved all four findings: restored the story audit trail, covered Hub-driven auth loss, labeled the draw-code input, and removed the embedded background panel. All 56 tests and browser/quality gates pass.
+- Second code review cleared draw state on Hub-detected session loss and corrected the verification record. Real-account sandbox verification remains open.
 
 ### File List
 
@@ -200,3 +204,4 @@ GPT-5 Codex
 
 - 2026-07-16: Added the public landing and free Quick Draw, updated auth entry/logout routing, and established Playwright browser coverage.
 - 2026-07-16: Resolved four code-review findings and marked the story done.
+- 2026-07-17: Resolved three second-pass findings and returned the story to in-progress pending real-account sandbox verification.

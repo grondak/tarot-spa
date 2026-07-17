@@ -106,10 +106,21 @@ describe('App authenticated sign-out round trip', () => {
     render(<App />);
 
     expect(await screen.findByText('Your account')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: /Single Card/ }));
+    expect(screen.getByRole('button', { name: 'Draw Again' })).toBeVisible();
     getCurrentUser.mockRejectedValueOnce(new Error('session expired'));
     Hub.listen.mock.calls[0][1]();
 
     expect(await screen.findByRole('button', { name: 'I have an Invite Key' })).toBeVisible();
     expect(screen.queryByText('Your account')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log In' }));
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'tony@example.com' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
+
+    expect(await screen.findByText('Your account')).toBeVisible();
+    expect(screen.getByRole('button', { name: /Single Card/ })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Draw Again' })).not.toBeInTheDocument();
   });
 });

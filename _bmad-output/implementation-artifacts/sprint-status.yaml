@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-11
-last_updated: 2026-07-16
+last_updated: 2026-07-17
 project: tarot-spa
 project_key: NOKEY
 tracking_system: file-system
@@ -56,7 +56,7 @@ development_status:
   epic-1-retrospective: done
 
   epic-2: in-progress
-  2-1-view-the-public-landing-page-with-a-free-quick-draw: done
+  2-1-view-the-public-landing-page-with-a-free-quick-draw: in-progress
   2-2-request-access-via-the-form: backlog
   epic-2-retrospective: optional
 

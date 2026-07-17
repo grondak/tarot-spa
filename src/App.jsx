@@ -27,6 +27,8 @@ export default function App() {
         if (requestId === authRequestId.current) {
           setAuthState('unauthenticated');
           setAuthScreen('landing');
+          setSpreadKey(null);
+          setCards([]);
         }
       }
     }
