@@ -61,4 +61,14 @@ describe('PublicLanding', () => {
     expect(onShowSignUp).toHaveBeenCalledTimes(1);
     expect(onShowLogIn).toHaveBeenCalledTimes(1);
   });
+
+  it('renders Request Access after Quick Draw', () => {
+    render(<PublicLanding />);
+
+    const quickDraw = screen.getByRole('heading', { name: 'Quick Draw' });
+    const requestAccess = screen.getByRole('heading', { name: 'Request Access' });
+    expect(screen.getByRole('textbox', { name: 'Name' })).toBeVisible();
+    expect(screen.getByRole('textbox', { name: 'Email' })).toBeVisible();
+    expect(quickDraw.compareDocumentPosition(requestAccess) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

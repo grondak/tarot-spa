@@ -23,6 +23,7 @@
     "@aws-amplify/backend-cli": "^1.8.3",
     "@aws-sdk/client-cognito-identity-provider": "^3.1085.0",
     "@aws-sdk/client-dynamodb": "^3.1085.0",
+    "@aws-sdk/client-sesv2": "^3.1090.0",
     "@aws-sdk/client-ssm": "^3.1085.0",
     "@aws-sdk/lib-dynamodb": "^3.1085.0",
     "@eslint/js": "^9.39.1",

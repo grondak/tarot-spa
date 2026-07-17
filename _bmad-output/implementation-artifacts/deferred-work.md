@@ -5,4 +5,4 @@
 
 ## Tracked from: Story 1.1 review, accepted-as-is (2026-07-12)
 
-- AppSync API key (`apiKeyAuthorizationMode: { expiresInDays: 30 }`) has no rotation plan. The public `checkInviteKey` pre-check authenticates with this key, so new signups' key pre-check starts failing ~30 days after each deploy unless the key is rotated (a redeploy regenerates it). Current sandbox deploy dates from 2026-07-12 → nominal expiry ~2026-08-11. Decide before Epic 3: rotation habit, longer expiry, or move the pre-check off apiKey auth.
+- AppSync API key (`apiKeyAuthorizationMode: { expiresInDays: 30 }`) has no rotation plan. Both public operations, `checkInviteKey` and `requestAccess`, authenticate with this key, so new-signup key checks and access requests start failing ~30 days after each deploy unless the key is rotated (a redeploy regenerates it). Story 2.2 redeployed the sandbox on 2026-07-17 → nominal expiry ~2026-08-16. Decide before Epic 3: rotation habit, longer expiry, or move the public operations off apiKey auth.

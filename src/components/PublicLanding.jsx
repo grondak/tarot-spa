@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { decodeDraw, encodeDraw, shuffleAndDraw, SPREADS } from '../utils/deck';
 import SpreadSelector from './SpreadSelector';
 import SpreadView from './SpreadView';
+import RequestAccess from './RequestAccess';
 
 const JOBS = [
   ['Functional', "See it from a different angle — not another pro/con list you could've made yourself."],
@@ -93,6 +94,8 @@ export default function PublicLanding({ onShowSignUp = () => {}, onShowLogIn = (
           <SpreadSelector embedded onSelect={handleSelect} onLoadCode={handleLoadCode} />
         </div>
       </section>
+
+      <RequestAccess />
     </main>
   );
 }

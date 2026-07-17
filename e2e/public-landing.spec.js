@@ -30,3 +30,21 @@ test('visitor can draw, redraw, reload a code, and return to the landing', async
   await page.getByRole('button', { name: '← Back' }).click();
   await expect(page.getByText("Most bad decisions aren't made because people lack information" , { exact: false })).toBeVisible();
 });
+
+test('visitor sees inline access-request validation', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(page.getByRole('heading', { name: 'Request Access' })).toBeVisible();
+  const name = page.getByRole('textbox', { name: 'Name' });
+  const email = page.getByRole('textbox', { name: 'Email' });
+  await expect(name).toBeVisible();
+  await expect(email).toBeVisible();
+
+  await page.getByRole('button', { name: 'Request Access' }).click();
+  await expect(page.getByText('Please enter your name.')).toBeVisible();
+
+  await name.fill('Priya Shah');
+  await email.fill('not-an-email');
+  await page.getByRole('button', { name: 'Request Access' }).click();
+  await expect(page.getByText("That email address doesn't look right — double-check it.")).toBeVisible();
+});

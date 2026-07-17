@@ -8,6 +8,7 @@ import { data } from './data/resource';
 import { postConfirmation } from './auth/post-confirmation/resource';
 import { checkInviteKey } from './functions/check-invite-key/resource';
 import { inviteKeyMint } from './functions/invite-key-mint/resource';
+import { requestAccess } from './functions/request-access/resource';
 
 const backend = defineBackend({
   auth,
@@ -15,6 +16,7 @@ const backend = defineBackend({
   postConfirmation,
   checkInviteKey,
   inviteKeyMint,
+  requestAccess,
 });
 
 const accountTable = backend.data.resources.tables.Account;
@@ -22,6 +24,18 @@ const inviteKeyTable = backend.data.resources.tables.InviteKey;
 const redemptionLambda = backend.postConfirmation.resources.lambda;
 const checkInviteKeyLambda = backend.checkInviteKey.resources.lambda;
 const inviteKeyMintLambda = backend.inviteKeyMint.resources.lambda;
+const requestAccessLambda = backend.requestAccess.resources.lambda;
+
+// The cutout identity is a runtime secret, so its exact ARN is unavailable at synth.
+// Accepted residual risk: one action on this single Lambda may target any SES identity
+// in this account/region, matching the existing User Pool wildcard rationale below.
+const dataStack = Stack.of(accountTable);
+requestAccessLambda.addToRolePolicy(new PolicyStatement({
+  actions: ['ses:SendEmail'],
+  resources: [
+    dataStack.formatArn({ service: 'ses', resource: 'identity', resourceName: '*' }),
+  ],
+}));
 
 // checkInviteKey lives in the same nested stack as `data` (resourceGroupName: 'data' on
 // both), so this is a same-stack reference — safe to grant directly, no cycle risk.
@@ -68,7 +82,6 @@ const accountTableParam = `${ssmPrefix}/account-table-name`;
 const inviteKeyTableParam = `${ssmPrefix}/invite-key-table-name`;
 
 // Same-stack live refs (table -> parameter, both in `data`) — no cycle risk.
-const dataStack = Stack.of(accountTable);
 new StringParameter(dataStack, 'AccountTableNameParam', {
   parameterName: accountTableParam,
   stringValue: accountTable.tableName,
@@ -172,6 +185,30 @@ const inviteKeyRateLimit = new CfnWebACL(dataStack, 'ApiRateLimit', {
         sampledRequestsEnabled: true,
         cloudWatchMetricsEnabled: true,
         metricName: 'tarotSpaApiRateLimit',
+      },
+    },
+    {
+      name: 'RateLimitRequestAccessPerIp',
+      priority: 1,
+      action: { block: {} },
+      statement: {
+        rateBasedStatement: {
+          limit: 100,
+          aggregateKeyType: 'IP',
+          scopeDownStatement: {
+            byteMatchStatement: {
+              searchString: 'requestAccess',
+              fieldToMatch: { body: { oversizeHandling: 'MATCH' } },
+              textTransformations: [{ priority: 0, type: 'NONE' }],
+              positionalConstraint: 'CONTAINS',
+            },
+          },
+        },
+      },
+      visibilityConfig: {
+        sampledRequestsEnabled: true,
+        cloudWatchMetricsEnabled: true,
+        metricName: 'tarotSpaRequestAccessRateLimit',
       },
     },
   ],
