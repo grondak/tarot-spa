@@ -55,8 +55,8 @@ development_status:
   1-4-log-out: done
   epic-1-retrospective: done
 
-  epic-2: backlog
-  2-1-view-the-public-landing-page-with-a-free-quick-draw: backlog
+  epic-2: in-progress
+  2-1-view-the-public-landing-page-with-a-free-quick-draw: ready-for-dev
   2-2-request-access-via-the-form: backlog
   epic-2-retrospective: optional
 
