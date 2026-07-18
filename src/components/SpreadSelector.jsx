@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { SPREADS } from '../utils/deck';
 
-export default function SpreadSelector({ onSelect, onLoadCode, embedded = false }) {
+export default function SpreadSelector({ onSelect, onLoadCode, embedded = false, selectedKey, showLoadDraw = true }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+  const selectionMode = selectedKey !== undefined;
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -27,27 +28,38 @@ export default function SpreadSelector({ onSelect, onLoadCode, embedded = false 
 
       {/* Spread buttons */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-xl">
-        {Object.entries(SPREADS).map(([key, spread]) => (
-          <button
-            key={key}
-            onClick={() => onSelect(key)}
-            className="group flex flex-col items-start gap-1.5 p-5 bg-gray-900 hover:bg-gray-800 border border-gray-700 hover:border-indigo-500 rounded-2xl text-left transition-all"
-          >
-            <span className="text-white font-semibold text-base group-hover:text-indigo-300 transition-colors">
-              {spread.label}
-            </span>
-            <span className="text-gray-400 text-sm">
-              {spread.description}
-            </span>
-            <span className="text-gray-600 text-xs mt-1">
-              {spread.positions.length} {spread.positions.length === 1 ? 'card' : 'cards'}
-            </span>
-          </button>
-        ))}
+        {Object.entries(SPREADS).map(([key, spread]) => {
+          const selected = selectionMode && key === selectedKey;
+          return (
+            <button
+              key={key}
+              // Selection mode renders inside ContextEntry's form; without an explicit
+              // type these buttons would submit it. Default usage stays byte-identical.
+              type={selectionMode ? 'button' : undefined}
+              onClick={() => onSelect(key)}
+              aria-pressed={selectionMode ? selected : undefined}
+              className={selected
+                ? 'group flex flex-col items-start gap-1.5 p-5 bg-gray-800 hover:bg-gray-800 border border-indigo-500 hover:border-indigo-500 rounded-2xl text-left transition-all'
+                : 'group flex flex-col items-start gap-1.5 p-5 bg-gray-900 hover:bg-gray-800 border border-gray-700 hover:border-indigo-500 rounded-2xl text-left transition-all'}
+            >
+              <span className={selected
+                ? 'text-indigo-300 font-semibold text-base group-hover:text-indigo-300 transition-colors'
+                : 'text-white font-semibold text-base group-hover:text-indigo-300 transition-colors'}>
+                {spread.label}
+              </span>
+              <span className="text-gray-400 text-sm">
+                {spread.description}
+              </span>
+              <span className="text-gray-600 text-xs mt-1">
+                {spread.positions.length} {spread.positions.length === 1 ? 'card' : 'cards'}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Load a draw */}
-      <div className="w-full max-w-xl mt-10">
+      {showLoadDraw && <div className="w-full max-w-xl mt-10">
         <div className="flex items-center gap-3 mb-4">
           <div className="flex-1 border-t border-gray-800" />
           <span className="text-gray-600 text-xs uppercase tracking-wider">or load a draw</span>
@@ -70,7 +82,7 @@ export default function SpreadSelector({ onSelect, onLoadCode, embedded = false 
           </button>
         </form>
         {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
-      </div>
+      </div>}
     </div>
   );
 }

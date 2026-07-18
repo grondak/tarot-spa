@@ -5,4 +5,5 @@
 
 ## Tracked from: Story 1.1 review, accepted-as-is (2026-07-12)
 
-- AppSync API key (`apiKeyAuthorizationMode: { expiresInDays: 30 }`) has no rotation plan. Both public operations, `checkInviteKey` and `requestAccess`, authenticate with this key, so new-signup key checks and access requests start failing ~30 days after each deploy unless the key is rotated (a redeploy regenerates it). Story 2.2 redeployed the sandbox on 2026-07-17 → nominal expiry ~2026-08-16. Decide before Epic 3: rotation habit, longer expiry, or move the public operations off apiKey auth.
+- AppSync API key (`apiKeyAuthorizationMode: { expiresInDays: 30 }`) has no rotation plan. Both public operations, `checkInviteKey` and `requestAccess`, authenticate with this key, so new-signup key checks and access requests start failing ~30 days after each deploy unless the key is rotated (a redeploy regenerates it). Story 2.2 redeployed the sandbox on 2026-07-17 → nominal expiry ~2026-08-16.
+  - **2026-07-17 (Epic 2 retro): DECIDED.** Keep apiKey auth with a rotation habit; a reminder email to the cutout address ahead of expiry is the tripwire (the cutout inbox is proven delivery infrastructure as of Story 2.2), and rotation happens via redeploy. Implementation tracked as an Epic 2 retro action item (owner: Tony).

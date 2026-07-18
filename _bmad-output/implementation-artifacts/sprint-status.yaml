@@ -1,5 +1,5 @@
 # generated: 2026-07-11
-# last_updated: 2026-07-16
+# last_updated: 2026-07-18
 # project: tarot-spa
 # project_key: NOKEY
 # tracking_system: file-system
@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-11
-last_updated: 2026-07-17
+last_updated: 2026-07-18
 project: tarot-spa
 project_key: NOKEY
 tracking_system: file-system
@@ -55,13 +55,13 @@ development_status:
   1-4-log-out: done
   epic-1-retrospective: done
 
-  epic-2: in-progress
+  epic-2: done
   2-1-view-the-public-landing-page-with-a-free-quick-draw: done
   2-2-request-access-via-the-form: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
-  epic-3: backlog
-  3-1-enter-context-and-pick-a-spread: backlog
+  epic-3: in-progress
+  3-1-enter-context-and-pick-a-spread: review
   3-2-generate-an-orientation-guide-bounded-by-the-daily-and-monthly-limits: backlog
   3-3-view-the-orientation-guide-results-screen: backlog
   3-4-redraw-from-the-results-screen: backlog
@@ -81,16 +81,52 @@ action_items:
   - epic: 1
     action: "Playwright E2E foothold landed alongside Story 2.1: one agent-runnable browser smoke spec against npm run dev, so live UI verification is a script rather than manual clicks"
     owner: "Amelia (dev agent), guidance from Murat"
-    status: open
+    status: done
   - epic: 1
     action: "SES one-time setup: verify the cutout recipient address (sandbox mode) before Story 2.2 dev starts"
     owner: "Tony"
-    status: open
+    status: done
   - epic: 1
     action: "API-key expiry decision before Epic 3: rotation habit, longer expiry, or move the checkInviteKey pre-check off apiKey auth (nominal expiry ~2026-08-11)"
     owner: "Tony + Winston"
-    status: open
+    status: done
   - epic: 1
     action: "Tighten definition of done: done = committed, pushed, artifacts swept for live credentials/keys; enforced in every story's final task from 2.1 onward"
     owner: "Amelia (process)"
+    status: done
+  - epic: 2
+    action: "API-key expiry handling per the Epic 2 retro decision: reminder email to the cutout address ahead of ~2026-08-16; rotate via redeploy on reminder"
+    owner: "Tony"
+    status: open
+  - epic: 2
+    action: "Bedrock one-time setup before Story 3.2: model access enabled in sandbox account/region; correct Opus inference-profile identifier confirmed and recorded"
+    owner: "Tony"
+    status: open
+  - epic: 2
+    action: "Tavily one-time setup before Story 3.2: account created, API key stored via npx ampx sandbox secret set"
+    owner: "Tony"
+    status: open
+  - epic: 2
+    action: "Dedicated agent test account: mint+redeem a test account, credentials as sandbox secrets (never in repo), wire into Playwright as authenticated fixture at Epic 3's first authenticated surface"
+    owner: "Tony (account) + Amelia (Playwright wiring)"
+    status: open
+  - epic: 2
+    action: "Manual AWS Budgets tripwire before real spend begins, covering the 3.2-to-3.6 window until FR10 alerting exists"
+    owner: "Tony"
+    status: open
+  - epic: 2
+    action: "Standard 'Pre-dev prerequisites (Tony)' section in every story spec with human-only setup; human-only work never on the agent's checklist"
+    owner: "Amelia (story-creation process)"
+    status: open
+  - epic: 2
+    action: "Environment pre-flight as Task 0 of any story with live verification: verify credentials/sandbox access at story start"
+    owner: "Amelia (process)"
+    status: open
+  - epic: 2
+    action: "Test bar: live-verification tasks name the observable outcome (email arrives, guide renders grounded), never the API call result"
+    owner: "Amelia + Murat"
+    status: open
+  - epic: 2
+    action: "Classify the 'Account couldn't load' transient from the 2026-07-17 session (CloudWatch/AppSync logs) before Epic 3 multiplies authenticated queries"
+    owner: "Amelia"
     status: open

@@ -28,6 +28,13 @@ export default defineConfig([
     },
   },
   {
+    // Playwright runs in Node; in-page callbacks (page.evaluate etc.) also touch browser globals.
+    files: ['e2e/**/*.js', 'playwright.config.js'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
+  {
     // Backend (Amplify/Lambda) and tooling code: Node runtime, not browser; no React rules.
     files: ['amplify/**/*.ts', 'scripts/**/*.mjs'],
     extends: [tseslint.configs.recommended],

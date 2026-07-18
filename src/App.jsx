@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getCurrentUser, signOut } from 'aws-amplify/auth';
 import { Hub } from 'aws-amplify/utils';
 import { SPREADS, shuffleAndDraw, encodeDraw, decodeDraw } from './utils/deck';
-import SpreadSelector from './components/SpreadSelector';
+import ContextEntry from './components/ContextEntry';
 import SpreadView from './components/SpreadView';
 import SignUp from './components/SignUp';
 import LogIn from './components/LogIn';
@@ -123,7 +123,7 @@ export default function App() {
         onBack={handleBack}
       />
       ) : (
-        <SpreadSelector onSelect={handleSelect} onLoadCode={handleLoadCode} />
+        <ContextEntry onQuickDrawSelect={handleSelect} onLoadCode={handleLoadCode} />
       )}
     </>
   );

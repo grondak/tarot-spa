@@ -77,6 +77,8 @@ describe('App authenticated sign-out round trip', () => {
     render(<App />);
 
     expect(await screen.findByText('Your account')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Help Me Orient' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Draw for fun instead' }));
     fireEvent.click(screen.getByRole('button', { name: /Single Card/ }));
     expect(screen.getByText('Single Card')).toBeVisible();
 
@@ -94,7 +96,7 @@ describe('App authenticated sign-out round trip', () => {
 
     expect(await screen.findByText('Your account')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'I have an Invite Key' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Single Card/ })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Help Me Orient' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Draw Again' })).not.toBeInTheDocument();
   });
 
@@ -123,6 +125,7 @@ describe('App authenticated sign-out round trip', () => {
     render(<App />);
 
     expect(await screen.findByText('Your account')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Draw for fun instead' }));
     fireEvent.click(screen.getByRole('button', { name: /Single Card/ }));
     expect(screen.getByRole('button', { name: 'Draw Again' })).toBeVisible();
     getCurrentUser.mockRejectedValueOnce(new Error('session expired'));
@@ -137,7 +140,28 @@ describe('App authenticated sign-out round trip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
 
     expect(await screen.findByText('Your account')).toBeVisible();
-    expect(screen.getByRole('button', { name: /Single Card/ })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Help Me Orient' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Draw Again' })).not.toBeInTheDocument();
+  });
+
+  it('shows Context Entry as the authenticated home and round-trips a deliberate quick draw', async () => {
+    render(<App />);
+
+    expect(await screen.findByText('Your account')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Help Me Orient' })).toBeVisible();
+    expect(screen.getByLabelText('Context')).toHaveAttribute(
+      'placeholder',
+      'Tell me about your upcoming decision, and what you know or think you know about the situation.',
+    );
+    expect(screen.getByRole('button', { name: 'Help Me Orient' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draw for fun instead' }));
+    expect(screen.getByRole('heading', { name: 'Quick Draw' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: /Single Card/ }));
+    expect(screen.getByRole('button', { name: 'Draw Again' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: '← Back' }));
+    expect(screen.getByRole('heading', { name: 'Help Me Orient' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Help Me Orient' })).toBeDisabled();
   });
 });

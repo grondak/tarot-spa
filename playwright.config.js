@@ -9,7 +9,25 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: [/auth\.setup\.js/, /authenticated\.spec\.js/],
     },
+    // Authenticated projects only exist when test-account credentials are present,
+    // so machines without them still get a green unauthenticated run.
+    ...(process.env.TAROT_E2E_EMAIL
+      ? [
+          {
+            name: 'setup',
+            testMatch: /auth\.setup\.js/,
+            use: { ...devices['Desktop Chrome'] },
+          },
+          {
+            name: 'chromium-auth',
+            testMatch: /authenticated\.spec\.js/,
+            dependencies: ['setup'],
+            use: { ...devices['Desktop Chrome'], storageState: 'playwright/.auth/user.json' },
+          },
+        ]
+      : []),
   ],
   webServer: {
     command: 'npm run dev',

@@ -6,3 +6,4 @@ amplify_outputs.json
 .amplify
 test-results/
 playwright-report/
+playwright/.auth/
