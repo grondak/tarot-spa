@@ -113,7 +113,7 @@ action_items:
   - epic: 2
     action: "Manual AWS Budgets tripwire before real spend begins, covering the 3.2-to-3.6 window until FR10 alerting exists"
     owner: "Tony"
-    status: open
+    status: done
   - epic: 2
     action: "Standard 'Pre-dev prerequisites (Tony)' section in every story spec with human-only setup; human-only work never on the agent's checklist"
     owner: "Amelia (story-creation process)"
