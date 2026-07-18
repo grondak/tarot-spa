@@ -13,7 +13,7 @@ export default defineConfig({
     },
     // Authenticated projects only exist when test-account credentials are present,
     // so machines without them still get a green unauthenticated run.
-    ...(process.env.TAROT_E2E_EMAIL
+    ...(process.env.TAROT_E2E_EMAIL && process.env.TAROT_E2E_PASSWORD
       ? [
           {
             name: 'setup',

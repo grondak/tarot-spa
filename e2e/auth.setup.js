@@ -10,7 +10,11 @@ setup('authenticate as the agent test account', async ({ page }) => {
   // Amplify persists Cognito tokens shortly AFTER the UI flips to authenticated;
   // capturing storageState before they land saves an empty, logged-out state.
   await page.waitForFunction(
-    () => Object.keys(localStorage).some((key) => key.startsWith('CognitoIdentityServiceProvider')),
+    () => {
+      const keys = Object.keys(localStorage);
+      return keys.some((key) => key.endsWith('.accessToken'))
+        && keys.some((key) => key.endsWith('.idToken'));
+    },
     undefined,
     { timeout: 15000 },
   );

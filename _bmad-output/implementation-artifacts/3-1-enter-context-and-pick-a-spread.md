@@ -4,7 +4,7 @@ baseline_commit: 8c6f76c68e2dfa32fa8fa7f022dd0ea654f80f71
 
 # Story 3.1: Enter Context and pick a Spread
 
-Status: review
+Status: done
 
 ## Story
 
@@ -117,6 +117,12 @@ Canonical-state copy is from `mockups/context-entry.html` and EXPERIENCE.md's Vo
   - [x] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e`.
   - [x] Sweep the diff and this story file for live credentials — ⚠️ this story's specific traps: the test account's email/password must never appear in code, config, tests, or this story file (env vars only), and `playwright/.auth/user.json` must be untracked before commit (`git status` proves it).
   - [x] Commit and push to `main`.
+
+### Review Findings
+
+- [x] [Review][Patch] Require both authenticated E2E credential variables before enabling the auth projects [playwright.config.js:16]
+- [x] [Review][Patch] Mark the dedicated agent test-account action complete now that the account and Playwright fixture are verified [sprint-status.yaml:110]
+- [x] [Review][Patch] Wait for persisted Cognito access and ID tokens instead of any Cognito metadata key before saving authenticated storage state [e2e/auth.setup.js:12]
 
 ## Dev Notes
 

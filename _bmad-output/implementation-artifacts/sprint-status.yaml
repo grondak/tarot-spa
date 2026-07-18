@@ -61,7 +61,7 @@ development_status:
   epic-2-retrospective: done
 
   epic-3: in-progress
-  3-1-enter-context-and-pick-a-spread: review
+  3-1-enter-context-and-pick-a-spread: done
   3-2-generate-an-orientation-guide-bounded-by-the-daily-and-monthly-limits: backlog
   3-3-view-the-orientation-guide-results-screen: backlog
   3-4-redraw-from-the-results-screen: backlog
@@ -109,7 +109,7 @@ action_items:
   - epic: 2
     action: "Dedicated agent test account: mint+redeem a test account, credentials as sandbox secrets (never in repo), wire into Playwright as authenticated fixture at Epic 3's first authenticated surface"
     owner: "Tony (account) + Amelia (Playwright wiring)"
-    status: open
+    status: done
   - epic: 2
     action: "Manual AWS Budgets tripwire before real spend begins, covering the 3.2-to-3.6 window until FR10 alerting exists"
     owner: "Tony"
