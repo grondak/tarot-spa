@@ -101,7 +101,7 @@ action_items:
   - epic: 2
     action: "Bedrock one-time setup before Story 3.2: model access enabled in sandbox account/region; correct Opus inference-profile identifier confirmed and recorded"
     owner: "Tony"
-    status: open
+    status: done
   - epic: 2
     action: "Tavily one-time setup before Story 3.2: account created, API key stored via npx ampx sandbox secret set"
     owner: "Tony"
