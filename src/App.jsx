@@ -16,19 +16,27 @@ export default function App() {
   const [spreadKey, setSpreadKey] = useState(null);
   const [cards, setCards] = useState([]);
   const authRequestId = useRef(0);
+  const authStateRef = useRef('loading');
 
   useEffect(() => {
     async function refreshAuth() {
       const requestId = ++authRequestId.current;
       try {
         await getCurrentUser();
-        if (requestId === authRequestId.current) setAuthState('authenticated');
+        if (requestId === authRequestId.current) {
+          authStateRef.current = 'authenticated';
+          setAuthState('authenticated');
+        }
       } catch {
         if (requestId === authRequestId.current) {
+          const sessionWasAuthenticated = authStateRef.current === 'authenticated';
+          authStateRef.current = 'unauthenticated';
           setAuthState('unauthenticated');
-          setAuthScreen('landing');
-          setSpreadKey(null);
-          setCards([]);
+          if (sessionWasAuthenticated) {
+            setAuthScreen('landing');
+            setSpreadKey(null);
+            setCards([]);
+          }
         }
       }
     }
@@ -63,6 +71,7 @@ export default function App() {
 
   function handleSignedOut() {
     authRequestId.current += 1;
+    authStateRef.current = 'unauthenticated';
     setAuthState('unauthenticated');
     setAuthScreen('landing');
     setSpreadKey(null);
@@ -71,6 +80,7 @@ export default function App() {
 
   function handleSignedIn() {
     authRequestId.current += 1;
+    authStateRef.current = 'authenticated';
     setAuthState('authenticated');
   }
 

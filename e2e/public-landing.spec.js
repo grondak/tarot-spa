@@ -17,7 +17,12 @@ test('visitor can draw, redraw, reload a code, and return to the landing', async
   let newCode = originalCode;
   for (let attempt = 0; attempt < 3 && newCode === originalCode; attempt += 1) {
     await page.getByRole('button', { name: 'Draw Again' }).click();
-    newCode = await drawCode.textContent();
+    try {
+      await expect.poll(() => drawCode.textContent(), { timeout: 500 }).not.toBe(originalCode);
+      newCode = await drawCode.textContent();
+    } catch {
+      // A random redraw can reproduce the original code; retry the draw.
+    }
   }
   expect(newCode).not.toBe(originalCode);
 

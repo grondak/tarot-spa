@@ -100,6 +100,9 @@ The mockup also shows a Request Access form — that is **Story 2.2, do not buil
 - [x] [Review][Patch] Clear authenticated draw state when Hub detects session loss [src/App.jsx:26]
 - [x] [Review][Patch] Reconcile the checked real-account verification task with the completion note that it was not performed [_bmad-output/implementation-artifacts/2-1-view-the-public-landing-page-with-a-free-quick-draw.md:91]
 - [x] [Review][Patch] Update the stale “55 total passing” completion evidence to 56 [_bmad-output/implementation-artifacts/2-1-view-the-public-landing-page-with-a-free-quick-draw.md:176]
+- [x] [Review][Patch] Preserve an active Sign Up or Log In screen when a rejected Hub auth refresh confirms the visitor is still unauthenticated [src/App.jsx:26]
+- [x] [Review][Patch] Wait for React to commit each redraw before reading the updated draw code in the Playwright smoke test [e2e/public-landing.spec.js:17]
+- [x] [Review][Patch] Reset the Hub listener mock and await the current auth-refresh callback so the form-preservation regression test cannot pass against stale pre-refresh state [src/AppAuth.test.jsx:23]
 
 - [x] **Task 7: Close out (Definition of Done — Epic 1 retro action item #4)**
   - [x] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e`.

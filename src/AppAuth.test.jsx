@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getCurrentUser, signIn, signOut } from 'aws-amplify/auth';
 import { Hub } from 'aws-amplify/utils';
@@ -23,6 +23,7 @@ describe('App unauthenticated screens', () => {
   beforeEach(() => {
     getCurrentUser.mockReset();
     getCurrentUser.mockRejectedValue(new Error('not signed in'));
+    Hub.listen.mockClear();
   });
 
   it('opens SignUp from the landing and keeps the SignUp and LogIn cross-links', async () => {
@@ -40,6 +41,22 @@ describe('App unauthenticated screens', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Have an invite key? Create your account' }));
 
     expect(screen.getByRole('heading', { name: 'Create your account' })).toBeVisible();
+  });
+
+  it('preserves an active auth screen when an auth refresh remains unauthenticated', async () => {
+    render(<App />);
+
+    expect(await screen.findByRole('button', { name: 'Log In' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Log In' }));
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'tony@example.com' } });
+
+    await act(async () => {
+      await Hub.listen.mock.calls[0][1]();
+    });
+
+    expect(getCurrentUser).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('heading', { name: 'Log in' })).toBeVisible();
+    expect(screen.getByLabelText('Email')).toHaveValue('tony@example.com');
   });
 });
 
