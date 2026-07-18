@@ -1,6 +1,6 @@
 # Story 2.2: Request access via the form
 
-Status: review
+Status: done
 baseline_commit: 40985965b13a1a492d59d16bbb1a3801549aa8bf
 
 ## Story
