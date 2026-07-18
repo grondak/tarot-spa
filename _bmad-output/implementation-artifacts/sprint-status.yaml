@@ -105,7 +105,7 @@ action_items:
   - epic: 2
     action: "Tavily one-time setup before Story 3.2: account created, API key stored via npx ampx sandbox secret set"
     owner: "Tony"
-    status: open
+    status: done
   - epic: 2
     action: "Dedicated agent test account: mint+redeem a test account, credentials as sandbox secrets (never in repo), wire into Playwright as authenticated fixture at Epic 3's first authenticated surface"
     owner: "Tony (account) + Amelia (Playwright wiring)"
