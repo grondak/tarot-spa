@@ -67,7 +67,7 @@ flowchart LR
 
 - **Binds:** `amplify/functions/**`
 - **Prevents:** introducing a repository/DAO layer, service layer, or DI container inside Lambda functions; Lambda writes silently bypassing or duplicating the client-facing authorization model
-- **Rule:** each Lambda function implements exactly one capability, calling AppSync/DynamoDB, Bedrock, and Tavily directly; no shared abstraction layer between functions beyond plain utility code. Server-side writes go through Amplify Gen 2's IAM-authorized, function-scoped data client (per-function resource grants — e.g. the usage-counter Lambda is granted write access to DailyUsage/MonthlySpend/Config only), never the client-facing owner-based GraphQL mutations. AD-9's owner-based rule therefore governs client-originated (browser → AppSync) mutations only; Lambda-originated writes are governed by their own per-function IAM grants.
+- **Rule:** each Lambda function implements exactly one capability, calling AppSync/DynamoDB, Bedrock, and Tavily directly; no shared abstraction layer between functions beyond plain utility code. Server-side writes go through Amplify Gen 2's IAM-authorized, function-scoped data client (per-function resource grants — e.g. the orientation-guide Lambda is granted read/write access to DailyUsage/MonthlySpend, read access to Config, and write access to Session), never the client-facing owner-based GraphQL mutations. The usage-counter Lambda is a separate read-only status capability with read access to DailyUsage and Config. AD-9's owner-based rule therefore governs client-originated (browser → AppSync) mutations only; Lambda-originated writes are governed by their own per-function IAM grants.
 
 ### AD-5 — LLM + Current-Events grounding split
 
@@ -79,9 +79,9 @@ flowchart LR
 
 - **Binds:** FR-9 (Daily Orientation Limit), FR-10 (aggregate monthly budget ceiling)
 - **Prevents:** a plain check-then-act race where concurrent requests all pass a pre-call limit check before any of them increments it (the exact race `review-edge-case.md` flagged); relying on AWS Budgets alone as the blocking mechanism (its billing data lags too far behind real time to gate individual requests); client-side-only enforcement
-- **Rule:** two phases, both atomic conditional `UpdateItem` operations (not a separate read-then-write):
-  1. **Pre-flight reservation**, before calling Tavily/Bedrock: atomically check-and-increment DailyUsage by 1 and MonthlySpend by a fixed per-request cost estimate (~$0.03, matching the Opus per-request math in Deferred) against the Config-defined ceilings (AD-13). The request is rejected up front if either increment would exceed its ceiling — this is what actually gates concurrent requests in real time, not a preceding plain check.
-  2. **Compensating rollback**, only on an outright Tavily exception or outright Bedrock/Claude failure (not a Tavily timeout — see AD-14, which still produces a delivered Guide and is a confirmed successful completion): atomically decrement both reservations back down.
+- **Rule:** two phases, each a conditional `TransactWriteItems` operation over MonthlySpend + DailyUsage with a stable request-scoped `ClientRequestToken` (never a separate read-then-write or retry of a naked numeric update):
+  1. **Pre-flight reservation**, before drawing or calling Tavily/Bedrock: atomically check-and-increment MonthlySpend by a fixed per-request cost estimate (~$0.03, matching the Opus per-request math in Deferred) and DailyUsage by 1 against the same Config snapshot (AD-13). MonthlySpend is transaction item 0 so its cancellation reason takes precedence when both limits are exhausted. Retrying an ambiguous response reuses the identical token and cannot double-increment.
+  2. **Compensating rollback**, only on a server-side draw exception, outright Tavily exception, or outright/invalid Bedrock completion (not a Tavily timeout — see AD-14, which still produces a delivered Guide and is a confirmed successful completion): atomically decrement both reservations together with a second stable token distinct from the reservation token. Ambiguous retries reuse the rollback token and cannot double-decrement.
   
   MonthlySpend is intentionally an estimate-based real-time gate, not a precise post-call ledger reconciled to actual billed cost — AWS Budgets + SNS remains the secondary safety net that catches estimate-vs-actual drift over time (not the primary blocking mechanism).
 
@@ -95,13 +95,13 @@ flowchart LR
 
 - **Binds:** `amplify/data/resource.ts`
 - **Prevents:** ad-hoc or per-feature key schemes
-- **Rule:** the model set is fixed at Account (incl. `generation`, `onwardKeyGenerated` — AD-17), InviteKey, Session, DailyUsage (key `accountId#date`, UTC date), MonthlySpend (key `year-month`, UTC) — no additional top-level models without a new decision.
+- **Rule:** the model set is fixed at Account (incl. `generation`, `onwardKeyGenerated` — AD-17), InviteKey, Session, DailyUsage (key `accountId#date`, UTC date), MonthlySpend (key `year-month`, UTC), Config — no additional top-level models without a new decision.
 
 ### AD-9 — Authorization: owner-based + admin group split [ADOPTED]
 
 - **Binds:** Account, Session, DailyUsage records; MonthlySpend; Admin Dashboard queries and key-minting
 - **Prevents:** hand-rolled per-request authorization checks duplicating Cognito identity, any Account (including admin) reading another Account's data via a per-record path, and MonthlySpend being given an owner-based rule it structurally can't have (it's a cross-account aggregate with no owning identity)
-- **Rule:** Amplify Data's owner-based authorization rule gates Account/Session/DailyUsage records to their owning Cognito identity. MonthlySpend gets no owner-based rule at all: read access is admin-group-gated via Amplify Data auth, write access is restricted to the usage-counter Lambda's IAM grant (AD-4) — never a client-writable field, never a public mutation. Admin Dashboard/key-minting capability is gated via a Cognito group or custom claim, never by relaxing per-record ownership.
+- **Rule:** Amplify Data's owner-based authorization rule gates Account/Session/DailyUsage records to their owning Cognito identity. MonthlySpend gets no owner-based rule at all: read access is admin-group-gated via Amplify Data auth, write access is restricted to the orientation-guide Lambda's IAM grant (AD-4) — never a client-writable field, never a public mutation. Admin Dashboard/key-minting capability is gated via a Cognito group or custom claim, never by relaxing per-record ownership.
 
 ### AD-10 — Admin Dashboard is aggregate-only
 
@@ -125,7 +125,7 @@ flowchart LR
 
 - **Binds:** FR-9 (Daily Orientation Limit), FR-10 (monthly budget ceiling)
 - **Prevents:** hardcoding the daily-limit or monthly-budget values in Lambda code, requiring a deploy to change them
-- **Rule:** a single `Config` item in DynamoDB (`dailyLimit`, `monthlyBudget` fields) is the source of truth the usage-counter Lambda reads on every request; the Admin Dashboard exposes a plain field to edit it, with no separate config service or feature flag system. Config is read once per request; both the DailyUsage and MonthlySpend reservation checks (AD-6) within that request use the same snapshot value, never independent re-reads.
+- **Rule:** a single `Config` item in DynamoDB (`dailyLimit`, `monthlyBudget` fields) is the source of truth. The orientation-guide Lambda reads it once per generation request; both the DailyUsage and MonthlySpend reservation checks (AD-6) use that same snapshot, never independent re-reads. The read-only usage-counter status Lambda reads the same item for presentation status. The Admin Dashboard exposes a plain field to edit it, with no separate config service or feature flag system.
 
 ### AD-14 — Tavily slow-but-not-failed handling
 
@@ -253,13 +253,13 @@ tarot-spa/
     data/
       resource.ts                # AppSync schema, DynamoDB models, owner-based + admin-group auth rules
     functions/
-      orientation-guide/         # FR-8: Tavily call -> Bedrock (Claude Opus) call; AD-6 reservation, AD-14 timeout
+      orientation-guide/         # FR-8: Config read + AD-6 counter transaction -> Tavily -> Bedrock; AD-14 timeout
         resource.ts
         handler.ts
       invite-key-mint/           # FR-2, FR-3: onward-key eligibility check (AD-17), Tony's direct admin mint
         resource.ts
         handler.ts
-      usage-counter/             # FR-9, FR-10: two-phase atomic DailyUsage / MonthlySpend (AD-6), reads Config
+      usage-counter/             # FR-9 presentation status: read-only DailyUsage + Config query
         resource.ts
         handler.ts
       request-access/            # FR-5: sends name + email to Tony's cutout address via SES

@@ -1,16 +1,32 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   readConfig,
-  reserveDaily,
-  reserveMonthly,
-  rollbackDaily,
-  rollbackMonthly,
+  reserveUsage,
+  rollbackUsage,
   utcDate,
   utcMonth,
 } from './reservation';
 
 function client(...results: unknown[]) {
   return { send: vi.fn().mockImplementation(() => Promise.resolve(results.shift())) };
+}
+
+const usage = {
+  dailyTable: 'DailyTable',
+  monthlyTable: 'MonthlyTable',
+  accountId: 'acct',
+  date: '2026-07-18',
+  month: '2026-07',
+  estimate: 0.03,
+  timestamp: 'timestamp',
+  requestToken: '12345678-1234-1234-1234-123456789012',
+};
+
+function canceled(...codes: string[]) {
+  return {
+    name: 'TransactionCanceledException',
+    CancellationReasons: codes.map((Code) => ({ Code })),
+  };
 }
 
 describe('usage reservations', () => {
@@ -37,52 +53,130 @@ describe('usage reservations', () => {
     );
   });
 
-  it('uses atomic conditional daily and monthly increments', async () => {
-    const dynamo = client({}, {});
-    await reserveDaily(dynamo, 'DailyTable', 'acct', '2026-07-18', 5, 'timestamp');
-    await reserveMonthly(dynamo, 'MonthlyTable', '2026-07', 0.03, 30, 'timestamp');
+  it('reserves monthly and daily counters in one idempotent transaction', async () => {
+    const dynamo = client({});
+    await reserveUsage(dynamo, { ...usage, dailyLimit: 5, monthlyBudget: 30 });
 
     expect((dynamo.send.mock.calls[0][0] as { input: unknown }).input).toMatchObject({
-      Key: { id: 'acct#2026-07-18' },
-      ConditionExpression: 'attribute_not_exists(id) OR #count < :limit',
-    });
-    expect((dynamo.send.mock.calls[1][0] as { input: unknown }).input).toMatchObject({
-      Key: { id: '2026-07' },
-      ConditionExpression: 'attribute_not_exists(id) OR #spent <= :budgetMinusEstimate',
-      ExpressionAttributeValues: expect.objectContaining({ ':budgetMinusEstimate': 29.97 }),
+      ClientRequestToken: usage.requestToken,
+      TransactItems: [
+        {
+          Update: {
+            TableName: 'MonthlyTable',
+            Key: { id: '2026-07' },
+            ConditionExpression: 'attribute_not_exists(id) OR #spent <= :budgetMinusEstimate',
+            ExpressionAttributeValues: expect.objectContaining({ ':budgetMinusEstimate': 29.97 }),
+          },
+        },
+        {
+          Update: {
+            TableName: 'DailyTable',
+            Key: { id: 'acct#2026-07-18' },
+            ConditionExpression: 'attribute_not_exists(id) OR #count < :limit',
+          },
+        },
+      ],
     });
   });
 
-  it('maps invalid limits and conditional failures to frozen error codes', async () => {
-    await expect(reserveDaily(client(), 't', 'a', 'd', 0, 'ts')).rejects.toThrow(
+  it('maps invalid limits and transaction cancellation reasons to frozen error codes', async () => {
+    await expect(reserveUsage(client(), {
+      ...usage,
+      dailyLimit: 0,
+      monthlyBudget: 30,
+    })).rejects.toThrow(
       'DAILY_LIMIT_EXHAUSTED',
     );
-    await expect(reserveMonthly(client(), 't', 'm', 0.03, 0.02, 'ts')).rejects.toThrow(
+    await expect(reserveUsage(client(), {
+      ...usage,
+      dailyLimit: 5,
+      monthlyBudget: 0.02,
+    })).rejects.toThrow(
       'MONTHLY_BUDGET_EXHAUSTED',
     );
 
-    const rejected = { send: vi.fn().mockRejectedValue({ name: 'ConditionalCheckFailedException' }) };
-    await expect(reserveDaily(rejected, 't', 'a', 'd', 5, 'ts')).rejects.toThrow(
+    const dailyRejected = { send: vi.fn().mockRejectedValue(canceled('None', 'ConditionalCheckFailed')) };
+    await expect(reserveUsage(dailyRejected, {
+      ...usage,
+      dailyLimit: 5,
+      monthlyBudget: 30,
+    })).rejects.toThrow(
       'DAILY_LIMIT_EXHAUSTED',
     );
-    await expect(reserveMonthly(rejected, 't', 'm', 0.03, 30, 'ts')).rejects.toThrow(
+
+    const bothRejected = {
+      send: vi.fn().mockRejectedValue(canceled(
+        'ConditionalCheckFailed',
+        'ConditionalCheckFailed',
+      )),
+    };
+    await expect(reserveUsage(bothRejected, {
+      ...usage,
+      dailyLimit: 5,
+      monthlyBudget: 30,
+    })).rejects.toThrow(
       'MONTHLY_BUDGET_EXHAUSTED',
     );
   });
 
-  it('performs atomic decrements and swallows rollback failures', async () => {
-    const dynamo = client({}, {});
-    await rollbackDaily(dynamo, 'DailyTable', 'acct', '2026-07-18', 'timestamp');
-    await rollbackMonthly(dynamo, 'MonthlyTable', '2026-07', 0.03, 'timestamp');
-    expect((dynamo.send.mock.calls[0][0] as { input: unknown }).input).toMatchObject({
-      ConditionExpression: '#count >= :one',
-    });
-    expect((dynamo.send.mock.calls[1][0] as { input: unknown }).input).toMatchObject({
-      ConditionExpression: '#spent >= :estimate',
-    });
+  it('rolls monthly and daily counters back in one idempotent transaction', async () => {
+    const dynamo = client({});
+    await rollbackUsage(dynamo, usage);
 
+    expect((dynamo.send.mock.calls[0][0] as { input: unknown }).input).toMatchObject({
+      ClientRequestToken: usage.requestToken,
+      TransactItems: [
+        {
+          Update: {
+            TableName: 'MonthlyTable',
+            ConditionExpression: '#spent >= :estimate',
+          },
+        },
+        {
+          Update: {
+            TableName: 'DailyTable',
+            ConditionExpression: '#count >= :one',
+          },
+        },
+      ],
+    });
+  });
+
+  it('retries transactions with the same request token after ambiguous failures', async () => {
+    const transient = {
+      send: vi.fn()
+        .mockRejectedValueOnce(new Error('throttled'))
+        .mockRejectedValueOnce(new Error('network reset'))
+        .mockResolvedValue({}),
+    };
+    await expect(reserveUsage(transient, {
+      ...usage,
+      dailyLimit: 5,
+      monthlyBudget: 30,
+    })).resolves.toBeUndefined();
+    expect(transient.send).toHaveBeenCalledTimes(3);
+    const inputs = transient.send.mock.calls
+      .map(([command]) => (command as { input: { ClientRequestToken?: string } }).input);
+    expect(inputs.map((input) => input.ClientRequestToken)).toEqual([
+      usage.requestToken,
+      usage.requestToken,
+      usage.requestToken,
+    ]);
+    expect(inputs[1]).toEqual(inputs[0]);
+    expect(inputs[2]).toEqual(inputs[0]);
+  });
+
+  it('does not retry a conditional rollback miss', async () => {
+    const conditional = {
+      send: vi.fn().mockRejectedValue(canceled('ConditionalCheckFailed', 'None')),
+    };
+    await expect(rollbackUsage(conditional, usage)).resolves.toBeUndefined();
+    expect(conditional.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves the original flow after bounded rollback retries are exhausted', async () => {
     const failing = { send: vi.fn().mockRejectedValue(new Error('rollback failed')) };
-    await expect(rollbackDaily(failing, 't', 'a', 'd', 'ts')).resolves.toBeUndefined();
-    await expect(rollbackMonthly(failing, 't', 'm', 0.03, 'ts')).resolves.toBeUndefined();
+    await expect(rollbackUsage(failing, usage)).resolves.toBeUndefined();
+    expect(failing.send).toHaveBeenCalledTimes(3);
   });
 });
