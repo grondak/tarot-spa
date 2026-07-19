@@ -5,6 +5,9 @@ import { SPREADS } from '../utils/deck';
 
 const HINT = 'Tell me about your upcoming decision, and what you know or think you know about the situation.';
 const RATE_LIMIT_NOTE = "You're tapped out on Orientation Guides for today — but the cards themselves are always free and unlimited. Draw away, no LLM, no limit. Your Orient-o-meter refills tomorrow.";
+const LOADING_COPY = 'Reading the cards and the world...';
+const GENERATION_ERROR = 'Something went wrong generating your Guide — nothing was used up. Your context is still here; try again.';
+const MONTHLY_ERROR = "Everyone's shared monthly Guide budget is spent — Orientation Guides return when the month rolls over. Quick Draw is always free.";
 
 let onOrient;
 let onQuickDrawSelect;
@@ -122,6 +125,62 @@ describe('ContextEntry canonical state', () => {
     renderEntry({ initialContext: 'Seeded from a previous session.' });
 
     expect(screen.getByLabelText('Context')).toHaveValue('Seeded from a previous session.');
+  });
+
+  it('shows the loading treatment and blocks duplicate submits while pending', async () => {
+    onOrient.mockImplementation(() => new Promise(() => {}));
+    renderEntry();
+
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'A real decision.' } });
+    fireEvent.click(spreadButton('decision'));
+    fireEvent.click(orientButton());
+    fireEvent.click(orientButton());
+
+    expect(await screen.findByRole('status')).toHaveTextContent(LOADING_COPY);
+    expect(orientButton()).toBeDisabled();
+    expect(onOrient).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the generation error while preserving Context and Spread for immediate retry', async () => {
+    onOrient.mockRejectedValue(new Error('GENERATION_FAILED'));
+    renderEntry();
+
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'Keep this context.' } });
+    fireEvent.click(spreadButton('decision'));
+    fireEvent.click(orientButton());
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(GENERATION_ERROR);
+    expect(screen.getByLabelText('Context')).toHaveValue('Keep this context.');
+    expect(spreadButton('decision')).toHaveAttribute('aria-pressed', 'true');
+    expect(orientButton()).toBeEnabled();
+  });
+
+  it('shows the monthly-budget message for its frozen code', async () => {
+    onOrient.mockRejectedValue(new Error('wrapped MONTHLY_BUDGET_EXHAUSTED response'));
+    renderEntry();
+
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'Keep this context.' } });
+    fireEvent.click(spreadButton('single'));
+    fireEvent.click(orientButton());
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(MONTHLY_ERROR);
+  });
+
+  it('clears an earlier error when the user resubmits', async () => {
+    onOrient
+      .mockRejectedValueOnce(new Error('GENERATION_FAILED'))
+      .mockImplementationOnce(() => new Promise(() => {}));
+    renderEntry();
+
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'Try this again.' } });
+    fireEvent.click(spreadButton('three'));
+    fireEvent.click(orientButton());
+    expect(await screen.findByRole('alert')).toHaveTextContent(GENERATION_ERROR);
+
+    fireEvent.click(orientButton());
+    expect(await screen.findByRole('status')).toHaveTextContent(LOADING_COPY);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(onOrient).toHaveBeenCalledTimes(2);
   });
 });
 

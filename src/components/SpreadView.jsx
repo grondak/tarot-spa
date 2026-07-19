@@ -65,7 +65,8 @@ export default function SpreadView({ spread, cards, drawCode, onDrawAgain, onBac
   );
 }
 
-function gridClass(n) {
+// eslint-disable-next-line react-refresh/only-export-components
+export function gridClass(n) {
   if (n === 1) return 'grid-cols-1 max-w-sm mx-auto';
   if (n === 2) return 'grid-cols-1 sm:grid-cols-2';
   if (n === 3) return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';

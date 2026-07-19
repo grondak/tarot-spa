@@ -8,8 +8,16 @@ import SignUp from './components/SignUp';
 import LogIn from './components/LogIn';
 import GrantInviteKey from './components/GrantInviteKey';
 import PublicLanding from './components/PublicLanding';
+import OrientationGuideResults from './components/OrientationGuideResults';
 import { getMyAccount } from './utils/account';
-import { getOrientationStatus } from './utils/orientation';
+import {
+  generateOrientationGuide,
+  getNewestSession,
+  getOrientationStatus,
+} from './utils/orientation';
+
+const RECOVERY_POLL_MS = 5000;
+const RECOVERY_DEADLINE_MS = 75000;
 
 export default function App() {
   const [authState, setAuthState] = useState('loading');
@@ -17,6 +25,7 @@ export default function App() {
   const [spreadKey, setSpreadKey] = useState(null);
   const [cards, setCards] = useState([]);
   const [rateLimited, setRateLimited] = useState(false);
+  const [guideResult, setGuideResult] = useState(null);
   const authRequestId = useRef(0);
   const authStateRef = useRef('loading');
 
@@ -38,6 +47,7 @@ export default function App() {
             setAuthScreen('landing');
             setSpreadKey(null);
             setCards([]);
+            setGuideResult(null);
           }
         }
       }
@@ -92,6 +102,62 @@ export default function App() {
     return true;
   }
 
+  function showGuideResult(result) {
+    setGuideResult(result);
+    getOrientationStatus()
+      .then((status) => setRateLimited(status?.limitExhausted === true))
+      .catch(() => {});
+  }
+
+  async function handleOrient(context, selectedSpreadKey) {
+    const submittedAt = Date.now();
+    const baseline = await getNewestSession().catch(() => null);
+
+    try {
+      const result = await generateOrientationGuide(context, selectedSpreadKey);
+      showGuideResult({ spreadKey: selectedSpreadKey, context, ...result });
+      return;
+    } catch (error) {
+      const message = error?.message || '';
+      if (message.includes('DAILY_LIMIT_EXHAUSTED')) {
+        setRateLimited(true);
+        return;
+      }
+      if (
+        message.includes('MONTHLY_BUDGET_EXHAUSTED')
+        || message.includes('GENERATION_FAILED')
+      ) {
+        throw error;
+      }
+    }
+
+    const deadline = submittedAt + RECOVERY_DEADLINE_MS;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, Math.min(RECOVERY_POLL_MS, deadline - Date.now()));
+      });
+      const session = await getNewestSession().catch(() => null);
+      const isNew = session && (
+        baseline === null
+        || (session.id !== baseline.id && session.createdAt > baseline.createdAt)
+      );
+      if (isNew) {
+        showGuideResult({
+          spreadKey: session.spreadKey,
+          context: session.context,
+          sessionId: session.id,
+          cards: session.cards,
+          currentEvents: session.currentEvents,
+          guide: session.guide,
+          tavilyTimedOut: session.tavilyTimedOut,
+        });
+        return;
+      }
+    }
+
+    throw new Error('GENERATION_FAILED');
+  }
+
   function handleSignedOut() {
     authRequestId.current += 1;
     authStateRef.current = 'unauthenticated';
@@ -100,6 +166,7 @@ export default function App() {
     setSpreadKey(null);
     setCards([]);
     setRateLimited(false);
+    setGuideResult(null);
   }
 
   function handleSignedIn() {
@@ -139,7 +206,12 @@ export default function App() {
   return (
     <>
       <AccountBar onSignedOut={handleSignedOut} />
-      {spreadKey ? (
+      {guideResult ? (
+        <OrientationGuideResults
+          result={guideResult}
+          onBack={() => setGuideResult(null)}
+        />
+      ) : spreadKey ? (
       <SpreadView
         spread={SPREADS[spreadKey]}
         cards={cards}
@@ -150,6 +222,7 @@ export default function App() {
       ) : (
         <ContextEntry
           rateLimited={rateLimited}
+          onOrient={handleOrient}
           onQuickDrawSelect={handleSelect}
           onLoadCode={handleLoadCode}
         />

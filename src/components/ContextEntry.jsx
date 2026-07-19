@@ -3,6 +3,8 @@ import OrnamentalDivider from './OrnamentalDivider';
 import SpreadSelector from './SpreadSelector';
 
 const CONTEXT_HINT = 'Tell me about your upcoming decision, and what you know or think you know about the situation.';
+const GENERATION_ERROR = 'Something went wrong generating your Guide — nothing was used up. Your context is still here; try again.';
+const MONTHLY_ERROR = "Everyone's shared monthly Guide budget is spent — Orientation Guides return when the month rolls over. Quick Draw is always free.";
 
 export default function ContextEntry({
   rateLimited = false,
@@ -14,11 +16,22 @@ export default function ContextEntry({
   const [context, setContext] = useState(initialContext);
   const [spreadKey, setSpreadKey] = useState(null);
   const [mode, setMode] = useState('orient');
+  const [busy, setBusy] = useState(false);
+  const [orientError, setOrientError] = useState(null);
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
+    if (busy) return;
     if (!context.trim() || !spreadKey) return;
-    onOrient(context.trim(), spreadKey);
+    setOrientError(null);
+    setBusy(true);
+    try {
+      await onOrient(context.trim(), spreadKey);
+    } catch (error) {
+      setOrientError(error?.message || 'GENERATION_FAILED');
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (rateLimited || mode === 'quickdraw') {
@@ -87,12 +100,23 @@ export default function ContextEntry({
           <div className="mt-8 flex justify-center">
             <button
               type="submit"
-              disabled={!context.trim() || !spreadKey}
+              disabled={busy || !context.trim() || !spreadKey}
               className="rounded-lg bg-indigo-600 px-8 py-3 font-semibold text-white hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Help Me Orient
             </button>
           </div>
+          {busy ? (
+            <p role="status" className="mt-4 text-center text-sm text-gray-400">
+              Reading the cards and the world...
+            </p>
+          ) : orientError ? (
+            <p role="alert" className="mt-4 text-center text-sm text-red-400">
+              {orientError.includes('MONTHLY_BUDGET_EXHAUSTED')
+                ? MONTHLY_ERROR
+                : GENERATION_ERROR}
+            </p>
+          ) : null}
         </form>
         <div className="mt-4 flex justify-center">
           <button

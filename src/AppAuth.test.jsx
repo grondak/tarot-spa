@@ -4,7 +4,11 @@ import { getCurrentUser, signIn, signOut } from 'aws-amplify/auth';
 import { Hub } from 'aws-amplify/utils';
 import App from './App';
 import { getMyAccount } from './utils/account';
-import { getOrientationStatus } from './utils/orientation';
+import {
+  generateOrientationGuide,
+  getNewestSession,
+  getOrientationStatus,
+} from './utils/orientation';
 
 vi.mock('aws-amplify/auth', () => ({
   confirmSignUp: vi.fn(),
@@ -15,7 +19,11 @@ vi.mock('aws-amplify/auth', () => ({
 }));
 
 vi.mock('./utils/account', () => ({ getMyAccount: vi.fn() }));
-vi.mock('./utils/orientation', () => ({ getOrientationStatus: vi.fn() }));
+vi.mock('./utils/orientation', () => ({
+  generateOrientationGuide: vi.fn(),
+  getNewestSession: vi.fn(),
+  getOrientationStatus: vi.fn(),
+}));
 
 vi.mock('aws-amplify/utils', () => ({
   Hub: { listen: vi.fn(() => vi.fn()) },
@@ -66,12 +74,22 @@ describe('App authenticated sign-out round trip', () => {
   beforeEach(() => {
     getCurrentUser.mockReset();
     getMyAccount.mockReset();
+    generateOrientationGuide.mockReset();
+    getNewestSession.mockReset();
     getOrientationStatus.mockReset();
     signIn.mockReset();
     signOut.mockReset();
     Hub.listen.mockClear();
     getCurrentUser.mockResolvedValue({ username: 'tony' });
     getMyAccount.mockResolvedValue({ generation: 'SecondGen', onwardKeyGenerated: false });
+    generateOrientationGuide.mockResolvedValue({
+      sessionId: 'session-1',
+      cards: [],
+      currentEvents: [],
+      guide: 'The generated guide.',
+      tavilyTimedOut: false,
+    });
+    getNewestSession.mockResolvedValue(null);
     getOrientationStatus.mockResolvedValue({ limitExhausted: false });
     signOut.mockResolvedValue();
     signIn.mockResolvedValue({ isSignedIn: true });
@@ -184,5 +202,143 @@ describe('App authenticated sign-out round trip', () => {
 
     expect(await screen.findByRole('heading', { name: 'Help Me Orient', exact: true })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Help Me Orient', exact: true })).toBeDisabled();
+  });
+
+  it('submits Context once and renders the successful guide result', async () => {
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Help Me Orient', exact: true })).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Context'), {
+      target: { value: '  A consequential choice.  ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Decision/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
+
+    expect(await screen.findByText('The generated guide.')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Your Draw', level: 2 })).toBeVisible();
+    expect(generateOrientationGuide).toHaveBeenCalledTimes(1);
+    expect(generateOrientationGuide).toHaveBeenCalledWith('A consequential choice.', 'decision');
+    expect(getOrientationStatus).toHaveBeenCalledTimes(2);
+    expect(screen.queryByLabelText('Context')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '← Back' }));
+    expect(screen.getByLabelText('Context')).toHaveValue('');
+  });
+
+  it('degrades to Rate-Limited Intake on the frozen daily-limit code', async () => {
+    generateOrientationGuide.mockRejectedValue(new Error('wrapped DAILY_LIMIT_EXHAUSTED response'));
+    render(<App />);
+
+    expect(await screen.findByLabelText('Context')).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'A decision.' } });
+    fireEvent.click(screen.getByRole('button', { name: /Single Card/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
+
+    expect(await screen.findByRole('heading', { name: 'Quick Draw', exact: true })).toBeVisible();
+    expect(screen.getByText(/You're tapped out on Orientation Guides for today/)).toBeVisible();
+    expect(generateOrientationGuide).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('surfaces frozen generation and monthly-budget failures inline without recovery polling', async () => {
+    generateOrientationGuide.mockRejectedValueOnce(new Error('wrapped GENERATION_FAILED response'));
+    render(<App />);
+
+    expect(await screen.findByLabelText('Context')).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'Keep this context.' } });
+    fireEvent.click(screen.getByRole('button', { name: /Single Card/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Something went wrong generating your Guide — nothing was used up. Your context is still here; try again.',
+    );
+    expect(getNewestSession).toHaveBeenCalledTimes(1);
+
+    generateOrientationGuide.mockRejectedValueOnce(
+      new Error('wrapped MONTHLY_BUDGET_EXHAUSTED response'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Everyone's shared monthly Guide budget is spent — Orientation Guides return when the month rolls over. Quick Draw is always free.",
+    );
+    expect(getNewestSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('recovers a newer Session after a timeout without resubmitting the mutation', async () => {
+    vi.useFakeTimers();
+    generateOrientationGuide.mockRejectedValue(new Error('AppSync request timed out'));
+    getNewestSession
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'recovered-session',
+        spreadKey: 'decision',
+        context: 'A decision.',
+        cards: [],
+        currentEvents: [],
+        guide: 'The recovered guide.',
+        tavilyTimedOut: false,
+        createdAt: '2026-07-19T01:00:00.000Z',
+      });
+    render(<App />);
+
+    await act(async () => {
+      await vi.runAllTicks();
+    });
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'A decision.' } });
+    fireEvent.click(screen.getByRole('button', { name: /Decision/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+
+    expect(screen.getByText('The recovered guide.')).toBeVisible();
+    expect(generateOrientationGuide).toHaveBeenCalledTimes(1);
+    expect(getNewestSession).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it('shows the generic inline error when timeout recovery reaches its deadline', async () => {
+    vi.useFakeTimers();
+    generateOrientationGuide.mockRejectedValue(new Error('AppSync request timed out'));
+    getNewestSession.mockResolvedValue(null);
+    render(<App />);
+
+    await act(async () => {
+      await vi.runAllTicks();
+    });
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'A decision.' } });
+    fireEvent.click(screen.getByRole('button', { name: /Decision/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(75000);
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Something went wrong generating your Guide — nothing was used up. Your context is still here; try again.',
+    );
+    expect(generateOrientationGuide).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it('clears a guide result when signing out', async () => {
+    render(<App />);
+
+    expect(await screen.findByLabelText('Context')).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'A decision.' } });
+    fireEvent.click(screen.getByRole('button', { name: /Single Card/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
+    expect(await screen.findByText('The generated guide.')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log Out' }));
+    expect(await screen.findByRole('button', { name: 'I have an Invite Key' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log In' }));
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'tony@example.com' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
+
+    expect(await screen.findByLabelText('Context')).toBeVisible();
+    expect(screen.queryByText('The generated guide.')).not.toBeInTheDocument();
   });
 });
