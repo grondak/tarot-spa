@@ -9,12 +9,14 @@ import LogIn from './components/LogIn';
 import GrantInviteKey from './components/GrantInviteKey';
 import PublicLanding from './components/PublicLanding';
 import { getMyAccount } from './utils/account';
+import { getOrientationStatus } from './utils/orientation';
 
 export default function App() {
   const [authState, setAuthState] = useState('loading');
   const [authScreen, setAuthScreen] = useState('landing');
   const [spreadKey, setSpreadKey] = useState(null);
   const [cards, setCards] = useState([]);
+  const [rateLimited, setRateLimited] = useState(false);
   const authRequestId = useRef(0);
   const authStateRef = useRef('loading');
 
@@ -44,6 +46,27 @@ export default function App() {
     refreshAuth();
     return Hub.listen('auth', refreshAuth);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (authState !== 'authenticated') {
+      return () => {
+        active = false;
+      };
+    }
+
+    getOrientationStatus()
+      .then((status) => {
+        if (active) setRateLimited(status?.limitExhausted === true);
+      })
+      .catch(() => {
+        if (active) setRateLimited(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [authState]);
 
   function handleSelect(key) {
     const n = SPREADS[key].positions.length;
@@ -76,11 +99,13 @@ export default function App() {
     setAuthScreen('landing');
     setSpreadKey(null);
     setCards([]);
+    setRateLimited(false);
   }
 
   function handleSignedIn() {
     authRequestId.current += 1;
     authStateRef.current = 'authenticated';
+    setRateLimited(false);
     setAuthState('authenticated');
   }
 
@@ -123,7 +148,11 @@ export default function App() {
         onBack={handleBack}
       />
       ) : (
-        <ContextEntry onQuickDrawSelect={handleSelect} onLoadCode={handleLoadCode} />
+        <ContextEntry
+          rateLimited={rateLimited}
+          onQuickDrawSelect={handleSelect}
+          onLoadCode={handleLoadCode}
+        />
       )}
     </>
   );

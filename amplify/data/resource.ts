@@ -1,7 +1,9 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 import { checkInviteKey } from '../functions/check-invite-key/resource';
 import { inviteKeyMint } from '../functions/invite-key-mint/resource';
+import { orientationGuide } from '../functions/orientation-guide/resource';
 import { requestAccess } from '../functions/request-access/resource';
+import { usageCounter } from '../functions/usage-counter/resource';
 
 const schema = a.schema({
   Account: a
@@ -31,6 +33,34 @@ const schema = a.schema({
     // and the seed script) or the `checkInviteKey` query below, which has its own
     // explicit `allow.publicApiKey()` rule.
     .authorization((allow) => [allow.authenticated().to([])]),
+  Session: a
+    .model({
+      spreadKey: a.string(),
+      context: a.string(),
+      cards: a.json(),
+      currentEvents: a.json(),
+      guide: a.string(),
+      tavilyTimedOut: a.boolean(),
+    })
+    // The owner may only read their own Session. Every write goes through the
+    // orientation-guide Lambda's direct IAM/DynamoDB access.
+    .authorization((allow) => [allow.owner().identityClaim('sub').to(['read'])]),
+  DailyUsage: a
+    .model({
+      count: a.integer(),
+    })
+    .authorization((allow) => [allow.owner().identityClaim('sub').to(['read'])]),
+  MonthlySpend: a
+    .model({
+      spent: a.float(),
+    })
+    .authorization((allow) => [allow.authenticated().to([])]),
+  Config: a
+    .model({
+      dailyLimit: a.integer(),
+      monthlyBudget: a.float(),
+    })
+    .authorization((allow) => [allow.authenticated().to([])]),
   checkInviteKey: a
     .query()
     .arguments({ code: a.string().required() })
@@ -48,6 +78,17 @@ const schema = a.schema({
     .returns(a.boolean())
     .authorization((allow) => [allow.publicApiKey()])
     .handler(a.handler.function(requestAccess)),
+  generateOrientationGuide: a
+    .mutation()
+    .arguments({ context: a.string().required(), spreadKey: a.string().required() })
+    .returns(a.json())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(orientationGuide)),
+  getOrientationStatus: a
+    .query()
+    .returns(a.json())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(usageCounter)),
 });
 
 export type Schema = ClientSchema<typeof schema>;

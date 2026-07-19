@@ -4,6 +4,7 @@ import { getCurrentUser, signIn, signOut } from 'aws-amplify/auth';
 import { Hub } from 'aws-amplify/utils';
 import App from './App';
 import { getMyAccount } from './utils/account';
+import { getOrientationStatus } from './utils/orientation';
 
 vi.mock('aws-amplify/auth', () => ({
   confirmSignUp: vi.fn(),
@@ -14,6 +15,7 @@ vi.mock('aws-amplify/auth', () => ({
 }));
 
 vi.mock('./utils/account', () => ({ getMyAccount: vi.fn() }));
+vi.mock('./utils/orientation', () => ({ getOrientationStatus: vi.fn() }));
 
 vi.mock('aws-amplify/utils', () => ({
   Hub: { listen: vi.fn(() => vi.fn()) },
@@ -64,11 +66,13 @@ describe('App authenticated sign-out round trip', () => {
   beforeEach(() => {
     getCurrentUser.mockReset();
     getMyAccount.mockReset();
+    getOrientationStatus.mockReset();
     signIn.mockReset();
     signOut.mockReset();
     Hub.listen.mockClear();
     getCurrentUser.mockResolvedValue({ username: 'tony' });
     getMyAccount.mockResolvedValue({ generation: 'SecondGen', onwardKeyGenerated: false });
+    getOrientationStatus.mockResolvedValue({ limitExhausted: false });
     signOut.mockResolvedValue();
     signIn.mockResolvedValue({ isSignedIn: true });
   });
@@ -163,5 +167,22 @@ describe('App authenticated sign-out round trip', () => {
     fireEvent.click(screen.getByRole('button', { name: '← Back' }));
     expect(screen.getByRole('heading', { name: 'Help Me Orient' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Help Me Orient' })).toBeDisabled();
+  });
+
+  it('renders Rate-Limited Intake when the daily status is exhausted', async () => {
+    getOrientationStatus.mockResolvedValue({ limitExhausted: true });
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Quick Draw', exact: true })).toBeVisible();
+    expect(screen.getByText(/You're tapped out on Orientation Guides for today/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Help Me Orient', exact: true })).not.toBeInTheDocument();
+  });
+
+  it('fails open to normal Context Entry when status loading fails', async () => {
+    getOrientationStatus.mockRejectedValue(new Error('status unavailable'));
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Help Me Orient', exact: true })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Help Me Orient', exact: true })).toBeDisabled();
   });
 });

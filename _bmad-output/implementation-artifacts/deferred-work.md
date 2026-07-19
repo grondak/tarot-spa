@@ -6,6 +6,7 @@
 ## Recorded for Story 3.2 (2026-07-18)
 
 - **Bedrock Claude Opus inference-profile ID (sandbox account, us-east-1): `us.anthropic.claude-opus-4-6-v1`.** Confirmed working by Tony via a live `bedrock-runtime converse` smoke call. This is the identifier the orientation-guide Lambda must pass as `modelId` (AD-5 implementation detail flagged by the tech-verification review: current-gen Opus requires the cross-region `us.` inference-profile form, not the bare foundation-model ID).
+- **Production rollout:** run `npm run seed-config -- <env-name>` once after the Story 3.2 schema first deploys to each staging/main environment. The conditional seed creates Config `global` with `dailyLimit: 5` and `monthlyBudget: 30` without clobbering later Story 4.3 edits.
 
 ## Tracked from: Story 1.1 review, accepted-as-is (2026-07-12)
 
