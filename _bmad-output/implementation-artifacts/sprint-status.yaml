@@ -62,7 +62,7 @@ development_status:
 
   epic-3: in-progress
   3-1-enter-context-and-pick-a-spread: done
-  3-2-generate-an-orientation-guide-bounded-by-the-daily-and-monthly-limits: in-progress
+  3-2-generate-an-orientation-guide-bounded-by-the-daily-and-monthly-limits: review
   3-3-view-the-orientation-guide-results-screen: backlog
   3-4-redraw-from-the-results-screen: backlog
   3-5-score-orientation-guide-groundedness-async: backlog

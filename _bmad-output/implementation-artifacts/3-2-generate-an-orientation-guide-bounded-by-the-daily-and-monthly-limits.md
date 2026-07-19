@@ -4,7 +4,7 @@ baseline_commit: b33f24b
 
 # Story 3.2: Generate an Orientation Guide, bounded by the Daily and Monthly limits
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -125,11 +125,11 @@ Machine-facing strings/values — **not** user-facing copy (3.3 renders user cop
   - [x] **Restore state:** reset Config to `dailyLimit: 5`, restore MonthlySpend to the true estimate total. Verify normal generation works again (one more real call) and the app shows normal Context Entry.
   - [x] Rollback paths (AC 5) are unit-verified (Task 3), not live-forced — breaking Bedrock live means corrupting config; note that explicitly in the record rather than faking a live check.
   - [x] No new always-on e2e: authenticated *generation* e2e stays deliberate, not always-on (retro item #4 — this account now burns real units/spend). Existing Playwright suites must pass untouched, both with and without credentials.
-- [ ] **Task 8: Close out (Definition of Done)**
+- [x] **Task 8: Close out (Definition of Done)**
   - [x] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e`.
   - [x] Sweep the diff and this story file for live credentials — this story's specific traps: the Tavily API key must exist ONLY as an ampx secret (never in code/env files/story artifacts); test-account creds only via env; the scratchpad verification script must not be committed (or if a `scripts/` verification helper is kept, it reads everything from env); no real guide output containing personal Context committed.
   - [x] Update deferred-work.md: seed-config must be run once on staging/main when those environments first deploy this schema.
-  - [ ] Commit and push to `main`.
+  - [x] Commit and push to `main`.
 
 ## Dev Notes
 
@@ -230,6 +230,7 @@ GPT-5 Codex
 - Task 5 complete: added the JSON-safe orientation-status client and one-fetch-per-auth presentation flag with fail-open behavior; added exhausted and error-path UI tests without touching `ContextEntry` or wiring the paid submit path.
 - Task 6 complete: sandbox deployed four tables and two Lambdas in 222 seconds; Config `global` was seeded with `dailyLimit: 5` and `monthlyBudget: 30`, and the second seed was a successful non-clobbering no-op.
 - Task 7 complete: two real grounded Guides persisted with three-or-fewer events and specific Erica fixture details; both AppSync calls timed out at 30.748s/30.638s while the Lambdas completed, confirming Story 3.3 needs latest-Session recovery. Daily and monthly rejections returned their frozen codes in about one second without provider spend; live Rate-Limited Intake was captured; Config was restored to 5/$30 and true usage is DailyUsage 2 / MonthlySpend $0.06. Outright provider rollback was deliberately unit-verified, not live-forced.
+- Task 8 complete: all automated gates, live-credential sweep, deployment parity, implementation commit `1787a81`, and push to `main` completed. Story is ready for review.
 
 ### File List
 
@@ -259,3 +260,4 @@ GPT-5 Codex
 
 - 2026-07-18: Story created via create-story workflow (ultimate context engine analysis) — status ready-for-dev.
 - 2026-07-18: Implemented the bounded Orientation Guide backend, usage-status presentation flag, sandbox Config seed, comprehensive automated coverage, and live acceptance verification.
+- 2026-07-18: Definition of Done passed; implementation committed and pushed; status advanced to review.
