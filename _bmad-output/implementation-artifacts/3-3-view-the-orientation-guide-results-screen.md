@@ -4,7 +4,7 @@ baseline_commit: 73d8d01
 
 # Story 3.3: View the Orientation Guide Results screen
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -125,11 +125,11 @@ Spec-sourced strings are verbatim (UX-DR19). Story-authored strings had no spec 
   - [x] `GENERATION_FAILED`'s live path is not forced (breaking Bedrock live = corrupting config — same call as 3.2); its evidence is the unit/AppAuth tests. Say so in the record; don't fake it.
   - [x] Narrow-viewport eyeball (~375px): cards single-column, essay column full-width readable, no horizontal scroll (UX-DR18).
   - [x] Both Playwright modes green, untouched: with credentials (4 tests) and without (2 tests). **Do not add a generation e2e** — authenticated generation stays deliberate-only (Epic 2 retro item #4; it burns real money on every CI-ish run).
-- [ ] **Task 7: Close out (Definition of Done)**
+- [x] **Task 7: Close out (Definition of Done)**
   - [x] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e`.
   - [x] Sweep the diff and this story file for live credentials — this story's traps: no real Guide/Context text from the live run committed anywhere (screenshot goes in implementation-artifacts only if it contains no personal context — use a synthetic test Context for the screenshotted run), test creds env-only, `playwright/.auth/` still untracked.
   - [x] Story-authored copy (timeout note, two error strings, `← Back` interim) listed in the completion notes for Tony's review.
-  - [ ] Commit and push to `main`.
+  - [x] Commit and push to `main`.
 
 ## Dev Notes
 
@@ -234,6 +234,8 @@ GPT-5 Codex
 - 2026-07-19 UTC — Task 6 limits and restoration: `dailyLimit=4` degraded the UI to Rate-Limited Intake and survived reload with MonthlySpend unchanged; `spent=monthlyBudget` rendered the monthly inline message with Context preserved. Temporary overrides were restored to Config 5 / $30 and true spend. A final healthy generation rendered in 29.636s and advanced usage exactly once from 4 / $0.12 to 5 / $0.15. `GENERATION_FAILED` was not live-forced; unit/AppAuth coverage remains its evidence. Permanent Playwright modes passed 4/4 credentialed and 2/2 anonymous, and the deliberate generation spec was removed.
 - 2026-07-19 UTC — Task 7 gates: 148/148 unit/integration tests, lint, typecheck, production build, credentialed Playwright 4/4, anonymous Playwright 2/2, and `git diff --check` passed. The required `gridClass` named export received a one-line Fast Refresh lint exception; the full suite remained green.
 - 2026-07-19 UTC — Task 7 sweep: changed-file inventory matches the File List; no credential values or live personal Guide/Context text are present. The screenshot contains only synthetic cooperative context, and `playwright/.auth/` remains ignored.
+- 2026-07-19 UTC — Task 7 implementation commit `4505580` (`Add Orientation Guide results screen`) pushed successfully to `origin/main`.
+- 2026-07-19 UTC — Step 9 completion validation: every task/subtask is checked, the File List and permitted story sections are complete, and the final 148/148 regression passed before moving the story to review.
 
 ### Completion Notes List
 
@@ -245,6 +247,7 @@ GPT-5 Codex
 - Task 5 complete: added 21 story-focused UI/orchestration assertions plus 4 thin-client tests while preserving every pre-existing 3.1 assertion.
 - Task 6 complete: live synthetic Results, native copy, divider count, responsive layout, exact-once usage, daily degradation/reload, monthly stop/context preservation, restored configuration, and final provider health all passed; permanent Playwright remained generation-free.
 - Task 7 copy review for Tony: story-authored strings are `The news is slow today — this Guide worked from the cards and your own words alone.`, `Something went wrong generating your Guide — nothing was used up. Your context is still here; try again.`, `Everyone's shared monthly Guide budget is spent — Orientation Guides return when the month rolls over. Quick Draw is always free.`, and the interim action `← Back`.
+- Task 7 complete: every gate, artifact/credential sweep, story record update, and implementation commit/push requirement passed.
 
 ### File List
 
