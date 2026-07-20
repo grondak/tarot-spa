@@ -1,8 +1,8 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 import { checkInviteKey } from '../functions/check-invite-key/resource';
 import { inviteKeyMint } from '../functions/invite-key-mint/resource';
-import { orientationGuide } from '../functions/orientation-guide/resource';
 import { requestAccess } from '../functions/request-access/resource';
+import { startOrientationGuide } from '../functions/start-orientation-guide/resource';
 import { usageCounter } from '../functions/usage-counter/resource';
 
 const schema = a.schema({
@@ -41,6 +41,9 @@ const schema = a.schema({
       currentEvents: a.json(),
       guide: a.string(),
       tavilyTimedOut: a.boolean(),
+      status: a.enum(['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED']),
+      errorCode: a.string(),
+      completedAt: a.datetime(),
     })
     // The owner may only read their own Session. Every write goes through the
     // orientation-guide Lambda's direct IAM/DynamoDB access.
@@ -78,12 +81,16 @@ const schema = a.schema({
     .returns(a.boolean())
     .authorization((allow) => [allow.publicApiKey()])
     .handler(a.handler.function(requestAccess)),
-  generateOrientationGuide: a
+  startOrientationGuide: a
     .mutation()
-    .arguments({ context: a.string().required(), spreadKey: a.string().required() })
+    .arguments({
+      requestId: a.string().required(),
+      context: a.string().required(),
+      spreadKey: a.string().required(),
+    })
     .returns(a.json())
     .authorization((allow) => [allow.authenticated()])
-    .handler(a.handler.function(orientationGuide)),
+    .handler(a.handler.function(startOrientationGuide)),
   getOrientationStatus: a
     .query()
     .returns(a.json())

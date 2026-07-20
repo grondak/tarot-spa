@@ -3,11 +3,11 @@ name: 'tarot-spa Multiuser Accounts + LLM Orientation Guide'
 type: architecture-spine
 purpose: build-substrate
 altitude: feature
-paradigm: 'thin Lambda-function-per-capability, no repository/DI abstraction layers'
+paradigm: 'thin Lambda capability boundaries, with a starter + durable worker for long-running execution; no repository/DI abstraction layers'
 scope: 'tarot-spa multiuser accounts + LLM Orientation Guide release'
 status: final
 created: '2026-07-10'
-updated: '2026-07-11'
+updated: '2026-07-19'
 binds: []
 sources:
   - _bmad-output/planning-artifacts/prds/prd-tarot-spa-2026-07-06/prd.md
@@ -21,13 +21,13 @@ companions: []
 
 ## Design Paradigm
 
-Thin Lambda-function-per-capability, no repository/DI abstraction layers. Each backend capability (Orientation Guide generation, Invite Key redemption, Invite Key minting, daily/monthly counter enforcement, Request-Access email, admin metrics) is a single Amplify Gen 2 Lambda function, invoked either from an AppSync resolver or a Cognito trigger — no service layer, no repository/DAO abstraction, no dependency-injection container. This mirrors the existing frontend's own minimal-abstraction style (prop-drilling from `App.jsx`, no Context API, no state library) rather than introducing backend patterns foreign to the rest of the codebase.
+Thin Lambda capability boundaries, no repository/DI abstraction layers. Short-lived backend capabilities remain a single Amplify Gen 2 Lambda invoked from an AppSync resolver or Cognito trigger. A long-running capability may use one thin synchronous API adapter plus one durable worker when its execution cannot safely fit inside the caller's response boundary. The Orientation Guide is that exception: `start-orientation-guide` owns request acceptance and `orientation-guide` owns durable generation. No service layer, repository/DAO abstraction, or dependency-injection container is introduced. This mirrors the frontend's minimal-abstraction style rather than introducing backend patterns foreign to the rest of the codebase.
 
 Maps to the `amplify/` directory:
 
 - `amplify/auth/resource.ts` + `amplify/auth/post-confirmation/` — Cognito User Pool config (incl. admin group/claim) and the InviteKey-redemption trigger (AD-16)
 - `amplify/data/resource.ts` — AppSync GraphQL schema + DynamoDB models + owner-based/admin-group authorization rules
-- `amplify/functions/<capability>/` — one directory per Lambda capability (`resource.ts` + `handler.ts`); no shared abstraction layer between them
+- `amplify/functions/<capability>/` — one directory per Lambda boundary (`resource.ts` + `handler.ts`); no shared abstraction layer between them. Long-running Orientation Guide execution uses `start-orientation-guide/` plus the durable `orientation-guide/` worker.
 - `amplify/backend.ts` — wires auth + data + functions together
 
 ## Invariants & Rules
@@ -39,9 +39,13 @@ flowchart LR
   COGNITO -.authorizes.-> DATA
   COGNITO -->|post-confirmation trigger, AD-16| FN[Lambda Functions<br/>amplify/functions/*]
   DATA -->|resolvers invoke| FN
+  DATA -->|startOrientationGuide| START[Starter Lambda<br/>start-orientation-guide]
+  START -->|conditional Session create| DATA
+  START -->|async invoke by qualified version<br/>execution name = Session id| DURABLE[Lambda Durable Function<br/>orientation-guide]
+  DURABLE -->|Session lifecycle + counters| DATA
   FN -->|IAM-scoped writes, AD-4| DATA
-  FN --> BEDROCK[Bedrock: Claude Opus]
-  FN --> TAVILY[Tavily Search API]
+  DURABLE --> BEDROCK[Bedrock: Claude Opus]
+  DURABLE --> TAVILY[Tavily Search API]
   FN --> SES[Amazon SES]
 ```
 
@@ -61,19 +65,19 @@ flowchart LR
 
 - **Binds:** all backend work (auth, data, functions, hosting)
 - **Prevents:** hand-rolled API Gateway REST + a separately wired database + separately integrated Cognito
-- **Rule:** Cognito Auth + AppSync GraphQL/DynamoDB Data + Lambda Functions are defined together as TypeScript-as-code in `amplify/`, provisioned as one Amplify Gen 2 backend.
+- **Rule:** Cognito Auth + AppSync GraphQL/DynamoDB Data + Lambda Functions, including Lambda Durable Functions, are defined together as TypeScript-as-code in `amplify/`, provisioned as one Amplify Gen 2 backend.
 
 ### AD-4 — Design-paradigm enforcement: no abstraction layers
 
 - **Binds:** `amplify/functions/**`
 - **Prevents:** introducing a repository/DAO layer, service layer, or DI container inside Lambda functions; Lambda writes silently bypassing or duplicating the client-facing authorization model
-- **Rule:** each Lambda function implements exactly one capability, calling AppSync/DynamoDB, Bedrock, and Tavily directly; no shared abstraction layer between functions beyond plain utility code. Server-side writes go through Amplify Gen 2's IAM-authorized, function-scoped data client (per-function resource grants — e.g. the orientation-guide Lambda is granted read/write access to DailyUsage/MonthlySpend, read access to Config, and write access to Session), never the client-facing owner-based GraphQL mutations. The usage-counter Lambda is a separate read-only status capability with read access to DailyUsage and Config. AD-9's owner-based rule therefore governs client-originated (browser → AppSync) mutations only; Lambda-originated writes are governed by their own per-function IAM grants.
+- **Rule:** each Lambda boundary implements exactly one responsibility and calls DynamoDB or its provider directly; no shared abstraction layer exists between functions beyond plain utility code. A long-running capability may split into a synchronous adapter and durable worker without adding a service tier. Server-side writes use IAM-authorized, function-scoped access, never client-facing owner mutations. For Orientation Guide generation, `start-orientation-guide` receives only Session create/read/update and qualified worker-invoke grants; `orientation-guide` receives Session read/update, DailyUsage/MonthlySpend read/write, Config read, Bedrock invoke, and Tavily-secret access. The usage-counter Lambda remains a separate read-only status capability. AD-9 governs browser access; Lambda writes are governed by their per-function IAM grants.
 
 ### AD-5 — LLM + Current-Events grounding split
 
 - **Binds:** FR-8 (Orientation Guide generation)
 - **Prevents:** adopting Bedrock AgentCore's agent-runtime layer or Nova Web Grounding's built-in search tool for this capability
-- **Rule:** the Orientation Guide Lambda calls Tavily directly via a plain HTTP request to source Current Events, then calls Claude Opus via Bedrock with the results included in the prompt — grounding is a manual two-step Lambda flow, not a Bedrock-native tool call. Implementation note: current-generation Claude Opus on Bedrock requires an inference-profile identifier rather than a bare foundation-model ID for most versions/regions (Opus 4.5/4.6 always; Opus 4.7/4.8 outside select regions) — resolve the correct identifier for the chosen Opus version/region at implementation time.
+- **Rule:** the durable Orientation Guide worker calls Tavily directly in an explicit durable step, then calls Claude Opus via Bedrock in a subsequent durable step with the results included in the prompt. Grounding remains a manual two-step flow, not a Bedrock-native tool call. Implementation note: current-generation Claude Opus on Bedrock requires an inference-profile identifier rather than a bare foundation-model ID for most versions/regions (Opus 4.5/4.6 always; Opus 4.7/4.8 outside select regions) — resolve the correct identifier for the chosen Opus version/region at implementation time.
 
 ### AD-6 — Rate-limit + budget enforcement: two-phase atomic reservation
 
@@ -82,6 +86,8 @@ flowchart LR
 - **Rule:** two phases, each a conditional `TransactWriteItems` operation over MonthlySpend + DailyUsage with a stable request-scoped `ClientRequestToken` (never a separate read-then-write or retry of a naked numeric update):
   1. **Pre-flight reservation**, before drawing or calling Tavily/Bedrock: atomically check-and-increment MonthlySpend by a fixed per-request cost estimate (~$0.03, matching the Opus per-request math in Deferred) and DailyUsage by 1 against the same Config snapshot (AD-13). MonthlySpend is transaction item 0 so its cancellation reason takes precedence when both limits are exhausted. Retrying an ambiguous response reuses the identical token and cannot double-increment.
   2. **Compensating rollback**, only on a server-side draw exception, outright Tavily exception, or outright/invalid Bedrock completion (not a Tavily timeout — see AD-14, which still produces a delivered Guide and is a confirmed successful completion): atomically decrement both reservations together with a second stable token distinct from the reservation token. Ambiguous retries reuse the rollback token and cannot double-decrement.
+
+  Under AD-19, the stable tokens are derived deterministically from the Session id: `sessionId:reserve` and `sessionId:rollback`. Every replayable step is independently safe for at-least-once execution; durable execution identity does not make external side effects exactly-once automatically.
   
   MonthlySpend is intentionally an estimate-based real-time gate, not a precise post-call ledger reconciled to actual billed cost — AWS Budgets + SNS remains the secondary safety net that catches estimate-vs-actual drift over time (not the primary blocking mechanism).
 
@@ -95,25 +101,25 @@ flowchart LR
 
 - **Binds:** `amplify/data/resource.ts`
 - **Prevents:** ad-hoc or per-feature key schemes
-- **Rule:** the model set is fixed at Account (incl. `generation`, `onwardKeyGenerated` — AD-17), InviteKey, Session, DailyUsage (key `accountId#date`, UTC date), MonthlySpend (key `year-month`, UTC), Config — no additional top-level models without a new decision.
+- **Rule:** the model set is fixed at Account (incl. `generation`, `onwardKeyGenerated` — AD-17), InviteKey, Session, DailyUsage (key `accountId#date`, UTC date), MonthlySpend (key `year-month`, UTC), Config — no additional top-level models without a new decision. Session is the durable execution record: its id is the client request id and durable execution name; `status` is `PENDING | RUNNING | SUCCEEDED | FAILED`; `errorCode` and `completedAt` are optional; result fields remain optional until `SUCCEEDED`. Pre-lifecycle Sessions are backfilled or unambiguously treated as `SUCCEEDED`.
 
 ### AD-9 — Authorization: owner-based + admin group split [ADOPTED]
 
 - **Binds:** Account, Session, DailyUsage records; MonthlySpend; Admin Dashboard queries and key-minting
 - **Prevents:** hand-rolled per-request authorization checks duplicating Cognito identity, any Account (including admin) reading another Account's data via a per-record path, and MonthlySpend being given an owner-based rule it structurally can't have (it's a cross-account aggregate with no owning identity)
-- **Rule:** Amplify Data's owner-based authorization rule gates Account/Session/DailyUsage records to their owning Cognito identity. MonthlySpend gets no owner-based rule at all: read access is admin-group-gated via Amplify Data auth, write access is restricted to the orientation-guide Lambda's IAM grant (AD-4) — never a client-writable field, never a public mutation. Admin Dashboard/key-minting capability is gated via a Cognito group or custom claim, never by relaxing per-record ownership.
+- **Rule:** Amplify Data's owner-based authorization rule gates Account/Session/DailyUsage records to their owning Cognito identity. Session remains owner-readable and never browser-writable in every lifecycle state. Only the starter and durable worker receive scoped Session write grants. MonthlySpend gets no owner-based rule: read access is admin-group-gated via Amplify Data auth, write access is restricted to the durable orientation-guide worker's IAM grant (AD-4). Admin Dashboard/key-minting capability is gated via a Cognito group or custom claim, never by relaxing per-record ownership.
 
 ### AD-10 — Admin Dashboard is aggregate-only
 
 - **Binds:** FR-11 (Admin Dashboard)
 - **Prevents:** building any raw-content viewer (an individual Account's Context or Orientation Guide text) into the Admin Dashboard
-- **Rule:** Admin Dashboard queries return only aggregate metrics — user counts by generation, Session counts, Daily Orientation Limit hit-rate, spend-to-date — never a single Account's Context or Guide content.
+- **Rule:** Admin Dashboard queries return only aggregate metrics — user counts by generation, `SUCCEEDED` Session counts, Daily Orientation Limit hit-rate, spend-to-date — never a single Account's Context or Guide content. `PENDING` and `FAILED` lifecycle records do not inflate delivered-Guide metrics.
 
 ### AD-11 — Deployment: staging + main branch-per-environment
 
 - **Binds:** all backend + hosting deployment
 - **Prevents:** testing auth/data/LLM-spend changes directly against production; the old GH-Pages pipeline silently surviving alongside the new one
-- **Rule:** `staging` is a fully isolated Amplify environment (own Cognito pool, own DynamoDB tables, own Lambda, password-protected URL); changes land on `staging` first and promote to `main` (prod) by merge. Amplify Hosting on `main` fully replaces GitHub Pages — the existing `.github/workflows/deploy.yml` → GH Pages pipeline is retired, not kept as a parallel/fallback path. Base path drops to `/` per AD-2.
+- **Rule:** `staging` is a fully isolated Amplify environment (own Cognito pool, own DynamoDB tables, own Lambda, password-protected URL); changes land on `staging` first and promote to `main` (prod) by merge. Amplify Hosting on `main` fully replaces GitHub Pages — the existing `.github/workflows/deploy.yml` → GH Pages pipeline is retired, not kept as a parallel/fallback path. Base path drops to `/` per AD-2. Production durable executions target a numbered function version or controlled alias; `$LATEST` is not used because a deployment must not change code beneath an active execution.
 
 ### AD-12 — Draw-code sharing mechanism stays as-is
 
@@ -125,13 +131,13 @@ flowchart LR
 
 - **Binds:** FR-9 (Daily Orientation Limit), FR-10 (monthly budget ceiling)
 - **Prevents:** hardcoding the daily-limit or monthly-budget values in Lambda code, requiring a deploy to change them
-- **Rule:** a single `Config` item in DynamoDB (`dailyLimit`, `monthlyBudget` fields) is the source of truth. The orientation-guide Lambda reads it once per generation request; both the DailyUsage and MonthlySpend reservation checks (AD-6) use that same snapshot, never independent re-reads. The read-only usage-counter status Lambda reads the same item for presentation status. The Admin Dashboard exposes a plain field to edit it, with no separate config service or feature flag system.
+- **Rule:** a single `Config` item in DynamoDB (`dailyLimit`, `monthlyBudget` fields) is the source of truth. The durable orientation-guide worker reads it once per generation execution and checkpoints the snapshot; both DailyUsage and MonthlySpend reservation checks (AD-6) use that same snapshot, never independent re-reads. The read-only usage-counter status Lambda reads the same item for presentation status. The Admin Dashboard exposes a plain field to edit it, with no separate config service or feature flag system.
 
 ### AD-14 — Tavily slow-but-not-failed handling
 
 - **Binds:** FR-8 (Orientation Guide generation), the Current-Events grounding step (AD-5), the AD-6 reservation/rollback protocol
 - **Prevents:** the Orientation Guide Lambda hanging indefinitely on a slow (but not erroring) Tavily response; a timeout-triggered ungrounded Guide being mistaken for a failure and rolled back, which would create a free/uncounted-request path (repeatedly timing out to dodge FR-9/FR-10)
-- **Rule:** the Tavily call carries a 20-second timeout; on timeout, the Lambda proceeds to the Claude Opus generation call without Current-Events grounding rather than blocking. This is a confirmed successful completion for AD-6's counter purposes, not a failure — the AD-6 rollback carve-out applies only to an outright Tavily exception or outright Bedrock/Claude failure, never a timeout-with-fallback. User-facing copy on this path is playful, not a dry error — Tony's framing: "the news is slow today, ha ha."
+- **Rule:** the Tavily durable step carries a 20-second timeout; on timeout, the worker proceeds to the Claude Opus generation step without Current-Events grounding rather than blocking. This is a confirmed successful completion for AD-6's counter purposes, not a failure — the AD-6 rollback carve-out applies only to an outright Tavily exception or outright Bedrock/Claude failure, never a timeout-with-fallback. User-facing copy on this path is playful, not a dry error — Tony's framing: "the news is slow today, ha ha."
 
 ### AD-15 — Request-Access email via Amazon SES
 
@@ -155,21 +161,36 @@ flowchart LR
 
 - **Binds:** FR-11 (Admin Dashboard)
 - **Prevents:** client-side aggregation over paginated Amplify Data list queries (which would also require relaxing AD-9's authorization model to let the client read cross-account records directly)
-- **Rule:** an `admin-metrics` Lambda computes the FR-11 aggregates (users by generation, Session counts, Daily Orientation Limit hit-rate, spend-to-date vs. Config's `monthlyBudget`) server-side, following the same thin-Lambda-per-capability paradigm as every other capability (AD-4). The Admin Dashboard's frontend calls this Lambda rather than issuing raw list queries against Account/Session/MonthlySpend.
+- **Rule:** an `admin-metrics` Lambda computes the FR-11 aggregates (users by generation, `SUCCEEDED` Session counts, Daily Orientation Limit hit-rate, spend-to-date vs. Config's `monthlyBudget`) server-side, following the thin capability-boundary paradigm (AD-4). `PENDING` and `FAILED` lifecycle records are excluded from delivered-Guide counts. The Admin Dashboard's frontend calls this Lambda rather than issuing raw list queries against Account/Session/MonthlySpend.
+
+### AD-19 — Durable asynchronous Orientation Guide execution
+
+- **Binds:** FR-8 (Orientation Guide generation), Session, `startOrientationGuide`, `start-orientation-guide`, `orientation-guide`, client completion tracking
+- **Prevents:** successful paid work being reported as an AppSync timeout; the browser resubmitting ambiguous work; newest-Session inference selecting the wrong result; deployments changing code beneath active executions
+- **Rule:** AppSync invokes `start-orientation-guide`, never the long-running worker directly. The client generates a UUID request id. The starter validates authentication, Context, Spread, and idempotency; conditionally creates a caller-owned `PENDING` Session whose id equals that request id; invokes a numbered version or controlled alias of the durable worker asynchronously with the same durable execution name; and returns a typed `{ sessionId, status }` acknowledgment without waiting for generation.
+
+  Reusing a request id with identical owner and inputs returns the existing Session acknowledgment. Reusing it with different inputs returns `IDEMPOTENCY_CONFLICT`.
+
+  The durable worker input contains only the Session id. Context and Spread are loaded from the owner-bound Session rather than copied through execution input. The worker transitions the record through `RUNNING` and exactly one terminal state. Expected failures become stable public error codes only after required compensation completes. The Config snapshot and all state-changing provider/data boundaries are durable steps with replay-safe behavior per AD-6.
+
+  The browser polls only `Session.get(sessionId)` and persists only the active id for reload recovery. An ambiguous start response is resolved by reading that already-known id before another submission is allowed. Listing Sessions or choosing a result by `createdAt` is prohibited. The active id is cleared on sign-out or deliberate exit from Results; no arbitrary Session-history surface is introduced.
+
+  Durable execution history and logs use least-privilege IAM, encrypted AWS storage, short retention, and no Context, Tavily evidence, prompt, or Guide bodies in CloudWatch logs.
 
 ## Consistency Conventions
 
 | Concern | Convention |
 | --- | --- |
 | Naming (entities, files, interfaces, events) | Amplify Data model names PascalCase singular (`Account`, `InviteKey`, `Session`, `DailyUsage`, `MonthlySpend`); Lambda function directories kebab-case under `amplify/functions/<capability-name>/`; frontend keeps its existing convention unchanged — PascalCase component files/functions, camelCase utils/data functions, SCREAMING_SNAKE_CASE exported constants [ADOPTED] |
-| Data & formats (ids, dates, error shapes, envelopes) | `DailyUsage` primary key `accountId#date` (date = UTC `YYYY-MM-DD`); `MonthlySpend` primary key `year-month` (UTC `YYYY-MM`); all stored timestamps are UTC ISO-8601; `Account` id is the Cognito identity `sub`, not a separately generated id |
-| State & cross-cutting (mutation, errors, logging, config, auth) | Auth: Amplify Data owner-based rule for user-owned records, admin-group-gated for MonthlySpend/Admin Dashboard, Lambda writes via per-function IAM grants not client mutations (AD-4, AD-9). Counters: DailyUsage/MonthlySpend reserved atomically pre-flight, rolled back only on outright Tavily/Bedrock failure — a Tavily timeout still counts as success (AD-6, AD-14). InviteKey redemption and onward-key minting are each a single atomic conditional `UpdateItem`, never read-then-write (AD-16, AD-17). Config: Daily Orientation Limit and monthly budget ceiling live in a single DynamoDB `Config` item, read once per request, edited via the Admin Dashboard (AD-13) |
+| Data & formats (ids, dates, error shapes, envelopes) | `DailyUsage` primary key `accountId#date` (date = UTC `YYYY-MM-DD`); `MonthlySpend` primary key `year-month` (UTC `YYYY-MM`); all stored timestamps are UTC ISO-8601; `Account` id is the Cognito identity `sub`; Orientation Guide `requestId`, Session id, and durable execution name are the same UUID |
+| State & cross-cutting (mutation, errors, logging, config, auth) | Auth: Amplify Data owner-based rule for user-owned records, admin-group-gated for MonthlySpend/Admin Dashboard, Lambda writes via per-function IAM grants not client mutations (AD-4, AD-9). Orientation Guide: `PENDING → RUNNING → SUCCEEDED | FAILED`; client polls exact Session id; durable steps are independently idempotent; production executions are version-pinned; sensitive payload bodies are not logged (AD-19). Counters: DailyUsage/MonthlySpend reserved atomically pre-flight, rolled back only on outright Tavily/Bedrock failure — a Tavily timeout still counts as success (AD-6, AD-14). InviteKey redemption and onward-key minting are each a single atomic conditional `UpdateItem`, never read-then-write (AD-16, AD-17). Config: Daily Orientation Limit and monthly budget ceiling live in a single DynamoDB `Config` item, read and checkpointed once per generation, edited via the Admin Dashboard (AD-13) |
 
 ## Stack
 
 | Name | Version |
 | --- | --- |
 | AWS Amplify Gen 2 (code-first TypeScript backend: Cognito Auth, AppSync/DynamoDB Data, Lambda Functions) | Gen 2 (current paved path, verified 2026-07-10) |
+| AWS Lambda Durable Functions + JavaScript/TypeScript durable execution SDK | Code-first durable Orientation Guide worker (AD-19) |
 | Claude Opus (via Bedrock) | Opus 4.x family, Bedrock Converse API |
 | Tavily Search API | Basic Search tier (1,000 free credits/month, $0.008/credit thereafter) |
 | Amazon SES | Sandbox mode initially (recipient verification required once) |
@@ -194,7 +215,9 @@ flowchart TB
     STAGING_COGNITO[Cognito User Pool]
     STAGING_APPSYNC[AppSync GraphQL API]
     STAGING_DDB[(DynamoDB)]
-    STAGING_FN[Lambda Functions]
+    STAGING_FN[Other Lambda Functions]
+    STAGING_START[Orientation Guide<br/>starter Lambda]
+    STAGING_DURABLE[Version-pinned<br/>durable worker]
   end
 
   subgraph PROD_ENV[Amplify Environment: main / prod]
@@ -202,7 +225,9 @@ flowchart TB
     PROD_COGNITO[Cognito User Pool]
     PROD_APPSYNC[AppSync GraphQL API]
     PROD_DDB[(DynamoDB)]
-    PROD_FN[Lambda Functions]
+    PROD_FN[Other Lambda Functions]
+    PROD_START[Orientation Guide<br/>starter Lambda]
+    PROD_DURABLE[Version-pinned<br/>durable worker]
   end
 
   BEDROCK[Bedrock: Claude Opus]
@@ -219,16 +244,24 @@ flowchart TB
   STAGING_APPSYNC --> STAGING_COGNITO
   STAGING_APPSYNC --> STAGING_DDB
   STAGING_APPSYNC --> STAGING_FN
-  STAGING_FN --> BEDROCK
-  STAGING_FN --> TAVILY
+  STAGING_APPSYNC --> STAGING_START
+  STAGING_START --> STAGING_DDB
+  STAGING_START --> STAGING_DURABLE
+  STAGING_DURABLE --> STAGING_DDB
+  STAGING_DURABLE --> BEDROCK
+  STAGING_DURABLE --> TAVILY
   STAGING_FN --> SES
 
   PROD_HOST --> PROD_APPSYNC
   PROD_APPSYNC --> PROD_COGNITO
   PROD_APPSYNC --> PROD_DDB
   PROD_APPSYNC --> PROD_FN
-  PROD_FN --> BEDROCK
-  PROD_FN --> TAVILY
+  PROD_APPSYNC --> PROD_START
+  PROD_START --> PROD_DDB
+  PROD_START --> PROD_DURABLE
+  PROD_DURABLE --> PROD_DDB
+  PROD_DURABLE --> BEDROCK
+  PROD_DURABLE --> TAVILY
   PROD_FN --> SES
 ```
 
@@ -253,7 +286,10 @@ tarot-spa/
     data/
       resource.ts                # AppSync schema, DynamoDB models, owner-based + admin-group auth rules
     functions/
-      orientation-guide/         # FR-8: Config read + AD-6 counter transaction -> Tavily -> Bedrock; AD-14 timeout
+      start-orientation-guide/   # AD-19: validate, conditionally create PENDING Session, invoke worker, acknowledge
+        resource.ts
+        handler.ts
+      orientation-guide/         # AD-19 durable worker: reserve -> Draw -> Tavily -> Bedrock -> terminal Session
         resource.ts
         handler.ts
       invite-key-mint/           # FR-2, FR-3: onward-key eligibility check (AD-17), Tony's direct admin mint

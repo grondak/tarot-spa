@@ -9,6 +9,8 @@ const MONTHLY_ERROR = "Everyone's shared monthly Guide budget is spent — Orien
 export default function ContextEntry({
   rateLimited = false,
   initialContext = '',
+  orientBusy = false,
+  orientError = null,
   onOrient = () => {},
   onQuickDrawSelect,
   onLoadCode,
@@ -16,22 +18,12 @@ export default function ContextEntry({
   const [context, setContext] = useState(initialContext);
   const [spreadKey, setSpreadKey] = useState(null);
   const [mode, setMode] = useState('orient');
-  const [busy, setBusy] = useState(false);
-  const [orientError, setOrientError] = useState(null);
 
-  async function handleSubmit(event) {
+  function handleSubmit(event) {
     event.preventDefault();
-    if (busy) return;
+    if (orientBusy) return;
     if (!context.trim() || !spreadKey) return;
-    setOrientError(null);
-    setBusy(true);
-    try {
-      await onOrient(context.trim(), spreadKey);
-    } catch (error) {
-      setOrientError(error?.message || 'GENERATION_FAILED');
-    } finally {
-      setBusy(false);
-    }
+    onOrient(context.trim(), spreadKey);
   }
 
   if (rateLimited || mode === 'quickdraw') {
@@ -100,13 +92,13 @@ export default function ContextEntry({
           <div className="mt-8 flex justify-center">
             <button
               type="submit"
-              disabled={busy || !context.trim() || !spreadKey}
+              disabled={orientBusy || !context.trim() || !spreadKey}
               className="rounded-lg bg-indigo-600 px-8 py-3 font-semibold text-white hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Help Me Orient
             </button>
           </div>
-          {busy ? (
+          {orientBusy ? (
             <p role="status" className="mt-4 text-center text-sm text-gray-400">
               Reading the cards and the world...
             </p>

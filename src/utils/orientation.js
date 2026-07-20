@@ -7,38 +7,29 @@ export async function getOrientationStatus() {
   return typeof data === 'string' ? JSON.parse(data) : data;
 }
 
-export async function generateOrientationGuide(context, spreadKey) {
+export async function startOrientationGuide(requestId, context, spreadKey) {
   const client = generateClient();
-  const { data, errors } = await client.mutations.generateOrientationGuide({ context, spreadKey });
+  const { data, errors } = await client.mutations.startOrientationGuide({
+    requestId,
+    context,
+    spreadKey,
+  });
   if (errors?.length) throw new Error(errors[0].message);
   return typeof data === 'string' ? JSON.parse(data) : data;
 }
 
-export async function getNewestSession() {
+export async function getSession(sessionId) {
   const client = generateClient();
-  const sessions = [];
-  let nextToken;
-
-  do {
-    const page = nextToken
-      ? await client.models.Session.list({ nextToken })
-      : await client.models.Session.list();
-    const { data, nextToken: followingToken } = page;
-    sessions.push(...data);
-    nextToken = followingToken;
-  } while (nextToken);
-
-  const newest = sessions.reduce(
-    (latest, session) => !latest || session.createdAt > latest.createdAt ? session : latest,
-    null,
-  );
-  if (!newest) return null;
+  const { data, errors } = await client.models.Session.get({ id: sessionId });
+  if (errors?.length) throw new Error(errors[0].message);
+  if (!data) return null;
 
   return {
-    ...newest,
-    cards: typeof newest.cards === 'string' ? JSON.parse(newest.cards) : newest.cards,
-    currentEvents: typeof newest.currentEvents === 'string'
-      ? JSON.parse(newest.currentEvents)
-      : newest.currentEvents,
+    ...data,
+    status: data.status ?? 'SUCCEEDED',
+    cards: typeof data.cards === 'string' ? JSON.parse(data.cards) : data.cards,
+    currentEvents: typeof data.currentEvents === 'string'
+      ? JSON.parse(data.currentEvents)
+      : data.currentEvents,
   };
 }

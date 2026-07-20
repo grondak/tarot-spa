@@ -127,60 +127,55 @@ describe('ContextEntry canonical state', () => {
     expect(screen.getByLabelText('Context')).toHaveValue('Seeded from a previous session.');
   });
 
-  it('shows the loading treatment and blocks duplicate submits while pending', async () => {
-    onOrient.mockImplementation(() => new Promise(() => {}));
-    renderEntry();
+  it('shows the controlled loading treatment and blocks submits while pending', () => {
+    renderEntry({ orientBusy: true });
 
     fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'A real decision.' } });
     fireEvent.click(spreadButton('decision'));
     fireEvent.click(orientButton());
-    fireEvent.click(orientButton());
 
-    expect(await screen.findByRole('status')).toHaveTextContent(LOADING_COPY);
+    expect(screen.getByRole('status')).toHaveTextContent(LOADING_COPY);
     expect(orientButton()).toBeDisabled();
-    expect(onOrient).toHaveBeenCalledTimes(1);
+    expect(onOrient).not.toHaveBeenCalled();
   });
 
-  it('shows the generation error while preserving Context and Spread for immediate retry', async () => {
-    onOrient.mockRejectedValue(new Error('GENERATION_FAILED'));
-    renderEntry();
+  it('shows the controlled generation error while preserving Context and Spread for retry', () => {
+    renderEntry({ orientError: 'GENERATION_FAILED' });
 
     fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'Keep this context.' } });
     fireEvent.click(spreadButton('decision'));
-    fireEvent.click(orientButton());
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(GENERATION_ERROR);
+    expect(screen.getByRole('alert')).toHaveTextContent(GENERATION_ERROR);
     expect(screen.getByLabelText('Context')).toHaveValue('Keep this context.');
     expect(spreadButton('decision')).toHaveAttribute('aria-pressed', 'true');
     expect(orientButton()).toBeEnabled();
   });
 
-  it('shows the monthly-budget message for its frozen code', async () => {
-    onOrient.mockRejectedValue(new Error('wrapped MONTHLY_BUDGET_EXHAUSTED response'));
-    renderEntry();
+  it('shows the monthly-budget message for its frozen controlled code', () => {
+    renderEntry({ orientError: 'wrapped MONTHLY_BUDGET_EXHAUSTED response' });
 
-    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'Keep this context.' } });
-    fireEvent.click(spreadButton('single'));
-    fireEvent.click(orientButton());
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(MONTHLY_ERROR);
+    expect(screen.getByRole('alert')).toHaveTextContent(MONTHLY_ERROR);
   });
 
-  it('clears an earlier error when the user resubmits', async () => {
-    onOrient
-      .mockRejectedValueOnce(new Error('GENERATION_FAILED'))
-      .mockImplementationOnce(() => new Promise(() => {}));
-    renderEntry();
+  it('replaces a controlled error with the loading treatment on parent state change', () => {
+    const { rerender } = renderEntry({ orientError: 'GENERATION_FAILED' });
 
     fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'Try this again.' } });
     fireEvent.click(spreadButton('three'));
-    fireEvent.click(orientButton());
-    expect(await screen.findByRole('alert')).toHaveTextContent(GENERATION_ERROR);
+    expect(screen.getByRole('alert')).toHaveTextContent(GENERATION_ERROR);
 
-    fireEvent.click(orientButton());
-    expect(await screen.findByRole('status')).toHaveTextContent(LOADING_COPY);
+    rerender(
+      <ContextEntry
+        orientBusy
+        orientError={null}
+        onOrient={onOrient}
+        onQuickDrawSelect={onQuickDrawSelect}
+        onLoadCode={onLoadCode}
+      />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(LOADING_COPY);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(onOrient).toHaveBeenCalledTimes(2);
+    expect(screen.getByLabelText('Context')).toHaveValue('Try this again.');
   });
 });
 

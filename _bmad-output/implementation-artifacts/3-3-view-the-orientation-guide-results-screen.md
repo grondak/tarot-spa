@@ -268,3 +268,22 @@ GPT-5 Codex
 
 - 2026-07-18: Story created via create-story workflow (ultimate context engine analysis) — status ready-for-dev.
 - 2026-07-18: Implemented the Orientation Guide submit/recovery flow, loading and frozen-error states, responsive Results screen, contract/UI coverage, and deliberate live acceptance verification.
+
+## Architecture Correction and Review Freeze — 2026-07-19
+
+Story 3.3's Results UI, loading/error presentation, accessibility behavior, card rehydration, Current Events treatment, essay rendering, and live evidence remain valid.
+
+Its timeout-recovery architecture was a necessary temporary response to Story 3.2's measured AppSync ceiling, but it is superseded by approved Story 3.8.
+
+The following Story 3.3 contracts are temporary and must not be expanded or treated as current architecture:
+
+- Calling a mutation that waits for and returns the complete Guide.
+- Establishing a pre-submit newest-Session baseline.
+- Listing all owner Sessions during recovery.
+- Selecting a newer Session by `createdAt`.
+- Treating an unclassified mutation error as the normal completion path.
+- Holding the only active result/recovery identity in transient React state.
+
+Story 3.8 replaces those contracts with prompt acknowledgment, a client-generated request/Session ID, exact-Session polling, durable lifecycle states, and reload-safe active-ID recovery.
+
+No further development or standalone review effort should be spent hardening the temporary newest-Session polling path. Story 3.3 remains in `review`; after Story 3.8 is implemented, the retained Story 3.3 UI and the replacement orchestration are reviewed together before either path is considered complete.

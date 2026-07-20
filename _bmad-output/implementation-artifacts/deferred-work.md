@@ -8,6 +8,11 @@
 - **Bedrock Claude Opus inference-profile ID (sandbox account, us-east-1): `us.anthropic.claude-opus-4-6-v1`.** Confirmed working by Tony via a live `bedrock-runtime converse` smoke call. This is the identifier the orientation-guide Lambda must pass as `modelId` (AD-5 implementation detail flagged by the tech-verification review: current-gen Opus requires the cross-region `us.` inference-profile form, not the bare foundation-model ID).
 - **Production rollout:** run `npm run seed-config -- <env-name>` once after the Story 3.2 schema first deploys to each staging/main environment. The conditional seed creates Config `global` with `dailyLimit: 5` and `monthlyBudget: 30` without clobbering later Story 4.3 edits.
 
+## Recorded for Story 3.8 (2026-07-19)
+
+- **Lifecycle rollout:** run `npm run backfill-sessions -- <env-name>` once after the Story 3.8 Session lifecycle schema first deploys to each staging/main environment. The conditional, idempotent migration marks only legacy rows without `status` as `SUCCEEDED` and copies their existing `updatedAt` to `completedAt`.
+- **Durable worker rollout:** the `live` alias automatically follows the worker's `currentVersion` on each deploy. In-flight durable executions remain pinned to the version on which they started; do not hand-pin or clean up a version while it still has an active execution.
+
 ## Tracked from: Story 1.1 review, accepted-as-is (2026-07-12)
 
 - AppSync API key (`apiKeyAuthorizationMode: { expiresInDays: 30 }`) has no rotation plan. Both public operations, `checkInviteKey` and `requestAccess`, authenticate with this key, so new-signup key checks and access requests start failing ~30 days after each deploy unless the key is rotated (a redeploy regenerates it). Story 2.2 redeployed the sandbox on 2026-07-17 → nominal expiry ~2026-08-16.

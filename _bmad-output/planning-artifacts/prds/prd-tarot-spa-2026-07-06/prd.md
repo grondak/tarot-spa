@@ -2,7 +2,7 @@
 title: 'tarot-spa Multiuser + LLM Orientation Guide'
 status: draft
 created: '2026-07-06'
-updated: '2026-07-11'
+updated: '2026-07-19'
 ---
 
 # PRD: tarot-spa Multiuser + LLM Orientation Guide
@@ -63,7 +63,7 @@ This release also makes tarot-spa multiuser for the first time — a two-generat
 - **Current Events** — real-world items (3, sourced via the LLM's own internet search) woven into the Lens to ground it in the present moment.
 - **Lens** — the systems-thinking reframing pattern generated per-Session from the Draw + Current Events, expressed as an idea to view the Context through (not advice).
 - **Orientation Guide** — the essay-form output delivered to the user: the Lens applied to their Context. The product's core deliverable.
-- **Session** — one complete pass: Context entered, Spread chosen, Draw made, Orientation Guide produced.
+- **Session** — one Orientation Guide attempt from accepted request through terminal outcome. A Session progresses through `PENDING`, `RUNNING`, and either `SUCCEEDED` or `FAILED`. A successful Session contains the Draw, Current Events, and Orientation Guide; a failed Session retains only the execution and failure information needed for recovery and operations.
 - **Daily Orientation Limit** — a configurable per-Account cap on Orientation Guide requests per calendar day; the mechanism keeping the app cheap-as-free, paired with an aggregate monthly budget ceiling (see FR-10).
 - **Follow-Up Nudge** — *(Post-MVP concept, deferred — see §8.2)* a planned automated re-engagement touchpoint after a Session. In v1, this happens informally instead: Tony personally contacts early users directly to ask what they decided.
 - **Survey** — *(Post-MVP concept, deferred — see §8.2)* a planned structured response form for capturing decision outcomes at scale. Not built in v1 — Tony's direct contact with his friend circle serves the same purpose until usage outgrows what he can track by hand.
@@ -160,26 +160,32 @@ An authenticated user selects a Spread (Single, Three, Decision, System — exis
 
 #### FR-8: Orientation Guide generation ("Help Me Orient")
 
-An authenticated user with remaining Daily Orientation Limit can trigger a Draw and receive an Orientation Guide via a single "Help Me Orient" action. Realizes UJ-1, UJ-2.
+An authenticated user with remaining Daily Orientation Limit can initiate a durable Orientation Guide generation through a single "Help Me Orient" action. The application promptly acknowledges the accepted request with a stable Session ID, then completes the one-shot Draw, grounding, and Orientation Guide generation asynchronously. Realizes UJ-1, UJ-2.
 
 **Consequences (testable):**
+- The client supplies a stable idempotency key for each deliberate submission.
+- Repeating the same request because of retries or ambiguous network responses starts no additional generation and consumes no additional usage or spend.
+- The accepted request creates an owner-readable `PENDING` Session before background generation begins.
+- The client follows that exact Session ID through `RUNNING` to `SUCCEEDED` or `FAILED`; it never infers completion from the user's newest Session.
 - System performs a Draw of Card(s) per the selected Spread.
 - System sources exactly 3 Current Events relevant to the Draw via the LLM's internet search capability.
 - System generates one Lens from the Draw + Current Events, then one Orientation Guide applying that Lens to the user's Context — in a single LLM call (one-shot; no follow-up turns within the app).
 - Orientation Guide is essay-form prose, uses the idea/pattern of the drawn Card(s) as an Oblique Strategy (not a literal card-name reference) to shape the discussion, and demonstrably incorporates specific details from the user's own Context rather than restating the Card's idea abstractly (the UJ-2 quality bar).
 - Orientation Guide structure: identifies where the pattern actually shows up in the user's situation, points out what the user is likely missing, challenges the user's framing if the underlying question itself is wrong, gives one non-obvious/counterintuitive implication, and suggests better next questions the user should be asking.
 - Output is concrete and specific, avoids generic/widely-known advice, and prefers reframing over summarizing.
-- A completed request consumes exactly one unit of the user's Daily Orientation Limit (FR-9), including requests that produce a "miss."
+- A `SUCCEEDED` Session consumes exactly one unit of the user's Daily Orientation Limit (FR-9) and one cost reservation, including requests that produce a "miss."
+- A failed provider/generation attempt reaches `FAILED` only after compensating the reservation; retries cannot double-reserve or double-compensate.
+- Refreshing or reopening the active flow resumes the exact Session until the user deliberately exits it.
 
 **Out of Scope:**
 - Multi-turn/conversational follow-up within the app. A user wanting further elaboration is expected to continue with their own personal LLM outside tarot-spa.
 
 **Feature-specific NFRs:**
-- If the Current Events search or the LLM call fails outright, the system fails gracefully with a clear message and does **not** consume a unit of the Daily Orientation Limit for that attempt.
-- `[OPEN QUESTION]` What happens when the Current Events search is slow but doesn't outright fail (as opposed to the failure case above)? Does the system time out and proceed without grounding, or just run long? Deferred to architecture.
+- If the Current Events search or the LLM call fails outright, the durable execution compensates its reservation, records a terminal `FAILED` Session with a stable public error code, and presents a clear message. The failed attempt does **not** consume a unit of the Daily Orientation Limit.
+- If the Current Events search exceeds 20 seconds without completing, the durable worker proceeds to the LLM without grounding. This timeout fallback is a successful, counted Session and is distinguished from an outright search failure (AD-14).
 
 **Notes:**
-- `[ASSUMPTION]` Target end-to-end latency for a full generation (draw + current-events search + LLM essay) is ~20 seconds — affects loading-state design, but is unvalidated against any specific Bedrock model. Revisit once a model is chosen and benchmarked (see addendum.md).
+- Submission acknowledgment targets ≤3 seconds and must remain comfortably inside AppSync's synchronous response ceiling. Full generation latency is measured separately: current live evidence is approximately 30.6–30.7 seconds. Generation may run longer than the initiating request while the UI remains in its loading state and follows the exact Session (see addendum.md).
 - `[NOTE FOR PM]` The "grounded vs. abstract" quality bar surfaced by UJ-2 is a prompt-design problem more than a spec-able requirement — expect iteration post-launch rather than a one-time fix. That said, before launch it's worth assembling a small held-out set of Context examples (one Erica-style/grounded, one Maya-style/abstract-miss-prone) with an explicit human pass/fail rubric, so this requirement has *something* concrete to test against pre-launch rather than waiting entirely on post-launch signal.
 
 ### 4.4 Daily Orientation Limit & Cost Controls
@@ -220,7 +226,7 @@ The system enforces a configurable aggregate monthly spend ceiling across all Ac
 
 #### FR-11: Admin metrics dashboard
 
-Tony can view a dashboard showing number of users (by generation), number of Sessions, Daily Orientation Limit hit-rate, and aggregate spend against the FR-10 monthly budget ceiling.
+Tony can view a dashboard showing number of users (by generation), number of `SUCCEEDED` Sessions, Daily Orientation Limit hit-rate, and aggregate spend against the FR-10 monthly budget ceiling. `PENDING` and `FAILED` attempts remain operational records but do not count as delivered Guides.
 
 **Consequences (testable):**
 - Dashboard is reachable only by Tony's admin-flagged Account.
@@ -250,7 +256,7 @@ Tony can mint a new First-Gen Invite Key directly from the Admin Dashboard. Impl
 ## 6. Constraints and Guardrails
 
 **Cost**
-The hardest constraint on this release, and now a real number: Tony has set a **$30/month** aggregate budget ceiling across all Accounts combined (FR-10), on top of the per-Account Daily Orientation Limit (FR-9) which bounds individual usage but not total spend. Hosting itself (Amplify, Cognito, API Gateway, Lambda) is chosen to keep fixed costs near-zero, leaving Bedrock + internet-search usage as the only real variable cost — tuned to stay under the $30/month ceiling via FR-9 and FR-10 together. `[OPEN QUESTION]` Exact per-request cost is unknown until a specific Bedrock model is chosen (see addendum.md) — the $30/month ceiling is fixed regardless; the Daily Orientation Limit value and/or the model choice are what get tuned once real cost is known.
+The hardest constraint on this release, and now a real number: Tony has set a **$30/month** aggregate budget ceiling across all Accounts combined (FR-10), on top of the per-Account Daily Orientation Limit (FR-9) which bounds individual usage but not total spend. Hosting itself (Amplify, Cognito, AppSync, Lambda) is chosen to keep fixed costs near-zero, leaving Bedrock + internet-search usage as the only real variable cost — tuned to stay under the $30/month ceiling via FR-9 and FR-10 together. `[OPEN QUESTION]` Exact per-request cost is unknown until a specific Bedrock model is chosen (see addendum.md) — the $30/month ceiling is fixed regardless; the Daily Orientation Limit value and/or the model choice are what get tuned once real cost is known.
 
 **Privacy**
 Context frequently contains sensitive personal, career, or relationship information (see UJ-1, UJ-2). Context and Orientation Guide content must remain visible only to the Account that created them. `[OPEN QUESTION]` Does Tony need raw-content access for debugging/quality iteration on the prompt, or should the Admin Dashboard stay strictly aggregate/anonymized? `[ASSUMPTION]` Data retention, deletion-on-request, encryption-at-rest, and breach/incident handling are unspecified in v1 — accepted as a hobby-tier risk for a friend circle, but should be revisited before any broader/public opening (see §7, §8.2).
@@ -293,7 +299,7 @@ v1 is free for all First-Gen and Second-Gen Accounts; no payment mechanism exist
 
 **Primary**
 - **SM-1:** Access requests via the public form (FR-5) per month — the demand signal validating whether this idea has real legs. Validates FR-5, §2.1 JTBD. `[ASSUMPTION]` This count doesn't distinguish organic requests from people Tony personally pitched (LinkedIn article, direct friend asks) or from duplicate submissions (FR-5 has no dedup) — read as a directional signal, not a clean number, unless/until dedup and source-tagging are added.
-- **SM-2:** Sessions per Account per week (repeat usage).
+- **SM-2:** `SUCCEEDED` Sessions per Account per week (repeat usage).
 - **SM-3:** Second-Gen conversion rate — % of First-Gen Accounts that redeem their one onward Invite Key. Validates FR-2.
 
 **Qualitative signal (v1, manual — not tooled)**
@@ -308,7 +314,7 @@ v1 is free for all First-Gen and Second-Gen Accounts; no payment mechanism exist
 2. Does Tony need raw Context/Orientation Guide access for prompt quality iteration, or should the Admin Dashboard stay strictly aggregate (§6 Privacy)?
 3. Concrete mechanism for Tony to adjust the Daily Orientation Limit value (FR-9) — capability is required, exact interface undecided.
 4. Should Second-Gen Accounts ever gain onward-grant capability if usage grows (FR-2)? Not a v1 decision.
-5. What happens when Current Events search is slow but doesn't outright fail (FR-8)? Timeout-and-proceed-without-grounding vs. just running long — deferred to architecture.
+5. `[RESOLVED — AD-14]` Current Events search times out after 20 seconds and generation proceeds without grounding; this remains a successful counted Session.
 
 ## 11. Assumptions Index
 
@@ -318,7 +324,7 @@ v1 is free for all First-Gen and Second-Gen Accounts; no payment mechanism exist
 - §4.1 FR-3 — The two-generation cap bounds invite-chain depth, not the total number of Accounts Tony can mint directly; aggregate spend is actually bounded by FR-10's budget ceiling, not by chain depth.
 - §4.2 FR-5 — Request-access form is purely transactional (email only); no persistence, no waitlist position, simple on-page acknowledgment only; no anti-abuse/dedup, so SM-1 volume can be inflated (accepted risk).
 - §4.3 FR-6 — A contextual hint is shown in the Context box; exact copy, and whether it varies by Spread, deferred (see Open Question 1).
-- §4.3 FR-8 — Target end-to-end latency (~20s) is unvalidated against any specific Bedrock model.
+- §4.3 FR-8 — Prompt acknowledgment targets ≤3 seconds; measured full-generation latency is approximately 30.6–30.7 seconds and is handled asynchronously through exact-Session tracking.
 - §4.4 FR-9 — Daily Orientation Limit is configurable without a code deployment; exact admin interface deferred (see Open Question 3).
 - §4.4 FR-10 — "One request = one billable LLM call" may undercount real cost if Current Events search requires multiple underlying invocations; the $30/month ceiling is fixed regardless, Daily Orientation Limit and/or model choice are the tuning knobs.
 - §4.5 FR-12 — No formal audit trail links a minted key to a specific FR-5 request; tracked informally by Tony at this scale.

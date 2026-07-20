@@ -1,6 +1,7 @@
 import { Stack } from 'aws-cdk-lib';
 import { defineBackend } from '@aws-amplify/backend';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { Alias, Function } from 'aws-cdk-lib/aws-lambda';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
 import { CfnWebACL, CfnWebACLAssociation } from 'aws-cdk-lib/aws-wafv2';
 import { auth } from './auth/resource';
@@ -10,6 +11,7 @@ import { checkInviteKey } from './functions/check-invite-key/resource';
 import { inviteKeyMint } from './functions/invite-key-mint/resource';
 import { orientationGuide } from './functions/orientation-guide/resource';
 import { requestAccess } from './functions/request-access/resource';
+import { startOrientationGuide } from './functions/start-orientation-guide/resource';
 import { usageCounter } from './functions/usage-counter/resource';
 
 const backend = defineBackend({
@@ -20,6 +22,7 @@ const backend = defineBackend({
   inviteKeyMint,
   orientationGuide,
   requestAccess,
+  startOrientationGuide,
   usageCounter,
 });
 
@@ -34,12 +37,18 @@ const checkInviteKeyLambda = backend.checkInviteKey.resources.lambda;
 const inviteKeyMintLambda = backend.inviteKeyMint.resources.lambda;
 const orientationGuideLambda = backend.orientationGuide.resources.lambda;
 const requestAccessLambda = backend.requestAccess.resources.lambda;
+const startOrientationGuideLambda = backend.startOrientationGuide.resources.lambda;
 const usageCounterLambda = backend.usageCounter.resources.lambda;
 
 // The cutout identity is a runtime secret, so its exact ARN is unavailable at synth.
 // Accepted residual risk: one action on this single Lambda may target any SES identity
 // in this account/region, matching the existing User Pool wildcard rationale below.
 const dataStack = Stack.of(accountTable);
+const workerVersion = (orientationGuideLambda as Function).currentVersion;
+const workerAlias = new Alias(dataStack, 'OrientationGuideLive', {
+  aliasName: 'live',
+  version: workerVersion,
+});
 requestAccessLambda.addToRolePolicy(new PolicyStatement({
   actions: ['ses:SendEmail'],
   resources: [
@@ -57,7 +66,7 @@ inviteKeyTable.grantWriteData(inviteKeyMintLambda);
 backend.inviteKeyMint.addEnvironment('ACCOUNT_TABLE_NAME', accountTable.tableName);
 backend.inviteKeyMint.addEnvironment('INVITE_KEY_TABLE_NAME', inviteKeyTable.tableName);
 
-sessionTable.grantWriteData(orientationGuideLambda);
+sessionTable.grantReadWriteData(orientationGuideLambda);
 dailyUsageTable.grantReadWriteData(orientationGuideLambda);
 monthlySpendTable.grantReadWriteData(orientationGuideLambda);
 configTable.grantReadData(orientationGuideLambda);
@@ -65,6 +74,14 @@ backend.orientationGuide.addEnvironment('SESSION_TABLE_NAME', sessionTable.table
 backend.orientationGuide.addEnvironment('DAILY_USAGE_TABLE_NAME', dailyUsageTable.tableName);
 backend.orientationGuide.addEnvironment('MONTHLY_SPEND_TABLE_NAME', monthlySpendTable.tableName);
 backend.orientationGuide.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
+
+sessionTable.grantReadWriteData(startOrientationGuideLambda);
+workerAlias.grantInvoke(startOrientationGuideLambda);
+backend.startOrientationGuide.addEnvironment('SESSION_TABLE_NAME', sessionTable.tableName);
+backend.startOrientationGuide.addEnvironment(
+  'ORIENTATION_GUIDE_FUNCTION_ARN',
+  workerAlias.functionArn,
+);
 
 dailyUsageTable.grantReadData(usageCounterLambda);
 configTable.grantReadData(usageCounterLambda);
@@ -120,6 +137,7 @@ const ssmPrefix = `/${backendNamespace}/${backendName}`;
 const accountTableParam = `${ssmPrefix}/account-table-name`;
 const configTableParam = `${ssmPrefix}/config-table-name`;
 const inviteKeyTableParam = `${ssmPrefix}/invite-key-table-name`;
+const sessionTableParam = `${ssmPrefix}/session-table-name`;
 
 // Same-stack live refs (table -> parameter, both in `data`) — no cycle risk.
 new StringParameter(dataStack, 'AccountTableNameParam', {
@@ -133,6 +151,10 @@ new StringParameter(dataStack, 'InviteKeyTableNameParam', {
 new StringParameter(dataStack, 'ConfigTableNameParam', {
   parameterName: configTableParam,
   stringValue: configTable.tableName,
+});
+new StringParameter(dataStack, 'SessionTableNameParam', {
+  parameterName: sessionTableParam,
+  stringValue: sessionTable.tableName,
 });
 
 // The Lambda gets the SSM *paths* (plain strings) and resolves the names at cold start.

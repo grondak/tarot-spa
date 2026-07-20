@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { generateClient } from 'aws-amplify/data';
 import {
-  generateOrientationGuide,
-  getNewestSession,
+  getOrientationStatus,
+  getSession,
+  startOrientationGuide,
 } from './orientation';
 
 vi.mock('aws-amplify/data', () => ({
@@ -14,11 +15,14 @@ let client;
 beforeEach(() => {
   client = {
     mutations: {
-      generateOrientationGuide: vi.fn(),
+      startOrientationGuide: vi.fn(),
+    },
+    queries: {
+      getOrientationStatus: vi.fn(),
     },
     models: {
       Session: {
-        list: vi.fn(),
+        get: vi.fn(),
       },
     },
   };
@@ -26,71 +30,74 @@ beforeEach(() => {
   generateClient.mockReturnValue(client);
 });
 
-describe('generateOrientationGuide', () => {
-  it('calls the mutation with Context and spread and parses string data', async () => {
-    const payload = { sessionId: 'session-1', guide: 'A guide.' };
-    client.mutations.generateOrientationGuide.mockResolvedValue({
+describe('startOrientationGuide', () => {
+  it('calls the mutation with the request identity and parses string data', async () => {
+    const payload = { sessionId: 'session-1', status: 'PENDING' };
+    client.mutations.startOrientationGuide.mockResolvedValue({
       data: JSON.stringify(payload),
     });
 
-    await expect(generateOrientationGuide('A decision.', 'decision')).resolves.toEqual(payload);
-    expect(client.mutations.generateOrientationGuide).toHaveBeenCalledWith({
+    await expect(startOrientationGuide(
+      'request-1',
+      'A decision.',
+      'decision',
+    )).resolves.toEqual(payload);
+    expect(client.mutations.startOrientationGuide).toHaveBeenCalledWith({
+      requestId: 'request-1',
       context: 'A decision.',
       spreadKey: 'decision',
     });
   });
 
   it('throws the first mutation error message', async () => {
-    client.mutations.generateOrientationGuide.mockResolvedValue({
-      errors: [{ message: 'wrapped DAILY_LIMIT_EXHAUSTED response' }],
+    client.mutations.startOrientationGuide.mockResolvedValue({
+      errors: [{ message: 'wrapped IDEMPOTENCY_CONFLICT response' }],
     });
 
-    await expect(generateOrientationGuide('A decision.', 'decision')).rejects.toThrow(
-      'wrapped DAILY_LIMIT_EXHAUSTED response',
-    );
+    await expect(startOrientationGuide(
+      'request-1',
+      'A decision.',
+      'decision',
+    )).rejects.toThrow('wrapped IDEMPOTENCY_CONFLICT response');
   });
 });
 
-describe('getNewestSession', () => {
-  it('reads every page, including an empty page with a token, and normalizes the newest Session', async () => {
-    client.models.Session.list
-      .mockResolvedValueOnce({
-        data: [],
-        nextToken: 'page-2',
-      })
-      .mockResolvedValueOnce({
-        data: [{
-          id: 'older',
-          createdAt: '2026-07-18T10:00:00.000Z',
-          cards: [],
-          currentEvents: [],
-        }],
-        nextToken: 'page-3',
-      })
-      .mockResolvedValueOnce({
-        data: [{
-          id: 'newest',
-          createdAt: '2026-07-18T11:00:00.000Z',
-          cards: JSON.stringify([{ name: 'The Fool' }]),
-          currentEvents: JSON.stringify([{ title: 'An event' }]),
-        }],
-        nextToken: null,
-      });
+describe('getSession', () => {
+  it('gets only the exact Session and normalizes JSON fields plus legacy status', async () => {
+    client.models.Session.get.mockResolvedValue({
+      data: {
+        id: 'session-1',
+        cards: JSON.stringify([{ name: 'The Fool' }]),
+        currentEvents: JSON.stringify([{ title: 'An event' }]),
+      },
+    });
 
-    await expect(getNewestSession()).resolves.toEqual({
-      id: 'newest',
-      createdAt: '2026-07-18T11:00:00.000Z',
+    await expect(getSession('session-1')).resolves.toEqual({
+      id: 'session-1',
       cards: [{ name: 'The Fool' }],
       currentEvents: [{ title: 'An event' }],
+      status: 'SUCCEEDED',
     });
-    expect(client.models.Session.list).toHaveBeenNthCalledWith(1);
-    expect(client.models.Session.list).toHaveBeenNthCalledWith(2, { nextToken: 'page-2' });
-    expect(client.models.Session.list).toHaveBeenNthCalledWith(3, { nextToken: 'page-3' });
+    expect(client.models.Session.get).toHaveBeenCalledWith({ id: 'session-1' });
   });
 
-  it('returns null when the caller has no Sessions', async () => {
-    client.models.Session.list.mockResolvedValue({ data: [], nextToken: null });
+  it('returns null when the exact Session is absent and throws model errors', async () => {
+    client.models.Session.get.mockResolvedValueOnce({ data: null });
+    await expect(getSession('missing')).resolves.toBeNull();
 
-    await expect(getNewestSession()).resolves.toBeNull();
+    client.models.Session.get.mockResolvedValueOnce({
+      errors: [{ message: 'read denied' }],
+    });
+    await expect(getSession('hidden')).rejects.toThrow('read denied');
+  });
+});
+
+describe('getOrientationStatus', () => {
+  it('retains the existing status query and string guard', async () => {
+    client.queries.getOrientationStatus.mockResolvedValue({
+      data: JSON.stringify({ limitExhausted: false }),
+    });
+
+    await expect(getOrientationStatus()).resolves.toEqual({ limitExhausted: false });
   });
 });

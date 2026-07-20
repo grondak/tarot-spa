@@ -1,13 +1,13 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getCurrentUser, signIn, signOut } from 'aws-amplify/auth';
 import { Hub } from 'aws-amplify/utils';
 import App from './App';
 import { getMyAccount } from './utils/account';
 import {
-  generateOrientationGuide,
-  getNewestSession,
+  getSession,
   getOrientationStatus,
+  startOrientationGuide,
 } from './utils/orientation';
 
 vi.mock('aws-amplify/auth', () => ({
@@ -20,9 +20,9 @@ vi.mock('aws-amplify/auth', () => ({
 
 vi.mock('./utils/account', () => ({ getMyAccount: vi.fn() }));
 vi.mock('./utils/orientation', () => ({
-  generateOrientationGuide: vi.fn(),
-  getNewestSession: vi.fn(),
+  getSession: vi.fn(),
   getOrientationStatus: vi.fn(),
+  startOrientationGuide: vi.fn(),
 }));
 
 vi.mock('aws-amplify/utils', () => ({
@@ -74,25 +74,40 @@ describe('App authenticated sign-out round trip', () => {
   beforeEach(() => {
     getCurrentUser.mockReset();
     getMyAccount.mockReset();
-    generateOrientationGuide.mockReset();
-    getNewestSession.mockReset();
+    getSession.mockReset();
     getOrientationStatus.mockReset();
+    startOrientationGuide.mockReset();
     signIn.mockReset();
     signOut.mockReset();
     Hub.listen.mockClear();
+    localStorage.clear();
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(
+      '12345678-1234-4234-9234-123456789012',
+    );
     getCurrentUser.mockResolvedValue({ username: 'tony' });
     getMyAccount.mockResolvedValue({ generation: 'SecondGen', onwardKeyGenerated: false });
-    generateOrientationGuide.mockResolvedValue({
-      sessionId: 'session-1',
+    startOrientationGuide.mockResolvedValue({
+      sessionId: '12345678-1234-4234-9234-123456789012',
+      status: 'PENDING',
+    });
+    getSession.mockResolvedValue({
+      id: '12345678-1234-4234-9234-123456789012',
+      spreadKey: 'single',
+      context: 'A decision.',
+      status: 'SUCCEEDED',
       cards: [],
       currentEvents: [],
       guide: 'The generated guide.',
       tavilyTimedOut: false,
     });
-    getNewestSession.mockResolvedValue(null);
     getOrientationStatus.mockResolvedValue({ limitExhausted: false });
     signOut.mockResolvedValue();
     signIn.mockResolvedValue({ isSignedIn: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('clears the draw and returns to the landing before a fresh sign-in', async () => {
@@ -204,29 +219,58 @@ describe('App authenticated sign-out round trip', () => {
     expect(screen.getByRole('button', { name: 'Help Me Orient', exact: true })).toBeDisabled();
   });
 
-  it('submits Context once and renders the successful guide result', async () => {
+  it('starts once, follows PENDING to SUCCEEDED, and retains the exact active ID', async () => {
+    vi.useFakeTimers();
+    getSession
+      .mockResolvedValueOnce({
+        id: '12345678-1234-4234-9234-123456789012',
+        status: 'PENDING',
+      })
+      .mockResolvedValueOnce({
+        id: '12345678-1234-4234-9234-123456789012',
+        spreadKey: 'decision',
+        context: 'A consequential choice.',
+        status: 'SUCCEEDED',
+        cards: [],
+        currentEvents: [],
+        guide: 'The generated guide.',
+        tavilyTimedOut: false,
+      });
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Help Me Orient', exact: true })).toBeVisible();
+    await act(async () => vi.runAllTicks());
     fireEvent.change(screen.getByLabelText('Context'), {
       target: { value: '  A consequential choice.  ' },
     });
     fireEvent.click(screen.getByRole('button', { name: /Decision/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
+    await act(async () => vi.runAllTicks());
 
-    expect(await screen.findByText('The generated guide.')).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Your Draw', level: 2 })).toBeVisible();
-    expect(generateOrientationGuide).toHaveBeenCalledTimes(1);
-    expect(generateOrientationGuide).toHaveBeenCalledWith('A consequential choice.', 'decision');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Reading the cards and the world...',
+    );
+    expect(startOrientationGuide).toHaveBeenCalledWith(
+      '12345678-1234-4234-9234-123456789012',
+      'A consequential choice.',
+      'decision',
+    );
+    expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBe(
+      '12345678-1234-4234-9234-123456789012',
+    );
+
+    await act(async () => vi.advanceTimersByTimeAsync(5000));
+    expect(screen.getByText('The generated guide.')).toBeVisible();
+    expect(startOrientationGuide).toHaveBeenCalledTimes(1);
+    expect(getSession).toHaveBeenCalledWith('12345678-1234-4234-9234-123456789012');
     expect(getOrientationStatus).toHaveBeenCalledTimes(2);
-    expect(screen.queryByLabelText('Context')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '← Back' }));
-    expect(screen.getByLabelText('Context')).toHaveValue('');
   });
 
-  it('degrades to Rate-Limited Intake on the frozen daily-limit code', async () => {
-    generateOrientationGuide.mockRejectedValue(new Error('wrapped DAILY_LIMIT_EXHAUSTED response'));
+  it('maps a FAILED daily limit to Rate-Limited Intake and clears the active ID', async () => {
+    getSession.mockResolvedValue({
+      id: '12345678-1234-4234-9234-123456789012',
+      status: 'FAILED',
+      errorCode: 'DAILY_LIMIT_EXHAUSTED',
+    });
     render(<App />);
 
     expect(await screen.findByLabelText('Context')).toBeVisible();
@@ -235,13 +279,16 @@ describe('App authenticated sign-out round trip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
 
     expect(await screen.findByRole('heading', { name: 'Quick Draw', exact: true })).toBeVisible();
-    expect(screen.getByText(/You're tapped out on Orientation Guides for today/)).toBeVisible();
-    expect(generateOrientationGuide).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBeNull();
   });
 
-  it('surfaces frozen generation and monthly-budget failures inline without recovery polling', async () => {
-    generateOrientationGuide.mockRejectedValueOnce(new Error('wrapped GENERATION_FAILED response'));
+  it('maps a FAILED monthly limit inline while preserving Context and clears the ID', async () => {
+    getSession.mockResolvedValue({
+      id: '12345678-1234-4234-9234-123456789012',
+      status: 'FAILED',
+      errorCode: 'MONTHLY_BUDGET_EXHAUSTED',
+    });
     render(<App />);
 
     expect(await screen.findByLabelText('Context')).toBeVisible();
@@ -250,78 +297,155 @@ describe('App authenticated sign-out round trip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Something went wrong generating your Guide — nothing was used up. Your context is still here; try again.',
-    );
-    expect(getNewestSession).toHaveBeenCalledTimes(1);
-
-    generateOrientationGuide.mockRejectedValueOnce(
-      new Error('wrapped MONTHLY_BUDGET_EXHAUSTED response'),
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(
       "Everyone's shared monthly Guide budget is spent — Orientation Guides return when the month rolls over. Quick Draw is always free.",
     );
-    expect(getNewestSession).toHaveBeenCalledTimes(2);
+    expect(screen.getByLabelText('Context')).toHaveValue('Keep this context.');
+    expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBeNull();
   });
 
-  it('recovers a newer Session after a timeout without resubmitting the mutation', async () => {
+  it('continues the exact Session after an ambiguous ack without a second mutation', async () => {
     vi.useFakeTimers();
-    generateOrientationGuide.mockRejectedValue(new Error('AppSync request timed out'));
-    getNewestSession
-      .mockResolvedValueOnce(null)
+    startOrientationGuide.mockRejectedValue(new Error('ack connection lost'));
+    getSession
       .mockResolvedValueOnce({
-        id: 'recovered-session',
+        id: '12345678-1234-4234-9234-123456789012',
+        status: 'RUNNING',
+      })
+      .mockResolvedValueOnce({
+        id: '12345678-1234-4234-9234-123456789012',
         spreadKey: 'decision',
         context: 'A decision.',
+        status: 'SUCCEEDED',
         cards: [],
         currentEvents: [],
-        guide: 'The recovered guide.',
+        guide: 'Recovered exact Session.',
         tavilyTimedOut: false,
-        createdAt: '2026-07-19T01:00:00.000Z',
       });
     render(<App />);
 
-    await act(async () => {
-      await vi.runAllTicks();
-    });
+    await act(async () => vi.runAllTicks());
     fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'A decision.' } });
     fireEvent.click(screen.getByRole('button', { name: /Decision/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5000);
-    });
+    await act(async () => vi.advanceTimersByTimeAsync(5000));
 
-    expect(screen.getByText('The recovered guide.')).toBeVisible();
-    expect(generateOrientationGuide).toHaveBeenCalledTimes(1);
-    expect(getNewestSession).toHaveBeenCalledTimes(2);
-    vi.useRealTimers();
+    expect(screen.getByText('Recovered exact Session.')).toBeVisible();
+    expect(startOrientationGuide).toHaveBeenCalledTimes(1);
   });
 
-  it('shows the generic inline error when timeout recovery reaches its deadline', async () => {
-    vi.useFakeTimers();
-    generateOrientationGuide.mockRejectedValue(new Error('AppSync request timed out'));
-    getNewestSession.mockResolvedValue(null);
+  it('clears a missing ambiguous start and uses a fresh UUID on retry', async () => {
+    const secondId = 'abcdefab-cdef-4abc-9def-abcdefabcdef';
+    globalThis.crypto.randomUUID
+      .mockReturnValueOnce('12345678-1234-4234-9234-123456789012')
+      .mockReturnValueOnce(secondId);
+    startOrientationGuide
+      .mockRejectedValueOnce(new Error('ack connection lost'))
+      .mockResolvedValueOnce({ sessionId: secondId, status: 'PENDING' });
+    getSession
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: secondId,
+        spreadKey: 'single',
+        context: 'Retry me.',
+        status: 'SUCCEEDED',
+        cards: [],
+        currentEvents: [],
+        guide: 'Fresh retry result.',
+        tavilyTimedOut: false,
+      });
     render(<App />);
 
-    await act(async () => {
-      await vi.runAllTicks();
+    expect(await screen.findByLabelText('Context')).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'Retry me.' } });
+    fireEvent.click(screen.getByRole('button', { name: /Single Card/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Something went wrong generating your Guide — nothing was used up. Your context is still here; try again.',
+    );
+    expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
+    expect(await screen.findByText('Fresh retry result.')).toBeVisible();
+    expect(startOrientationGuide.mock.calls.map(([id]) => id)).toEqual([
+      '12345678-1234-4234-9234-123456789012',
+      secondId,
+    ]);
+  });
+
+  it('ends a never-terminal exact Session at 300 seconds with the generic error', async () => {
+    vi.useFakeTimers();
+    getSession.mockResolvedValue({
+      id: '12345678-1234-4234-9234-123456789012',
+      status: 'RUNNING',
     });
+    render(<App />);
+
+    await act(async () => vi.runAllTicks());
     fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'A decision.' } });
     fireEvent.click(screen.getByRole('button', { name: /Decision/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(75000);
-    });
+    await act(async () => vi.advanceTimersByTimeAsync(300000));
 
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Something went wrong generating your Guide — nothing was used up. Your context is still here; try again.',
     );
-    expect(generateOrientationGuide).toHaveBeenCalledTimes(1);
-    vi.useRealTimers();
+    expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBeNull();
+    expect(startOrientationGuide).toHaveBeenCalledTimes(1);
   });
 
-  it('clears a guide result when signing out', async () => {
+  it('resumes a stored SUCCEEDED or legacy Session without starting again', async () => {
+    localStorage.setItem(
+      'tarotSpaActiveOrientationSession',
+      '12345678-1234-4234-9234-123456789012',
+    );
+    getSession.mockResolvedValue({
+      id: '12345678-1234-4234-9234-123456789012',
+      spreadKey: 'single',
+      context: 'Stored context.',
+      cards: [],
+      currentEvents: [],
+      guide: 'Restored after reload.',
+      tavilyTimedOut: false,
+    });
+    render(<App />);
+
+    expect(await screen.findByText('Restored after reload.')).toBeVisible();
+    expect(startOrientationGuide).not.toHaveBeenCalled();
+    expect(localStorage.getItem('tarotSpaActiveOrientationSession')).not.toBeNull();
+  });
+
+  it('resumes a stored RUNNING Session in loading and clears a missing stored ID silently', async () => {
+    vi.useFakeTimers();
+    localStorage.setItem(
+      'tarotSpaActiveOrientationSession',
+      '12345678-1234-4234-9234-123456789012',
+    );
+    getSession.mockResolvedValue({
+      id: '12345678-1234-4234-9234-123456789012',
+      status: 'RUNNING',
+    });
+    const { unmount } = render(<App />);
+    await act(async () => vi.runAllTicks());
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Reading the cards and the world...',
+    );
+    expect(startOrientationGuide).not.toHaveBeenCalled();
+    unmount();
+
+    localStorage.setItem(
+      'tarotSpaActiveOrientationSession',
+      '12345678-1234-4234-9234-123456789012',
+    );
+    getSession.mockResolvedValue(null);
+    render(<App />);
+    await act(async () => vi.runAllTicks());
+    expect(screen.getByRole('heading', { name: 'Help Me Orient' })).toBeVisible();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBeNull();
+  });
+
+  it('clears the stored ID on Results Back and sign-out', async () => {
     render(<App />);
 
     expect(await screen.findByLabelText('Context')).toBeVisible();
@@ -329,16 +453,15 @@ describe('App authenticated sign-out round trip', () => {
     fireEvent.click(screen.getByRole('button', { name: /Single Card/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
     expect(await screen.findByText('The generated guide.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: '← Back' }));
+    expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBeNull();
 
+    localStorage.setItem(
+      'tarotSpaActiveOrientationSession',
+      '12345678-1234-4234-9234-123456789012',
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Log Out' }));
     expect(await screen.findByRole('button', { name: 'I have an Invite Key' })).toBeVisible();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Log In' }));
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'tony@example.com' } });
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
-
-    expect(await screen.findByLabelText('Context')).toBeVisible();
-    expect(screen.queryByText('The generated guide.')).not.toBeInTheDocument();
+    expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBeNull();
   });
 });

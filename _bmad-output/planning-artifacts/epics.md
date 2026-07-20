@@ -1,5 +1,6 @@
 ---
 stepsCompleted: [1, 2, 3]
+updated: '2026-07-19'
 inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-tarot-spa-2026-07-06/prd.md
   - _bmad-output/planning-artifacts/architecture/architecture-tarot-spa-2026-07-10/ARCHITECTURE-SPINE.md
@@ -36,7 +37,7 @@ NFR1 (Security): Invite Key redemption and Cognito authentication gate all Sessi
 NFR2 (Reliability): A failed Current Events search or LLM call degrades gracefully (clear user-facing error) rather than silently failing, and must not consume a Daily Orientation Limit unit. A slow-but-not-failed Current Events search times out (20s) and proceeds without grounding rather than hanging — and this still counts as a successful completion for rate-limit/budget purposes.
 NFR3 (Observability): The Admin Dashboard is the primary observability surface for v1. The one push-based exception is FR10's budget alert — Tony must not have to remember to check the dashboard to learn the cost ceiling is at risk.
 NFR4 (Performance/Cost enforcement): Daily Orientation Limit enforcement is server-side; a client-side-only cap is not acceptable, since the entire point is bounding real infrastructure spend.
-NFR5 (Latency, unvalidated): Target end-to-end latency for a full Orientation Guide generation is ~20 seconds — affects loading-state design; revisit once benchmarked against the chosen Bedrock model.
+NFR5 (Latency, benchmarked): Prompt acknowledgment targets ≤3 seconds and must remain inside AppSync's response boundary. Full generation is asynchronous; current live evidence is approximately 30.6–30.7 seconds and the client follows the exact Session until terminal status.
 NFR6 (Cost ceiling): $30/month aggregate budget is the hardest constraint on this release; hosting/fixed costs are kept near-zero so Bedrock + search usage is the only real variable cost.
 NFR7 (Privacy): Context and Orientation Guide content remain visible only to the Account that created them; no built-in admin raw-content viewer (deliberate architecture decision, ADR AD-10).
 
@@ -288,11 +289,13 @@ So that Tony can follow up and grant me one.
 
 ## Epic 3: Draw & Orientation Guide
 
-The core product: an authenticated user describes their situation, draws cards, and gets a real LLM-generated Orientation Guide — bounded by the two-layer daily/monthly cost controls baked into the same request flow.
+The core product: an authenticated user describes their situation, draws cards, and receives a real LLM-generated Orientation Guide through a durable asynchronous execution — bounded by atomic daily/monthly cost controls and tracked through an exact owner-readable Session.
 
-**FRs covered:** FR6, FR7, FR8, FR9, FR10 | **Architecture:** AD-5 (Bedrock+Tavily split), AD-6 (two-phase atomic reservation), AD-7 (UTC), AD-13 (Config), AD-14 (Tavily timeout) | **NFRs:** NFR2, NFR4, NFR5, NFR6 | **UX-DRs:** UX-DR2, UX-DR3, UX-DR4, UX-DR6, UX-DR10, UX-DR11, UX-DR13, UX-DR16, UX-DR19
+**FRs covered:** FR6, FR7, FR8, FR9, FR10 | **Architecture:** AD-5 (Bedrock+Tavily split), AD-6 (two-phase atomic reservation), AD-7 (UTC), AD-13 (Config), AD-14 (Tavily timeout), AD-19 (durable async generation) | **NFRs:** NFR2, NFR4, NFR5, NFR6 | **UX-DRs:** UX-DR2, UX-DR3, UX-DR4, UX-DR6, UX-DR10, UX-DR11, UX-DR13, UX-DR16, UX-DR19
 
 Story 3.5 (groundedness scoring) has no PRD FR number — it's a post-PRD addition instrumenting FR8's own "grounded vs. abstract" quality bar, surfaced during epic/story review rather than in the original document. Stories 3.2–3.4 were split from a single original story per Amelia's review: 3.2 is the backend generation/reservation flow, 3.3 is viewing the results, 3.4 is the redraw actions — kept separate because they're different work (Lambda vs. frontend vs. a small self-contained action), not because they're different atomic mechanisms.
+
+**Correct-course priority:** Story 3.8 preserves the established 3.4–3.7 identifiers but executes immediately after Story 3.3's deployed implementation. It gates Stories 3.4 and 3.5. Story 3.3 remains frozen in review until Story 3.8 and the retained Results UI receive an integrated review.
 
 ### Story 3.1: Enter Context and pick a Spread
 
@@ -388,11 +391,69 @@ So that I can actually read and absorb the reframing.
 **When** they use native browser copy
 **Then** it copies normally — no custom share UI exists (UX-DR16)
 
+### Story 3.8: Make Orientation Guide generation durable and asynchronous
+
+As an authenticated user requesting an Orientation Guide,
+I want generation to continue reliably beyond the initiating API response and remain tied to my exact request,
+So that I receive the Guide I paid for without timeout ambiguity, duplicate charges, or another Session being mistaken for mine.
+
+**Acceptance Criteria:**
+
+**Given** valid Context, Spread, and a client-generated request ID
+**When** the user submits
+**Then** the starter conditionally creates an owner-readable `PENDING` Session and returns `{ sessionId, status }` within the prompt-acknowledgment target without waiting for Tavily or Bedrock
+
+**Given** the same owner, request ID, Context, and Spread are submitted again
+**When** the starter handles the duplicate
+**Then** it returns the existing Session and starts no additional execution; reusing the ID with different inputs returns `IDEMPOTENCY_CONFLICT`
+
+**Given** an accepted Session
+**When** its version-pinned worker runs
+**Then** it transitions the Session to `RUNNING`, reads one Config snapshot, atomically reserves usage/spend, draws cards, calls Tavily, calls Bedrock, and transitions the Session to `SUCCEEDED` with the existing result contract
+
+**Given** an outright Draw, Tavily, Bedrock, or output-validation failure after reservation and before a successful Bedrock result is checkpointed
+**When** the execution terminates
+**Then** compensation completes idempotently before the Session becomes `FAILED`, and its stable `errorCode` drives the existing user-facing treatment
+
+**Given** a successful Bedrock result has been checkpointed but updating the Session transiently fails
+**When** the durable worker resumes
+**Then** it retries persistence from the checkpoint without intentionally calling Bedrock again; the reservation remains because real provider spend occurred, and exhausted persistence retries raise an operational alert rather than falsely reporting compensation
+
+**Given** Tavily exceeds 20 seconds
+**When** its timeout fires
+**Then** the durable worker continues to Bedrock without grounding, reaches `SUCCEEDED`, retains `tavilyTimedOut: true`, and does not compensate the reservation
+
+**Given** the durable runtime replays or retries any step
+**When** state-changing operations execute again
+**Then** Session creation, reservation, compensation, Bedrock-result persistence, and terminal transitions produce no duplicate usage, spend, or completed Guide
+
+**Given** generation is in progress
+**When** the client checks completion
+**Then** it fetches only the returned Session ID; it never lists Sessions, establishes a newest-row baseline, or re-submits because of timeout
+
+**Given** an active Session ID has been stored locally
+**When** the browser reloads or the app restarts under the same authenticated owner
+**Then** the application resumes that exact Session, and the ID is cleared on sign-out or deliberate exit from Results
+
+**Given** lifecycle changes occur
+**When** the client renders them
+**Then** `PENDING`/`RUNNING` use the existing loading treatment, `SUCCEEDED` renders the existing Results screen, Daily-limit failure degrades to Quick Draw, and other failures use the existing accessible inline messages
+
+**Given** Sessions created before lifecycle fields existed
+**When** Story 3.8 deploys
+**Then** they are safely backfilled or unambiguously treated as `SUCCEEDED`; no existing Context, cards, events, or Guide content is lost
+
+**Given** a real generation exceeds AppSync's former response boundary
+**When** live verification runs
+**Then** the starter acknowledgment succeeds promptly, the background worker reaches `SUCCEEDED`, the exact Guide renders, and DailyUsage/MonthlySpend each change exactly once; failed and abnormally long executions are observable without logging Context or Guide bodies
+
 ### Story 3.4: Redraw from the Results screen
 
 As a user viewing their Orientation Guide Results,
 I want to either start fresh or tweak my observation and try again,
 So that I can get another attempt if the first one didn't land or I want to add detail.
+
+*Prerequisite: Story 3.8's durable start and exact-Session tracking contract is deployed and verified.*
 
 **Acceptance Criteria:**
 
@@ -410,7 +471,7 @@ So that I can get another attempt if the first one didn't land or I want to add 
 
 **Given** either redraw action is used
 **When** the new request is submitted
-**Then** it's subject to the same Daily/Monthly limit rules as any other request (Story 3.2)
+**Then** it uses Story 3.8's asynchronous start contract and is subject to the same Daily/Monthly limit rules as any other request (Story 3.2)
 
 ### Story 3.5: Score Orientation Guide groundedness (async)
 
@@ -421,8 +482,8 @@ So that I have a real, trended signal on the "abstract miss" quality risk (FR8's
 **Acceptance Criteria:**
 
 **Given** a Session's Orientation Guide has just been delivered to the user
-**When** the Guide completes
-**Then** an async judge Lambda call is triggered off that Session record — never blocking the user-facing response
+**When** that Session transitions to `SUCCEEDED`
+**Then** an async judge Lambda call is triggered from that transition — never from initial `PENDING` creation or `FAILED`, and never blocking the user-facing response
 
 **Given** the judge call runs
 **When** it evaluates the essay against the Context
@@ -494,7 +555,7 @@ So that I can tell what's actually happening without digging through raw data.
 
 **Given** Tony's admin-flagged Account
 **When** he opens the Admin Dashboard
-**Then** he sees users by generation, total Session count, Daily Orientation Limit hit-rate, aggregate spend-to-date against the FR10 ceiling, and average `groundednessScore` across scored Sessions (Story 3.5) — all computed by the admin-metrics Lambda (AD-18)
+**Then** he sees users by generation, total `SUCCEEDED` Session count, Daily Orientation Limit hit-rate, aggregate spend-to-date against the FR10 ceiling, and average `groundednessScore` across scored Sessions (Story 3.5) — all computed by the admin-metrics Lambda (AD-18); `PENDING` and `FAILED` lifecycle records do not inflate delivered-Guide metrics
 
 **Given** a non-admin Account
 **When** they attempt to reach the Admin Dashboard

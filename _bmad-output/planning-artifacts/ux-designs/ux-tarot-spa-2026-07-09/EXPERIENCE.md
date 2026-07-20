@@ -7,7 +7,7 @@ sources:
   - _bmad-output/planning-artifacts/prds/prd-tarot-spa-2026-07-06/review-adversarial-general.md
   - _bmad-output/planning-artifacts/prds/prd-tarot-spa-2026-07-06/review-rubric.md
   - _bmad-output/planning-artifacts/prds/prd-tarot-spa-2026-07-06/review-edge-case.md
-updated: '2026-07-11'
+updated: '2026-07-19'
 ---
 
 # Systems Thinking Tarot — Experience Spine
@@ -67,8 +67,9 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 
 | State | Surface | Treatment |
 |---|---|---|
-| Generation in flight | Context Entry (transitioning to Results) | Target ~20s (FR-8). Loading treatment stays on the Context Entry screen itself (not a blank interstitial) with expectation-setting copy (e.g. "Reading the cards and the world..."). |
-| Generation failed outright | Context Entry | Clear inline error; does not consume a Daily Orientation Limit unit (FR-8 NFR); user can retry immediately without re-entering Context. |
+| Generation in flight | Context Entry (transitioning to Results) | After the request is promptly acknowledged, the loading treatment remains on Context Entry while the application follows the exact Session through `PENDING` and `RUNNING`. The active Session ID is retained for recovery, duplicate submissions remain blocked, and lifecycle changes are announced through the existing status region. Generation duration is independent of the initiating AppSync response. |
+| Generation failed outright | Context Entry | A `FAILED` Session renders the existing clear inline treatment only after required compensation has completed. Context and Spread remain available. Retrying is a new deliberate submission with a new request ID; the failed execution itself is never restarted from the browser. |
+| Submission acknowledgment ambiguous | Context Entry | The browser queries the Session whose ID equals the already-generated request ID before allowing another submission. It never generates a replacement ID or repeats paid work merely because the acknowledgment was lost. |
 | Daily Orientation Limit exhausted | Context Entry → Rate-Limited Intake | Whole screen degrades to the Quick Draw experience plus a short, playful inline note — not a hard rejection message. (Supersedes prd.md FR-9's current wording — flagged as a PRD follow-up.) |
 | Invalid / already-redeemed / revoked Invite Key | Sign Up | Distinct copy per reason; redeemed/revoked messaging points the user to their granter or Tony directly, since there's no in-app recovery path. |
 | Sign Up succeeds | Sign Up → Context Entry | Redirects straight to the authenticated home (Context Entry); no separate "welcome" interstitial. |
@@ -81,7 +82,7 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 | Key minting fails | Grant Invite Key, Admin Dashboard (Mint Key) | Clear inline error, action stays available to retry; no partial/ambiguous state (an Invite Key either exists, unredeemed, or it doesn't). |
 | Non-First-Gen reaches Grant Invite Key | Account/profile area | Surface hidden entirely from a Second-Gen account's nav — no blocked/permission-denied screen, since FR-2 gives Second-Gen accounts no path to this capability at all. |
 | Non-admin reaches Admin Dashboard | Anywhere | Surface hidden entirely from nav for any non-admin-flagged account — same "hidden, not blocked" pattern as Grant Invite Key above. |
-| Orientation Guide Results reloaded/revisited directly | Orientation Guide Results | The screen is a transient view-state, not a persisted route — a direct reload or revisit bounces to Context Entry rather than attempting to re-render a stale Guide. |
+| Active Orientation Guide reloaded/revisited | Context Entry or Orientation Guide Results | The active Session is resumable by its exact locally retained ID. Reloading during `PENDING`/`RUNNING` returns to the loading state; reloading after `SUCCEEDED` restores that Session's Results. Deliberately leaving Results, starting a redraw, or signing out clears the active ID. No Session-history or arbitrary past-Session browsing surface is introduced. |
 
 ## Interaction Primitives
 
@@ -101,6 +102,7 @@ Behavioral; visual contrast lives in `DESIGN.md`. Hobby-tier stakes — no forma
 - Existing focus-visible treatment (`focus:border-{colors.primary}`) carries forward on every new input and button.
 - `body-essay` text respects a constrained reading measure (`DESIGN.md.Layout & Spacing`) — a basic legibility floor for everyone, not just an accessibility nicety.
 - Tab order follows visual/reading order on every new screen, matching the existing app's simple DOM-order forms.
+- Asynchronous state transitions use the existing `role="status"` loading region and `role="alert"` failure region. Polling does not repeatedly announce an unchanged state; only meaningful lifecycle changes are announced.
 
 ## Responsive & Platform
 
@@ -122,7 +124,7 @@ Single Tailwind breakpoint set (`sm`/`md`/`lg`/`xl`), the same one already used 
 1. Erica already redeemed her First-Gen Invite Key and is authenticated — she arrives at **Context Entry** having already read Tony's LinkedIn article and PR-FAQ on **Public Landing**.
 2. She types her full situation — pros/cons, want-got gaps, management hints, goals, work/life balance — into the Context Textarea as one freeform block.
 3. She picks the **Decision** Spread from the Spread Selector.
-4. She taps **"Help Me Orient."** The screen shows the ~20s loading treatment ("Reading the cards and the world...").
+4. She taps **"Help Me Orient."** The request is acknowledged promptly and the screen retains the loading treatment ("Reading the cards and the world...") while durable generation continues. If the browser reloads, the same exact Session resumes rather than being submitted again.
 5. **Climax:** **Orientation Guide Results** loads. Her drawn cards appear at top; below, the Current Events rundown; below that, the Orientation Guide Essay — the Lens applied to her Context — lands on her Resources card, reframing the people she'd lead as *misplaced resources*, rendered in `body-essay` typography wide enough to read comfortably. She decides: take the VP job.
 6. **Resolution:** She highlights *"You're making four-star lemonade because you've got the best lemons on the continent"* using native text selection, copies it, and pastes it to her husband outside the app. Later, from her account area, she uses **Grant Invite Key** to generate her one onward key and sends it to a friend herself.
 
@@ -130,7 +132,7 @@ Single Tailwind breakpoint set (`sm`/`md`/`lg`/`xl`), the same one already used 
 
 1. Maya arrives at **Context Entry** authenticated, on a much more everyday call — car vs. Ubering.
 2. She types rich, concrete, sensory detail into the Context Textarea: cost, flexibility, a saved bumper sticker, missing oil-change rituals.
-3. She hits **"Help Me Orient."** After the loading treatment, **Orientation Guide Results** loads: her card is Major Arcana *The Compression*.
+3. She hits **"Help Me Orient."** The request is acknowledged promptly and the loading treatment follows that exact Session until **Orientation Guide Results** loads: her card is Major Arcana *The Compression*. A reload resumes the same request rather than submitting again.
 4. **Climax (inverted):** The Orientation Guide Essay picks up the Card idea immediately but stays abstract — *"What's the minimum viable complexity?"* — without weaving in her bumper sticker, her rituals, her specifics. She half-registers it, opens Instagram, wanders off.
 5. **Resolution:** She never uses the redraw actions — she just leaves and decides on gut alone, picking the more complex option. No in-app action taken; the Guide's only effect is delayed and involuntary (a phrase resurfaces weeks later, outside the app entirely).
 

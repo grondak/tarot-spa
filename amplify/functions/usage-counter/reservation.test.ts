@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  compensationToken,
   readConfig,
+  reservationToken,
   reserveUsage,
   rollbackUsage,
   utcDate,
@@ -14,12 +16,13 @@ function client(...results: unknown[]) {
 const usage = {
   dailyTable: 'DailyTable',
   monthlyTable: 'MonthlyTable',
+  sessionTable: 'SessionTable',
+  sessionId: '12345678-1234-4234-9234-123456789012',
   accountId: 'acct',
   date: '2026-07-18',
   month: '2026-07',
   estimate: 0.03,
   timestamp: 'timestamp',
-  requestToken: '12345678-1234-1234-1234-123456789012',
 };
 
 function canceled(...codes: string[]) {
@@ -34,6 +37,17 @@ describe('usage reservations', () => {
     const instant = new Date('2026-08-01T00:30:00+02:00');
     expect(utcDate(instant)).toBe('2026-07-31');
     expect(utcMonth(instant)).toBe('2026-07');
+  });
+
+  it('derives deterministic, distinct 35-character transaction tokens from the Session id', () => {
+    expect(reservationToken(usage.sessionId)).toBe(
+      '12345678123442349234123456789012RES',
+    );
+    expect(compensationToken(usage.sessionId)).toBe(
+      '12345678123442349234123456789012RBK',
+    );
+    expect(reservationToken(usage.sessionId)).toHaveLength(35);
+    expect(compensationToken(usage.sessionId)).toHaveLength(35);
   });
 
   it('reads the single consistent Config snapshot and fails loudly when missing', async () => {
@@ -58,7 +72,7 @@ describe('usage reservations', () => {
     await reserveUsage(dynamo, { ...usage, dailyLimit: 5, monthlyBudget: 30 });
 
     expect((dynamo.send.mock.calls[0][0] as { input: unknown }).input).toMatchObject({
-      ClientRequestToken: usage.requestToken,
+      ClientRequestToken: reservationToken(usage.sessionId),
       TransactItems: [
         {
           Update: {
@@ -73,6 +87,14 @@ describe('usage reservations', () => {
             TableName: 'DailyTable',
             Key: { id: 'acct#2026-07-18' },
             ConditionExpression: 'attribute_not_exists(id) OR #count < :limit',
+          },
+        },
+        {
+          Update: {
+            TableName: 'SessionTable',
+            Key: { id: usage.sessionId },
+            ConditionExpression: 'attribute_not_exists(usageReservedAt)',
+            UpdateExpression: 'SET usageReservedAt = :ts',
           },
         },
       ],
@@ -117,6 +139,19 @@ describe('usage reservations', () => {
     })).rejects.toThrow(
       'MONTHLY_BUDGET_EXHAUSTED',
     );
+
+    const alreadyReserved = {
+      send: vi.fn().mockRejectedValue(canceled(
+        'None',
+        'None',
+        'ConditionalCheckFailed',
+      )),
+    };
+    await expect(reserveUsage(alreadyReserved, {
+      ...usage,
+      dailyLimit: 5,
+      monthlyBudget: 30,
+    })).resolves.toBeUndefined();
   });
 
   it('rolls monthly and daily counters back in one idempotent transaction', async () => {
@@ -124,7 +159,7 @@ describe('usage reservations', () => {
     await rollbackUsage(dynamo, usage);
 
     expect((dynamo.send.mock.calls[0][0] as { input: unknown }).input).toMatchObject({
-      ClientRequestToken: usage.requestToken,
+      ClientRequestToken: compensationToken(usage.sessionId),
       TransactItems: [
         {
           Update: {
@@ -136,6 +171,14 @@ describe('usage reservations', () => {
           Update: {
             TableName: 'DailyTable',
             ConditionExpression: '#count >= :one',
+          },
+        },
+        {
+          Update: {
+            TableName: 'SessionTable',
+            Key: { id: usage.sessionId },
+            ConditionExpression: 'attribute_exists(usageReservedAt) AND attribute_not_exists(usageCompensatedAt)',
+            UpdateExpression: 'SET usageCompensatedAt = :ts',
           },
         },
       ],
@@ -158,25 +201,40 @@ describe('usage reservations', () => {
     const inputs = transient.send.mock.calls
       .map(([command]) => (command as { input: { ClientRequestToken?: string } }).input);
     expect(inputs.map((input) => input.ClientRequestToken)).toEqual([
-      usage.requestToken,
-      usage.requestToken,
-      usage.requestToken,
+      reservationToken(usage.sessionId),
+      reservationToken(usage.sessionId),
+      reservationToken(usage.sessionId),
     ]);
     expect(inputs[1]).toEqual(inputs[0]);
     expect(inputs[2]).toEqual(inputs[0]);
   });
 
-  it('does not retry a conditional rollback miss', async () => {
+  it('does not mark the Session failed when a counter rollback condition misses', async () => {
     const conditional = {
       send: vi.fn().mockRejectedValue(canceled('ConditionalCheckFailed', 'None')),
     };
-    await expect(rollbackUsage(conditional, usage)).resolves.toBeUndefined();
+    await expect(rollbackUsage(conditional, usage)).rejects.toMatchObject({
+      name: 'TransactionCanceledException',
+    });
     expect(conditional.send).toHaveBeenCalledTimes(1);
   });
 
-  it('preserves the original flow after bounded rollback retries are exhausted', async () => {
+  it('treats the Session marker miss as an already-compensated replay', async () => {
+    const replay = {
+      send: vi.fn().mockRejectedValue(canceled(
+        'None',
+        'None',
+        'ConditionalCheckFailed',
+      )),
+    };
+
+    await expect(rollbackUsage(replay, usage)).resolves.toBeUndefined();
+    expect(replay.send).toHaveBeenCalledOnce();
+  });
+
+  it('fails closed after bounded rollback retries are exhausted', async () => {
     const failing = { send: vi.fn().mockRejectedValue(new Error('rollback failed')) };
-    await expect(rollbackUsage(failing, usage)).resolves.toBeUndefined();
+    await expect(rollbackUsage(failing, usage)).rejects.toThrow('rollback failed');
     expect(failing.send).toHaveBeenCalledTimes(3);
   });
 });

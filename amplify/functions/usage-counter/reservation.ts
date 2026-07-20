@@ -36,12 +36,13 @@ export async function readConfig(dynamo: CommandClient, configTable: string): Pr
 type UsageMutation = {
   dailyTable: string;
   monthlyTable: string;
+  sessionTable: string;
+  sessionId: string;
   accountId: string;
   date: string;
   month: string;
   estimate: number;
   timestamp: string;
-  requestToken: string;
 };
 
 type UsageReservation = UsageMutation & {
@@ -50,6 +51,18 @@ type UsageReservation = UsageMutation & {
 };
 
 const TRANSACTION_ATTEMPTS = 3;
+
+function transactionToken(sessionId: string, suffix: 'RES' | 'RBK') {
+  return `${sessionId.replace(/-/g, '')}${suffix}`;
+}
+
+export function reservationToken(sessionId: string) {
+  return transactionToken(sessionId, 'RES');
+}
+
+export function compensationToken(sessionId: string) {
+  return transactionToken(sessionId, 'RBK');
+}
 
 function cancellationReasons(error: unknown) {
   if (typeof error !== 'object'
@@ -65,7 +78,7 @@ function cancellationReasons(error: unknown) {
 
 function reservationCommand(input: UsageReservation) {
   return new TransactWriteCommand({
-    ClientRequestToken: input.requestToken,
+    ClientRequestToken: reservationToken(input.sessionId),
     TransactItems: [
       {
         Update: {
@@ -101,13 +114,24 @@ function reservationCommand(input: UsageReservation) {
           },
         },
       },
+      {
+        Update: {
+          TableName: input.sessionTable,
+          Key: { id: input.sessionId },
+          ConditionExpression: 'attribute_not_exists(usageReservedAt)',
+          UpdateExpression: 'SET usageReservedAt = :ts',
+          ExpressionAttributeValues: {
+            ':ts': input.timestamp,
+          },
+        },
+      },
     ],
   });
 }
 
 function rollbackCommand(input: UsageMutation) {
   return new TransactWriteCommand({
-    ClientRequestToken: input.requestToken,
+    ClientRequestToken: compensationToken(input.sessionId),
     TransactItems: [
       {
         Update: {
@@ -135,6 +159,17 @@ function rollbackCommand(input: UsageMutation) {
           },
         },
       },
+      {
+        Update: {
+          TableName: input.sessionTable,
+          Key: { id: input.sessionId },
+          ConditionExpression: 'attribute_exists(usageReservedAt) AND attribute_not_exists(usageCompensatedAt)',
+          UpdateExpression: 'SET usageCompensatedAt = :ts',
+          ExpressionAttributeValues: {
+            ':ts': input.timestamp,
+          },
+        },
+      },
     ],
   });
 }
@@ -155,6 +190,7 @@ export async function reserveUsage(dynamo: CommandClient, input: UsageReservatio
       if (reasons[1]?.Code === 'ConditionalCheckFailed') {
         throw new Error('DAILY_LIMIT_EXHAUSTED');
       }
+      if (reasons[2]?.Code === 'ConditionalCheckFailed') return;
       if (attempt === TRANSACTION_ATTEMPTS) throw error;
     }
   }
@@ -166,11 +202,10 @@ export async function rollbackUsage(dynamo: CommandClient, input: UsageMutation)
       await dynamo.send(rollbackCommand(input));
       return;
     } catch (error) {
-      if (cancellationReasons(error).some((reason) => reason.Code === 'ConditionalCheckFailed')
-        || attempt === TRANSACTION_ATTEMPTS) {
-        console.error('Usage rollback failed', error);
-        return;
-      }
+      const reasons = cancellationReasons(error);
+      if (reasons[2]?.Code === 'ConditionalCheckFailed') return;
+      if (reasons.some((reason) => reason.Code === 'ConditionalCheckFailed')) throw error;
+      if (attempt === TRANSACTION_ATTEMPTS) throw error;
     }
   }
 }

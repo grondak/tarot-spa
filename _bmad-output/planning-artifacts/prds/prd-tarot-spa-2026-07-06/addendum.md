@@ -5,14 +5,16 @@ Implementation-leaning detail volunteered during PRD discovery. Belongs in archi
 ## Technology direction (AWS-native, per Tony)
 
 - **Auth/multiuser:** AWS Cognito
-- **LLM:** AWS Bedrock — specific model left open ("LLM is whatever, we'll get it from Bedrock")
-- **API:** AWS API Gateway + Lambda, fronting the orientation-guide request
-- **Hosting/CDN:** Heavy use of AWS Amplify — Tony's framing: "it's meant to be used" (i.e. lean into Amplify's opinionated hosting/CDN/auth-glue rather than hand-rolling equivalents)
-- Current static frontend (GH Pages) migrates to this AWS stack — replaces, not supplements, GH Pages
+- **LLM:** AWS Bedrock — Claude Opus is the implemented generation model
+- **API:** Amplify Gen 2 AppSync exposes a short-lived `startOrientationGuide` mutation backed by a starter Lambda. The starter validates the authenticated request, conditionally creates the caller-owned `PENDING` Session, invokes a version-pinned durable worker, and returns the Session ID without waiting for generation.
+- **Execution:** AWS Lambda Durable Functions provide code-first checkpointing, replay, retries, and execution tracking for the tightly coupled reservation → Draw → Tavily → Bedrock → persistence workflow.
+- **Completion:** The browser follows the exact owner-authorized Session ID through AppSync model reads. It does not wait synchronously for generation and does not infer completion from the newest Session.
+- **Hosting/CDN:** AWS Amplify Hosting, replacing the former GitHub Pages deployment.
+- **Orchestration boundary:** Step Functions remains a valid future option if this capability grows into broader multi-service orchestration. It is not selected for this increment because the workflow remains tightly coupled application logic and the installed Amplify backend supports durable Lambda configuration directly.
 
 ## Interaction model
 
-- The LLM call is explicitly **one-shot**, not a conversational/interactive problem-solving session — matches the OODA-loop "orientation guide" framing, not a chatbot
+- The Orientation Guide remains explicitly **one-shot**: one deliberate user submission produces at most one Draw and one LLM-generated Guide, with no conversational follow-up turns. "One-shot" describes the product interaction and model call, not a requirement that the browser, AppSync, and generation worker remain inside one synchronous request.
 - A user can copy their session's output/inputs out to their own personal LLM if they want further back-and-forth elaboration — that elaboration is explicitly out of scope for tarot-spa itself
 
 ## Core mechanism — the "lens" (Tony's essay, verbatim reference)

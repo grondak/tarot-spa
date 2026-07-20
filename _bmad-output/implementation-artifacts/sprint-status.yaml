@@ -1,5 +1,5 @@
 # generated: 2026-07-11
-# last_updated: 2026-07-18
+# last_updated: 2026-07-19
 # project: tarot-spa
 # project_key: NOKEY
 # tracking_system: file-system
@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-11
-last_updated: 2026-07-18
+last_updated: 2026-07-19
 project: tarot-spa
 project_key: NOKEY
 tracking_system: file-system
@@ -64,6 +64,12 @@ development_status:
   3-1-enter-context-and-pick-a-spread: done
   3-2-generate-an-orientation-guide-bounded-by-the-daily-and-monthly-limits: done
   3-3-view-the-orientation-guide-results-screen: review
+
+  # Correct-course gate: execute immediately before Stories 3.4–3.7.
+  # Story 3.3 remains frozen in review until 3.8 and the retained UI
+  # receive an integrated review.
+  3-8-make-orientation-guide-generation-durable-and-asynchronous: review
+
   3-4-redraw-from-the-results-screen: backlog
   3-5-score-orientation-guide-groundedness-async: backlog
   3-6-alert-tony-when-the-monthly-budget-nears-its-ceiling: backlog

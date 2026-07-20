@@ -302,3 +302,25 @@ GPT-5 Codex
 - 2026-07-18: Adversarial code review resolved all eight accepted findings; 117 tests and all quality/browser gates pass; status advanced to done.
 - 2026-07-18: Second adversarial pass resolved two decisions and six patches; 123 tests and all quality/browser gates pass; status remains done.
 - 2026-07-18: Third adversarial pass resolved all six accepted patches; 127 tests and all quality/browser gates pass; status remains done.
+
+## Post-completion Architecture Correction — 2026-07-19
+
+Story 3.2 correctly established the Orientation Guide generation logic, provider integrations, Config snapshot, atomic reservation/compensation protocol, validation, Session persistence, and live latency evidence. Its direct synchronous AppSync → Orientation Guide Lambda contract was subsequently found unsuitable for the measured 30.6–30.7-second execution time.
+
+Approved Story 3.8 supersedes these Story 3.2 implementation contracts:
+
+- AppSync invokes the long-running Orientation Guide Lambda directly.
+- The mutation waits for and returns the complete Guide payload.
+- Persist-before-return plus client recovery is the intended response-boundary strategy.
+- Lambda remaining-time calculations are the primary mechanism protecting compensation.
+
+Story 3.8 retains and adapts:
+
+- Context/Spread validation and server-side Draw.
+- Tavily query construction and 20-second fallback.
+- Bedrock prompt, output validation, and result shape.
+- Config snapshot semantics.
+- Atomic DailyUsage/MonthlySpend reservation and compensation.
+- Stable error-code meanings.
+
+Story 3.8 becomes the source of truth for invocation, lifecycle, idempotent execution, persistence transitions, timeout handling, and client completion tracking. This note records a deliberate architectural correction; it does not invalidate Story 3.2's completed implementation history or evidence.
