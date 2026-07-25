@@ -882,11 +882,27 @@ describe('App authenticated sign-out round trip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
     expect(await screen.findByText('The generated guide.')).toBeVisible();
 
+    localStorage.setItem('tarotSpaOrientationRedrawContext', 'Stale draft.');
     fireEvent.click(screen.getByRole('button', { name: 'Provide another observation' }));
 
     expect(screen.getByLabelText('Context')).toHaveValue('');
     expect(screen.queryByRole('button', { pressed: true })).toBeNull();
     expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBeNull();
+    expect(localStorage.getItem('tarotSpaOrientationRedrawContext')).toBeNull();
+  });
+
+  it('wipes the redraw draft on auth loss without an explicit sign-out', async () => {
+    render(<App />);
+
+    expect(await screen.findByLabelText('Context')).toBeVisible();
+    localStorage.setItem('tarotSpaOrientationRedrawContext', 'A decision.');
+    getCurrentUser.mockRejectedValue(new Error('token expired'));
+
+    await act(async () => {
+      await Hub.listen.mock.calls[0][1]();
+    });
+
+    expect(await screen.findByRole('button', { name: 'I have an Invite Key' })).toBeVisible();
     expect(localStorage.getItem('tarotSpaOrientationRedrawContext')).toBeNull();
   });
 
@@ -926,7 +942,7 @@ describe('App authenticated sign-out round trip', () => {
       }
       return originalSetItem.call(this, key, value);
     });
-    render(<App />);
+    const { unmount } = render(<App />);
 
     expect(await screen.findByText('The generated guide.')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Tweak existing observation' }));
@@ -934,6 +950,11 @@ describe('App authenticated sign-out round trip', () => {
     expect(screen.getByLabelText('Context')).toHaveValue('A decision.');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBeNull();
+
+    unmount();
+    render(<App />);
+
+    expect(await screen.findByLabelText('Context')).toHaveValue('');
   });
 
   it.each([

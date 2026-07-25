@@ -75,9 +75,9 @@ function storeOrientationRedrawContext(context) {
 function clearOrientationRedrawContext() {
   try {
     localStorage.removeItem(ORIENTATION_REDRAW_CONTEXT_KEY);
-    return true;
   } catch {
-    return false;
+    // Best-effort removal: a surviving stale draft is cleared again at the
+    // next submit start or auth loss.
   }
 }
 
@@ -180,7 +180,6 @@ export default function App() {
             setCards([]);
             setOrientBusy(false);
             setOrientError(null);
-            setOrientContext('');
             setOrientSpreadKey(null);
             setGuideResult(null);
           }
@@ -260,7 +259,12 @@ export default function App() {
   }, []);
 
   const restoreOrientationInput = useCallback((session) => {
-    if (typeof session?.context === 'string') setOrientContext(session.context);
+    if (typeof session?.context === 'string') {
+      // The recovered Context is fresher than any persisted redraw draft;
+      // drop the draft so a later reload cannot overwrite the recovery.
+      clearOrientationRedrawContext();
+      setOrientContext(session.context);
+    }
     if (
       typeof session?.spreadKey === 'string'
       && Object.hasOwn(SPREADS, session.spreadKey)
@@ -577,7 +581,11 @@ export default function App() {
     cancelOrientationDelays();
     clearActiveOrientationSession(guideResult?.sessionId);
     if (preserveContext) {
-      storeOrientationRedrawContext(context);
+      if (!storeOrientationRedrawContext(context)) {
+        // Store failed with the key possibly still holding an older draft;
+        // clear so the persisted draft cannot diverge from the prefill.
+        clearOrientationRedrawContext();
+      }
     } else {
       clearOrientationRedrawContext();
     }

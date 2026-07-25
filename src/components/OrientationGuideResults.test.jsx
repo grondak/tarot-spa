@@ -117,14 +117,16 @@ describe('OrientationGuideResults', () => {
     expect(glyphs).toHaveLength(1);
     const divider = glyphs[0].closest('[aria-hidden="true"]');
     const freshButton = screen.getByRole('button', { name: 'Provide another observation' });
+    const tweakButton = screen.getByRole('button', { name: 'Tweak existing observation' });
     expect(divider).not.toBeNull();
-    expect(divider.compareDocumentPosition(freshButton)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
+    expect(divider.compareDocumentPosition(freshButton) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+    expect(divider.compareDocumentPosition(tweakButton) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+    expect(freshButton.compareDocumentPosition(tweakButton) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
     expect(freshButton).toBeVisible();
-    expect(
-      screen.getByRole('button', { name: 'Tweak existing observation' }),
-    ).toBeVisible();
+    expect(tweakButton).toBeVisible();
   });
 
   it('calls only onRedrawFresh for another observation and adds no sharing affordance', () => {

@@ -8,8 +8,8 @@ const TIMEOUT_NOTE = 'The news is slow today — this Guide worked from the card
 
 export default function OrientationGuideResults({
   result,
-  onRedrawFresh,
-  onRedrawTweak,
+  onRedrawFresh = () => {},
+  onRedrawTweak = () => {},
 }) {
   const spread = SPREADS[result.spreadKey];
   const cards = result.cards
