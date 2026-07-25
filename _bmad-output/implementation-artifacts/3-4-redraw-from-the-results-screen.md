@@ -1,10 +1,14 @@
 ---
-baseline_commit: 6672642
+baseline_commit: c27971e
 ---
+
+<!-- baseline_commit was 6672642 at story creation; corrected at review — Task 0 landed
+     Story 3.8's pre-existing re-review work as c27971e before any 3.4 source change,
+     so c27971e is this story's true code baseline. -->
 
 # Story 3.4: Redraw from the Results screen
 
-Status: review
+Status: done
 
 ## Story
 
@@ -131,7 +135,43 @@ Both button labels are spec-verbatim from `epics.md` AC 1 / `EXPERIENCE.md`'s Re
   - [x] Sweep the diff and this story file for live credentials — no real Guide/Context text from the live run committed anywhere, test creds env-only, `playwright/.auth/` still untracked.
   - [x] Confirm two commits exist on `main` in order: (1) Task 0's pre-existing Story 3.8 runtime/infrastructure re-review commit, (2) this story's own `src/` diff. Push both.
 
+### Review Findings
+
+- [x] [Review][Decision] Ratify or redesign the redraw-draft lifecycle — **resolved 2026-07-24: Tony chose accept-and-document.** The four identified edges — (a) failed submission + reload loses the draft (cleared at submit-start, `src/App.jsx:428`) while the inline error says "Your context is still here"; (b) post-Tweak edits never re-sync, reload restores the tweak-time snapshot; (c) unguarded clears can clobber another tab's draft, two-tab Tweak is last-writer-wins (`src/App.jsx:428,582`); (d) any auth loss including ordinary token expiry wipes the draft (`src/App.jsx:171`) — are accepted as friend-scale-tolerable limits of the localStorage draft, with (d) ratified as the deliberate shared-machine privacy default. No code change; the accepted limits are recorded in the supersession note (next finding).
+- [x] [Review][Patch] Propagate the authorized localStorage decision into the normative docs: append a supersession note to this story (the frozen Task 2 snippet, contract-table `handleOrient` row, and AD-9 checklist bullet still describe the pre-HALT in-memory-only design), record the accepted draft-lifecycle limits from the resolved decision above, and amend `_bmad-output/project-context.md`'s "Persist only the active Session id for reload recovery" rule to name the redraw-draft exception — as written, a future story's agent could remove the feature as a rule violation [_bmad-output/project-context.md:74] — applied: supersession record added to Dev Notes, project-context rule amended
+- [x] [Review][Patch] Replace the tautological `expect(firstSessionId).not.toBe(secondSessionId)` (two hardcoded literals — can never fail) with an assertion on the actually-submitted request ids, e.g. distinctness of `startOrientationGuide.mock.calls[0][0]` and `[1][0]` [src/AppAuth.test.jsx:986] — applied
+- [x] [Review][Patch] Correct the stale `baseline_commit: 6672642` frontmatter — after Task 0 landed `c27971e`, this story's true code baseline is `c27971e`; anyone diffing from the frontmatter attributes ~2,300 lines of Story 3.8 infrastructure to this story [_bmad-output/implementation-artifacts/3-4-redraw-from-the-results-screen.md:2] — applied, with an explanatory comment preserved
+- [x] [Review][Defer] "Tweak existing observation" while the last generation exhausted the daily limit lands on the spec'd Rate-Limited Intake (Quick Draw) with the preserved Context invisible until the limit resets — an intersection of AC 1's always-present buttons and UX-DR13's whole-screen degrade, not a code bug; Context is retained in state and draft and resurfaces next day [src/components/ContextEntry.jsx:33] — deferred, pre-existing degrade behavior
+
+### Review Findings — second review (2026-07-25)
+
+Fresh full review (Blind Hunter + Edge Case Hunter + Acceptance Auditor) of the c27971e → working-tree diff, including the 2026-07-24 review round's applied-but-uncommitted patches. Core implementation held up again across all three layers; the weight of the findings is in the prior review round's own artifacts and in test gaps around the draft contract.
+
+- [ ] [Review][Decision] Residual draft-lifecycle privacy edges beyond the ratified (a)–(d) — (e) the tweak draft persists in plaintext localStorage indefinitely while the Cognito session stays alive: no TTL, no clear on reaching Results, so the privacy default guards the expired-token shared machine but not the likelier borrowed logged-in device [src/App.jsx:580]; (f) `restoreOrientationInput` (FAILED/malformed-session recovery) writes `orientContext` without syncing or clearing the draft, so a later reload overwrites the recovered Context with a stale draft — a new divergence introduced by draft persistence, distinct from ratified (c) [src/App.jsx:262-271, :93]. Choose: extend the accept-and-document record with (e)/(f), or change behavior (clear the draft in recovery-restore and/or bound retention).
+- [ ] [Review][Patch] Story is `done` in every tracking artifact while the entire 2026-07-24 review round (test fix, project-context amendment, supersession record, deferred-work entry, status flips) sits uncommitted — last commit is `7d185f8`; a careless checkout silently reverts a review the record says shipped. Commit and push the review-round changes. [repo working tree]
+- [ ] [Review][Patch] The Fresh-clears-draft assertion is vacuous — no test seeds `tarotSpaOrientationRedrawContext` before clicking "Provide another observation", so `expect(...).toBeNull()` passes against a key that never existed; deleting the clear at `src/App.jsx:582` keeps the whole suite green. Seed the draft key first. [src/AppAuth.test.jsx:876-891]
+- [ ] [Review][Patch] The ratified auth-loss draft wipe (accepted limit (d), the deliberate privacy default) has zero test coverage — only the explicit Log Out path is pinned; no test drives the Hub/`getCurrentUser`-rejection path and asserts draft removal [src/App.jsx:171]
+- [ ] [Review][Patch] Divider/actions-row test weaknesses: the Tweak button gets only `toBeVisible()` (no position check vs the divider), the spec-normative Fresh-before-Tweak order is asserted nowhere (swapping the buttons passes the suite), and `compareDocumentPosition` — a bitmask — is compared with strict `toBe` [src/components/OrientationGuideResults.test.jsx:113-127]
+- [ ] [Review][Patch] Partial-storage-failure divergence: Tweak ignores `storeOrientationRedrawContext`'s return, so if `setItem` throws while an older, different draft occupies the key (quota exhausted, not fully denied), the in-memory prefill and the persisted draft silently diverge and reload restores the stale draft. Fallback-clear when the store fails. [src/App.jsx:579-583]
+- [ ] [Review][Patch] The draft helpers' boolean returns are dead code — no caller reads them, unlike the session-key helper whose `false` triggers `failGeneration`; the fallback-clear fix above consumes the store return, drop or use the rest [src/App.jsx:66-82]
+- [ ] [Review][Patch] Duplicate `setOrientContext('')` in `refreshAuth`'s catch — unconditional at :172 then again at :183 inside the `sessionWasAuthenticated` branch; the unconditional pair also runs a `removeItem` + no-op state set on every auth event while an unauthenticated visitor sits on the landing screen [src/App.jsx:171-183]
+- [ ] [Review][Patch] Denied-storage degradation is tested only for the immediate in-memory prefill — no unmount/re-render pinning the documented degraded reload (blank Context Entry, silently), the most surprising user-visible half of the contract [src/AppAuth.test.jsx:917-936]
+- [ ] [Review][Patch] `OrientationGuideResults`' new callback props lack the codebase-idiomatic no-op defaults (`ContextEntry` defaults every callback); an omitted prop renders a silent dead button [src/components/OrientationGuideResults.jsx:8-11]
+- [ ] [Review][Patch] `Agent Model Used` remains the template placeholder in a `done` story — record the model or state it was not captured [_bmad-output/implementation-artifacts/3-4-redraw-from-the-results-screen.md:202]
+- [ ] [Review][Patch] The sprint-status comment still carries the correct-course-gate imperative ("execute immediately before Stories 3.4–3.7") with no record of its disposition — reword to record the gate as satisfied or remove the stale instruction [_bmad-output/implementation-artifacts/sprint-status.yaml:310]
+
+Dismissed as noise (3): draft cleared on any `getCurrentUser` rejection — consistent with the app-wide auth-loss semantics and ratified limit (d), and Amplify's `getCurrentUser` resolves from local tokens so the transient-network reading is largely theoretical; the 2026-07-24 "tautology fix" assertion being implied by the `toEqual` two lines above — decoration, but removing it is churn; the File List carrying the annotated Story 3.8 landing entries — historically accurate for Task 0 and explicitly annotated, and the record is append-only.
+
 ## Dev Notes
+
+### Review supersession record — 2026-07-24
+
+This append-only record supersedes the pre-HALT prose below; the sections it corrects are left as written for history:
+
+- **The frozen Task 2 snippet, the contract-table `handleOrient` row ("Redraw does not call this directly — it only sets state"), and the AD-9 checklist bullet ("redraw only reads already-fetched `guideResult` client state") describe the pre-HALT in-memory-only design and are superseded on the persistence point.** The dev agent HALTed on the contradiction between Task 4's reload wording and project-context's persist-only-the-Session-id rule; Tony resolved it on 2026-07-24 by choosing browser localStorage draft persistence over an API/DynamoDB path.
+- **The shipped draft contract:** key `tarotSpaOrientationRedrawContext` stores only the redraw Context draft (a bare string — never cards, Guide, or Session content). Stored by "Tweak existing observation"; seeds `orientContext` at App mount; cleared by Fresh redraw, the start of the next Orientation submission, sign-out, and any auth loss including token expiry (deliberate shared-machine privacy default). Denied storage degrades to in-memory-only prefill without error.
+- **Accepted lifecycle limits (code review, Tony's accept-and-document decision, 2026-07-24):** (a) a failed submission followed by a reload loses the draft — it is cleared at submit-start, and the "Your context is still here" copy is true only until reload; (b) edits typed after a Tweak are not re-synced to the draft, so a reload restores the tweak-time snapshot; (c) draft clears are unguarded across tabs (unlike the session key's compare-before-remove), so concurrent tabs can clobber each other's drafts; (d) token expiry wipes the draft before re-login. All four are ratified as friend-scale-tolerable; none blocks this story.
+- `_bmad-output/project-context.md`'s persistence rule now names the draft exception explicitly.
 
 ### What already exists — do not rebuild any of this
 
@@ -240,3 +280,4 @@ _To be filled by the dev agent._
 
 - 2026-07-23: Story created via create-story workflow (ultimate context engine analysis) — status ready-for-dev.
 - 2026-07-24: Implemented and live-verified both Results redraw actions, added localStorage-backed Tweak Context reload persistence per Tony's decision, passed all closeout gates, pushed the isolated source commit, and moved the story to review.
+- 2026-07-24: Code review completed (Blind Hunter + Edge Case Hunter + Acceptance Auditor). Core implementation confirmed clean across all three layers. Tony ratified the redraw-draft lifecycle as accept-and-document; three patches applied (normative-doc supersession + project-context amendment, tautological-assertion fix, baseline_commit correction); one low UX-intersection finding deferred to deferred-work.md. 229/229 tests and lint green post-patch. Status → done.

@@ -23,3 +23,7 @@
 
 - AppSync API key (`apiKeyAuthorizationMode: { expiresInDays: 30 }`) has no rotation plan. Both public operations, `checkInviteKey` and `requestAccess`, authenticate with this key, so new-signup key checks and access requests start failing ~30 days after each deploy unless the key is rotated (a redeploy regenerates it). Story 2.2 redeployed the sandbox on 2026-07-17 → nominal expiry ~2026-08-16.
   - **2026-07-17 (Epic 2 retro): DECIDED.** Keep apiKey auth with a rotation habit; a reminder email to the cutout address ahead of expiry is the tripwire (the cutout inbox is proven delivery infrastructure as of Story 2.2), and rotation happens via redeploy. Implementation tracked as an Epic 2 retro action item (owner: Tony).
+
+## Deferred from: code review of 3-4-redraw-from-the-results-screen (2026-07-24)
+
+- "Tweak existing observation" clicked when the just-finished generation exhausted the daily limit lands on the spec'd Rate-Limited Intake (Quick Draw degrade) with the preserved Context invisible until the limit resets — an intersection of AC 1's always-present redraw buttons and UX-DR13's whole-screen degrade, not a code bug. Context is retained in App state and the redraw draft and resurfaces next day. Candidate UX polish: suppress or annotate the Tweak action when `rateLimited` is already known on Results.

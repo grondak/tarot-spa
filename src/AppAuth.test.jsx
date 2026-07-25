@@ -990,7 +990,8 @@ describe('App authenticated sign-out round trip', () => {
         [firstSessionId, 'A decision.', 'single'],
         [secondSessionId, submittedContext, 'single'],
       ]);
-      expect(firstSessionId).not.toBe(secondSessionId);
+      expect(startOrientationGuide.mock.calls[0][0])
+        .not.toBe(startOrientationGuide.mock.calls[1][0]);
       expect(localStorage.getItem('tarotSpaOrientationRedrawContext')).toBeNull();
     },
   );

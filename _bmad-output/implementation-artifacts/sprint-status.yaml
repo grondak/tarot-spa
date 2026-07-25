@@ -69,7 +69,7 @@ development_status:
   # Story 3.8 and Story 3.3's retained UI passed their integrated review.
   3-8-make-orientation-guide-generation-durable-and-asynchronous: done
 
-  3-4-redraw-from-the-results-screen: review
+  3-4-redraw-from-the-results-screen: done
   3-5-score-orientation-guide-groundedness-async: backlog
   3-6-alert-tony-when-the-monthly-budget-nears-its-ceiling: backlog
   3-7-draw-for-fun-without-spending-your-daily-limit-authenticated-quick-draw: backlog
