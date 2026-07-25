@@ -4,7 +4,7 @@ baseline_commit: 73d8d01
 
 # Story 3.3: View the Orientation Guide Results screen
 
-Status: review
+Status: done
 
 ## Story
 
@@ -268,6 +268,7 @@ GPT-5 Codex
 
 - 2026-07-18: Story created via create-story workflow (ultimate context engine analysis) — status ready-for-dev.
 - 2026-07-18: Implemented the Orientation Guide submit/recovery flow, loading and frozen-error states, responsive Results screen, contract/UI coverage, and deliberate live acceptance verification.
+- 2026-07-23: Marked done after Story 3.8's integrated review verified the retained Results UI, loading/error treatment, accessibility behavior, and replacement exact-Session orchestration.
 
 ## Architecture Correction and Review Freeze — 2026-07-19
 

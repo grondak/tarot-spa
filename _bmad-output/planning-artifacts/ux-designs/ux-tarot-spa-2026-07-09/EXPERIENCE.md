@@ -68,6 +68,7 @@ Behavioral. Visual specs live in `DESIGN.md.Components`.
 | State | Surface | Treatment |
 |---|---|---|
 | Generation in flight | Context Entry (transitioning to Results) | After the request is promptly acknowledged, the loading treatment remains on Context Entry while the application follows the exact Session through `PENDING` and `RUNNING`. The active Session ID is retained for recovery, duplicate submissions remain blocked, and lifecycle changes are announced through the existing status region. Generation duration is independent of the initiating AppSync response. |
+| Generation status indeterminate | Context Entry | At the 300-second observation boundary, active polling stops but the exact Session ID remains stored. Copy says the Guide is taking longer, warns that usage may already be reserved, and offers “Check this request again.” A fresh paid submission remains blocked until the exact request is resolved or deliberately exited. |
 | Generation failed outright | Context Entry | A `FAILED` Session renders the existing clear inline treatment only after required compensation has completed. Context and Spread remain available. Retrying is a new deliberate submission with a new request ID; the failed execution itself is never restarted from the browser. |
 | Submission acknowledgment ambiguous | Context Entry | The browser queries the Session whose ID equals the already-generated request ID before allowing another submission. It never generates a replacement ID or repeats paid work merely because the acknowledgment was lost. |
 | Daily Orientation Limit exhausted | Context Entry → Rate-Limited Intake | Whole screen degrades to the Quick Draw experience plus a short, playful inline note — not a hard rejection message. (Supersedes prd.md FR-9's current wording — flagged as a PRD follow-up.) |
@@ -106,7 +107,7 @@ Behavioral; visual contrast lives in `DESIGN.md`. Hobby-tier stakes — no forma
 
 ## Responsive & Platform
 
-Single Tailwind breakpoint set (`sm`/`md`/`lg`/`xl`), the same one already used in the existing `SpreadView` card-grid logic. No separate mobile app, no separate mobile IA — every surface in the table above resizes rather than branching. The hardcoded `/tarot-spa/` base path (`vite.config.js`) applies to any new routing this release introduces (Sign Up, Admin Dashboard, etc.) — carried forward as a hard constraint, not a UX decision.
+Single Tailwind breakpoint set (`sm`/`md`/`lg`/`xl`), the same one already used in the existing `SpreadView` card-grid logic. No separate mobile app, no separate mobile IA — every surface in the table above resizes rather than branching. Amplify Hosting serves the application at the root `/` base; the retired `/tarot-spa/` GitHub Pages base must not be reintroduced.
 
 ## Inspiration & Anti-patterns
 

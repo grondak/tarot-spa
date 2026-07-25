@@ -1,8 +1,26 @@
-import { Stack } from 'aws-cdk-lib';
+import {
+  Duration,
+  Stack,
+} from 'aws-cdk-lib';
 import { defineBackend } from '@aws-amplify/backend';
+import {
+  Alarm,
+  ComparisonOperator,
+  TreatMissingData,
+} from 'aws-cdk-lib/aws-cloudwatch';
+import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
-import { Alias, Function } from 'aws-cdk-lib/aws-lambda';
+import {
+  Alias,
+  CfnFunction,
+  Function,
+} from 'aws-cdk-lib/aws-lambda';
+import { Rule, Schedule } from 'aws-cdk-lib/aws-events';
+import { LambdaFunction as LambdaFunctionTarget } from 'aws-cdk-lib/aws-events-targets';
 import { StringParameter } from 'aws-cdk-lib/aws-ssm';
+import { Topic } from 'aws-cdk-lib/aws-sns';
+import { LambdaSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
+import { Queue, QueueEncryption } from 'aws-cdk-lib/aws-sqs';
 import { CfnWebACL, CfnWebACLAssociation } from 'aws-cdk-lib/aws-wafv2';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
@@ -10,6 +28,8 @@ import { postConfirmation } from './auth/post-confirmation/resource';
 import { checkInviteKey } from './functions/check-invite-key/resource';
 import { inviteKeyMint } from './functions/invite-key-mint/resource';
 import { orientationGuide } from './functions/orientation-guide/resource';
+import { orientationAlert } from './functions/orientation-alert/resource';
+import { orientationReconciler } from './functions/orientation-reconciler/resource';
 import { requestAccess } from './functions/request-access/resource';
 import { startOrientationGuide } from './functions/start-orientation-guide/resource';
 import { usageCounter } from './functions/usage-counter/resource';
@@ -20,7 +40,9 @@ const backend = defineBackend({
   postConfirmation,
   checkInviteKey,
   inviteKeyMint,
+  orientationAlert,
   orientationGuide,
+  orientationReconciler,
   requestAccess,
   startOrientationGuide,
   usageCounter,
@@ -36,6 +58,8 @@ const redemptionLambda = backend.postConfirmation.resources.lambda;
 const checkInviteKeyLambda = backend.checkInviteKey.resources.lambda;
 const inviteKeyMintLambda = backend.inviteKeyMint.resources.lambda;
 const orientationGuideLambda = backend.orientationGuide.resources.lambda;
+const orientationAlertLambda = backend.orientationAlert.resources.lambda;
+const orientationReconcilerLambda = backend.orientationReconciler.resources.lambda;
 const requestAccessLambda = backend.requestAccess.resources.lambda;
 const startOrientationGuideLambda = backend.startOrientationGuide.resources.lambda;
 const usageCounterLambda = backend.usageCounter.resources.lambda;
@@ -44,11 +68,139 @@ const usageCounterLambda = backend.usageCounter.resources.lambda;
 // Accepted residual risk: one action on this single Lambda may target any SES identity
 // in this account/region, matching the existing User Pool wildcard rationale below.
 const dataStack = Stack.of(accountTable);
+const operationalStack = Stack.of(backend.data.resources.graphqlApi);
+const workerDeadLetterQueue = new Queue(
+  operationalStack,
+  'OrientationGuideWorkerDeadLetterQueue',
+  {
+  encryption: QueueEncryption.SQS_MANAGED,
+  retentionPeriod: Duration.days(14),
+  },
+);
+const workerCfnFunction = orientationGuideLambda.node.defaultChild as CfnFunction;
+workerCfnFunction.deadLetterConfig = { targetArn: workerDeadLetterQueue.queueArn };
+workerDeadLetterQueue.grantSendMessages(orientationGuideLambda);
 const workerVersion = (orientationGuideLambda as Function).currentVersion;
 const workerAlias = new Alias(dataStack, 'OrientationGuideLive', {
   aliasName: 'live',
   version: workerVersion,
 });
+const workerFailureTopic = new Topic(
+  operationalStack,
+  'OrientationGuideWorkerFailureTopic',
+);
+const alertDeliveryDeadLetterQueue = new Queue(
+  operationalStack,
+  'OrientationGuideAlertDeliveryDeadLetterQueue',
+  {
+    encryption: QueueEncryption.SQS_MANAGED,
+    retentionPeriod: Duration.days(14),
+  },
+);
+const alertCfnFunction = orientationAlertLambda.node.defaultChild as CfnFunction;
+alertCfnFunction.deadLetterConfig = { targetArn: alertDeliveryDeadLetterQueue.queueArn };
+alertDeliveryDeadLetterQueue.grantSendMessages(orientationAlertLambda);
+workerFailureTopic.addSubscription(new LambdaSubscription(orientationAlertLambda, {
+  deadLetterQueue: alertDeliveryDeadLetterQueue,
+}));
+const workerFailureAlarm = new Alarm(
+  operationalStack,
+  'OrientationGuideWorkerFailureAlarm',
+  {
+  // Persistence exhaustion logs ORIENTATION_GUIDE_PERSISTENCE_FAILED and rethrows,
+  // so it always increments this native metric without extra runtime IAM or log wiring.
+  metric: orientationGuideLambda.metricErrors({
+    period: Duration.minutes(5),
+    statistic: 'Sum',
+  }),
+  threshold: 1,
+  evaluationPeriods: 1,
+  comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+  treatMissingData: TreatMissingData.NOT_BREACHING,
+  },
+);
+workerFailureAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
+const durableExecutionFailureAlarm = new Alarm(
+  operationalStack,
+  'OrientationGuideDurableExecutionFailureAlarm',
+  {
+    metric: workerAlias.metric('DurableExecutionFailed', {
+      period: Duration.minutes(5),
+      statistic: 'Sum',
+    }),
+    threshold: 1,
+    evaluationPeriods: 1,
+    comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+    treatMissingData: TreatMissingData.NOT_BREACHING,
+  },
+);
+durableExecutionFailureAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
+const durableExecutionTimeoutAlarm = new Alarm(
+  operationalStack,
+  'OrientationGuideDurableExecutionTimeoutAlarm',
+  {
+    metric: workerAlias.metric('DurableExecutionTimedOut', {
+      period: Duration.minutes(5),
+      statistic: 'Sum',
+    }),
+    threshold: 1,
+    evaluationPeriods: 1,
+    comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+    treatMissingData: TreatMissingData.NOT_BREACHING,
+  },
+);
+durableExecutionTimeoutAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
+const workerDeadLetterAlarm = new Alarm(
+  operationalStack,
+  'OrientationGuideWorkerDeadLetterAlarm',
+  {
+  metric: workerDeadLetterQueue.metricApproximateNumberOfMessagesVisible({
+    period: Duration.minutes(5),
+    statistic: 'Maximum',
+  }),
+  threshold: 1,
+  evaluationPeriods: 1,
+  comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+  treatMissingData: TreatMissingData.NOT_BREACHING,
+  },
+);
+workerDeadLetterAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
+const alertDeliveryFailureAlarm = new Alarm(
+  operationalStack,
+  'OrientationGuideAlertDeliveryFailureAlarm',
+  {
+    metric: alertDeliveryDeadLetterQueue.metricApproximateNumberOfMessagesVisible({
+      period: Duration.minutes(5),
+      statistic: 'Maximum',
+    }),
+    threshold: 1,
+    evaluationPeriods: 1,
+    comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+    treatMissingData: TreatMissingData.NOT_BREACHING,
+  },
+);
+alertDeliveryFailureAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
+const alertLambdaErrorAlarm = new Alarm(
+  operationalStack,
+  'OrientationGuideAlertLambdaErrorAlarm',
+  {
+  metric: orientationAlertLambda.metricErrors({
+    period: Duration.minutes(5),
+    statistic: 'Sum',
+  }),
+  threshold: 1,
+  evaluationPeriods: 1,
+  comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+  treatMissingData: TreatMissingData.NOT_BREACHING,
+  },
+);
+alertLambdaErrorAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
+orientationAlertLambda.addToRolePolicy(new PolicyStatement({
+  actions: ['ses:SendEmail'],
+  resources: [
+    dataStack.formatArn({ service: 'ses', resource: 'identity', resourceName: '*' }),
+  ],
+}));
 requestAccessLambda.addToRolePolicy(new PolicyStatement({
   actions: ['ses:SendEmail'],
   resources: [
@@ -66,7 +218,11 @@ inviteKeyTable.grantWriteData(inviteKeyMintLambda);
 backend.inviteKeyMint.addEnvironment('ACCOUNT_TABLE_NAME', accountTable.tableName);
 backend.inviteKeyMint.addEnvironment('INVITE_KEY_TABLE_NAME', inviteKeyTable.tableName);
 
-sessionTable.grantReadWriteData(orientationGuideLambda);
+sessionTable.grant(
+  orientationGuideLambda,
+  'dynamodb:GetItem',
+  'dynamodb:UpdateItem',
+);
 dailyUsageTable.grantReadWriteData(orientationGuideLambda);
 monthlySpendTable.grantReadWriteData(orientationGuideLambda);
 configTable.grantReadData(orientationGuideLambda);
@@ -75,13 +231,47 @@ backend.orientationGuide.addEnvironment('DAILY_USAGE_TABLE_NAME', dailyUsageTabl
 backend.orientationGuide.addEnvironment('MONTHLY_SPEND_TABLE_NAME', monthlySpendTable.tableName);
 backend.orientationGuide.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
 
-sessionTable.grantReadWriteData(startOrientationGuideLambda);
+sessionTable.grant(
+  startOrientationGuideLambda,
+  'dynamodb:GetItem',
+  'dynamodb:PutItem',
+);
 workerAlias.grantInvoke(startOrientationGuideLambda);
 backend.startOrientationGuide.addEnvironment('SESSION_TABLE_NAME', sessionTable.tableName);
 backend.startOrientationGuide.addEnvironment(
   'ORIENTATION_GUIDE_FUNCTION_ARN',
   workerAlias.functionArn,
 );
+
+sessionTable.grant(
+  orientationReconcilerLambda,
+  'dynamodb:Scan',
+  'dynamodb:UpdateItem',
+);
+workerAlias.grantInvoke(orientationReconcilerLambda);
+orientationReconcilerLambda.addToRolePolicy(new PolicyStatement({
+  actions: ['lambda:ListDurableExecutionsByFunction'],
+  resources: [workerAlias.functionArn],
+}));
+backend.orientationReconciler.addEnvironment('SESSION_TABLE_NAME', sessionTable.tableName);
+backend.orientationReconciler.addEnvironment(
+  'ORIENTATION_GUIDE_FUNCTION_ARN',
+  workerAlias.functionArn,
+);
+backend.orientationReconciler.addEnvironment(
+  'ORIENTATION_GUIDE_FUNCTION_NAME',
+  orientationGuideLambda.functionName,
+);
+backend.orientationReconciler.addEnvironment(
+  'ORIENTATION_GUIDE_FUNCTION_QUALIFIER',
+  workerAlias.aliasName,
+);
+const reconciliationSchedule = new Rule(
+  operationalStack,
+  'OrientationGuideReconciliationSchedule',
+  { schedule: Schedule.rate(Duration.minutes(1)) },
+);
+reconciliationSchedule.addTarget(new LambdaFunctionTarget(orientationReconcilerLambda));
 
 dailyUsageTable.grantReadData(usageCounterLambda);
 configTable.grantReadData(usageCounterLambda);
@@ -275,6 +465,30 @@ const inviteKeyRateLimit = new CfnWebACL(dataStack, 'ApiRateLimit', {
         sampledRequestsEnabled: true,
         cloudWatchMetricsEnabled: true,
         metricName: 'tarotSpaRequestAccessRateLimit',
+      },
+    },
+    {
+      name: 'RateLimitStartOrientationGuidePerIp',
+      priority: 2,
+      action: { block: {} },
+      statement: {
+        rateBasedStatement: {
+          limit: 100,
+          aggregateKeyType: 'IP',
+          scopeDownStatement: {
+            byteMatchStatement: {
+              searchString: 'startOrientationGuide',
+              fieldToMatch: { body: { oversizeHandling: 'MATCH' } },
+              textTransformations: [{ priority: 0, type: 'NONE' }],
+              positionalConstraint: 'CONTAINS',
+            },
+          },
+        },
+      },
+      visibilityConfig: {
+        sampledRequestsEnabled: true,
+        cloudWatchMetricsEnabled: true,
+        metricName: 'tarotSpaStartOrientationGuideRateLimit',
       },
     },
   ],

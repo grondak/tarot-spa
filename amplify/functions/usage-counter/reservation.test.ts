@@ -61,17 +61,27 @@ describe('usage reservations', () => {
       Key: { id: 'global' },
       ConsistentRead: true,
     });
+    expect(dynamo.send).toHaveBeenCalledOnce();
 
     await expect(readConfig(client({}), 'ConfigTable')).rejects.toThrow(
       'orientation config missing — run scripts/seed-config.mjs',
     );
+    await expect(readConfig(
+      client({ Item: { dailyLimit: 5 } }),
+      'ConfigTable',
+    )).rejects.toThrow('orientation config missing — run scripts/seed-config.mjs');
+    await expect(readConfig(
+      client({ Item: { monthlyBudget: 30 } }),
+      'ConfigTable',
+    )).rejects.toThrow('orientation config missing — run scripts/seed-config.mjs');
   });
 
   it('reserves monthly and daily counters in one idempotent transaction', async () => {
     const dynamo = client({});
     await reserveUsage(dynamo, { ...usage, dailyLimit: 5, monthlyBudget: 30 });
 
-    expect((dynamo.send.mock.calls[0][0] as { input: unknown }).input).toMatchObject({
+    expect(dynamo.send).toHaveBeenCalledOnce();
+    expect((dynamo.send.mock.calls[0][0] as { input: unknown }).input).toEqual({
       ClientRequestToken: reservationToken(usage.sessionId),
       TransactItems: [
         {
@@ -79,7 +89,14 @@ describe('usage reservations', () => {
             TableName: 'MonthlyTable',
             Key: { id: '2026-07' },
             ConditionExpression: 'attribute_not_exists(id) OR #spent <= :budgetMinusEstimate',
-            ExpressionAttributeValues: expect.objectContaining({ ':budgetMinusEstimate': 29.97 }),
+            UpdateExpression: 'SET #spent = if_not_exists(#spent, :zero) + :estimate, createdAt = if_not_exists(createdAt, :ts), updatedAt = :ts',
+            ExpressionAttributeNames: { '#spent': 'spent' },
+            ExpressionAttributeValues: {
+              ':budgetMinusEstimate': 29.97,
+              ':zero': 0,
+              ':estimate': 0.03,
+              ':ts': 'timestamp',
+            },
           },
         },
         {
@@ -87,6 +104,15 @@ describe('usage reservations', () => {
             TableName: 'DailyTable',
             Key: { id: 'acct#2026-07-18' },
             ConditionExpression: 'attribute_not_exists(id) OR #count < :limit',
+            UpdateExpression: 'SET #count = if_not_exists(#count, :zero) + :one, #owner = if_not_exists(#owner, :accountId), createdAt = if_not_exists(createdAt, :ts), updatedAt = :ts',
+            ExpressionAttributeNames: { '#count': 'count', '#owner': 'owner' },
+            ExpressionAttributeValues: {
+              ':limit': 5,
+              ':zero': 0,
+              ':one': 1,
+              ':accountId': 'acct',
+              ':ts': 'timestamp',
+            },
           },
         },
         {
@@ -95,6 +121,7 @@ describe('usage reservations', () => {
             Key: { id: usage.sessionId },
             ConditionExpression: 'attribute_not_exists(usageReservedAt)',
             UpdateExpression: 'SET usageReservedAt = :ts',
+            ExpressionAttributeValues: { ':ts': 'timestamp' },
           },
         },
       ],
@@ -152,25 +179,61 @@ describe('usage reservations', () => {
       dailyLimit: 5,
       monthlyBudget: 30,
     })).resolves.toBeUndefined();
+    expect(alreadyReserved.send).toHaveBeenCalledOnce();
+
+    const alreadyReservedAfterLimitsChanged = {
+      send: vi.fn().mockRejectedValue(canceled(
+        'ConditionalCheckFailed',
+        'ConditionalCheckFailed',
+        'ConditionalCheckFailed',
+      )),
+    };
+    await expect(reserveUsage(alreadyReservedAfterLimitsChanged, {
+      ...usage,
+      dailyLimit: 5,
+      monthlyBudget: 30,
+    })).resolves.toBeUndefined();
+    expect(alreadyReservedAfterLimitsChanged.send).toHaveBeenCalledOnce();
+  });
+
+  it('accepts exact daily and monthly reservation boundaries', async () => {
+    const dynamo = client({});
+
+    await expect(reserveUsage(dynamo, {
+      ...usage,
+      dailyLimit: 1,
+      monthlyBudget: usage.estimate,
+    })).resolves.toBeUndefined();
+
+    expect(dynamo.send).toHaveBeenCalledOnce();
   });
 
   it('rolls monthly and daily counters back in one idempotent transaction', async () => {
     const dynamo = client({});
     await rollbackUsage(dynamo, usage);
 
-    expect((dynamo.send.mock.calls[0][0] as { input: unknown }).input).toMatchObject({
+    expect(dynamo.send).toHaveBeenCalledOnce();
+    expect((dynamo.send.mock.calls[0][0] as { input: unknown }).input).toEqual({
       ClientRequestToken: compensationToken(usage.sessionId),
       TransactItems: [
         {
           Update: {
             TableName: 'MonthlyTable',
+            Key: { id: '2026-07' },
             ConditionExpression: '#spent >= :estimate',
+            UpdateExpression: 'SET #spent = #spent - :estimate, updatedAt = :ts',
+            ExpressionAttributeNames: { '#spent': 'spent' },
+            ExpressionAttributeValues: { ':estimate': 0.03, ':ts': 'timestamp' },
           },
         },
         {
           Update: {
             TableName: 'DailyTable',
+            Key: { id: 'acct#2026-07-18' },
             ConditionExpression: '#count >= :one',
+            UpdateExpression: 'SET #count = #count - :one, updatedAt = :ts',
+            ExpressionAttributeNames: { '#count': 'count' },
+            ExpressionAttributeValues: { ':one': 1, ':ts': 'timestamp' },
           },
         },
         {
@@ -179,6 +242,7 @@ describe('usage reservations', () => {
             Key: { id: usage.sessionId },
             ConditionExpression: 'attribute_exists(usageReservedAt) AND attribute_not_exists(usageCompensatedAt)',
             UpdateExpression: 'SET usageCompensatedAt = :ts',
+            ExpressionAttributeValues: { ':ts': 'timestamp' },
           },
         },
       ],
@@ -209,6 +273,40 @@ describe('usage reservations', () => {
     expect(inputs[2]).toEqual(inputs[0]);
   });
 
+  it('fails closed after bounded reservation retries are exhausted', async () => {
+    const failing = { send: vi.fn().mockRejectedValue(new Error('reservation failed')) };
+
+    await expect(reserveUsage(failing, {
+      ...usage,
+      dailyLimit: 5,
+      monthlyBudget: 30,
+    })).rejects.toThrow('reservation failed');
+
+    expect(failing.send).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries rollback with byte-identical input after ambiguous failures', async () => {
+    const transient = {
+      send: vi.fn()
+        .mockRejectedValueOnce(new Error('throttled'))
+        .mockRejectedValueOnce(new Error('network reset'))
+        .mockResolvedValue({}),
+    };
+
+    await expect(rollbackUsage(transient, usage)).resolves.toBeUndefined();
+
+    expect(transient.send).toHaveBeenCalledTimes(3);
+    const inputs = transient.send.mock.calls
+      .map(([command]) => (command as { input: { ClientRequestToken?: string } }).input);
+    expect(inputs.map((input) => input.ClientRequestToken)).toEqual([
+      compensationToken(usage.sessionId),
+      compensationToken(usage.sessionId),
+      compensationToken(usage.sessionId),
+    ]);
+    expect(inputs[1]).toEqual(inputs[0]);
+    expect(inputs[2]).toEqual(inputs[0]);
+  });
+
   it('does not mark the Session failed when a counter rollback condition misses', async () => {
     const conditional = {
       send: vi.fn().mockRejectedValue(canceled('ConditionalCheckFailed', 'None')),
@@ -224,6 +322,19 @@ describe('usage reservations', () => {
       send: vi.fn().mockRejectedValue(canceled(
         'None',
         'None',
+        'ConditionalCheckFailed',
+      )),
+    };
+
+    await expect(rollbackUsage(replay, usage)).resolves.toBeUndefined();
+    expect(replay.send).toHaveBeenCalledOnce();
+  });
+
+  it('gives an already-compensated marker precedence over simultaneous counter misses', async () => {
+    const replay = {
+      send: vi.fn().mockRejectedValue(canceled(
+        'ConditionalCheckFailed',
+        'ConditionalCheckFailed',
         'ConditionalCheckFailed',
       )),
     };

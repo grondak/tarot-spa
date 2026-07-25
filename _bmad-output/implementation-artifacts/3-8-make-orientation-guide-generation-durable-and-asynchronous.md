@@ -4,7 +4,7 @@ baseline_commit: 687b9b3
 
 # Story 3.8: Make Orientation Guide generation durable and asynchronous
 
-Status: review
+Status: done
 
 ## Story
 
@@ -135,7 +135,116 @@ So that I receive the Guide I paid for without timeout ambiguity, duplicate char
   - [x] Credential/content sweep: no Tavily/test-account values anywhere; no real Context/Guide bodies in artifacts or logs cited in the record; `playwright/.auth/` untracked.
   - [x] Commit and push to `main`. Story → review, and note that the NEXT step per the proposal is the **integrated review of 3.8 + 3.3's retained UI together** — not a standalone 3.3 review, and not 3.4 work.
 
+### Review Findings
+
+- [x] [Review][Patch] Retry the starter once with the identical request ID and inputs when ambiguous recovery finds the exact Session still PENDING, healing the write/invoke gap without generating a new ID [amplify/functions/start-orientation-guide/handler.ts:98]
+- [x] [Review][Patch] Raise the worker Lambda timeout to 90 seconds so the 20-second Tavily and 50-second Bedrock budgets fit with checkpoint and persistence overhead [amplify/functions/orientation-guide/resource.ts:6]
+- [x] [Review][Patch] Add a CloudWatch worker-error alarm without notification actions; persistence exhaustion rethrows and retains its distinctive `ORIENTATION_GUIDE_PERSISTENCE_FAILED` log line for diagnosis [amplify/functions/orientation-guide/handler.ts:484]
+- [x] [Review][Patch] Make reservation and compensation transaction parameters replay-identical for deterministic client tokens [amplify/functions/orientation-guide/handler.ts:207]
+- [x] [Review][Patch] Roll back the exact UTC day and month that were originally reserved [amplify/functions/orientation-guide/handler.ts:355]
+- [x] [Review][Patch] Recognize an existing Session reservation before newly exhausted quota conditions on replay [amplify/functions/usage-counter/reservation.ts:186]
+- [x] [Review][Patch] Use a strongly consistent read when classifying a conditional-create duplicate [amplify/functions/start-orientation-guide/handler.ts:115]
+- [x] [Review][Patch] Reconcile Config and non-limit reservation failures instead of leaving Sessions permanently RUNNING [amplify/functions/orientation-guide/handler.ts:422]
+- [x] [Review][Patch] Do not start fresh executions for terminal or stale RUNNING duplicates after durable-name retention expires, including already-compensated Sessions [amplify/functions/start-orientation-guide/handler.ts:130]
+- [x] [Review][Patch] Restore the deployed sandbox worker's current Tavily secret value and verify the credential-safe in-memory probe returns HTTP 200 before any paid generation
+- [x] [Review][Patch] Cover changed-spread idempotency conflicts in the starter suite so request identity is proven across owner, Context, and Spread [amplify/functions/start-orientation-guide/handler.test.ts:185]
+- [x] [Review][Patch] Prove non-idempotency worker invocation failures propagate instead of falsely acknowledging an orphaned PENDING Session [amplify/functions/start-orientation-guide/handler.test.ts:208]
+- [x] [Review][Patch] Exercise Bedrock rejection, incomplete output, and blank output through the durable lifecycle, proving compensation completes before GENERATION_FAILED [amplify/functions/orientation-guide/handler.test.ts:220]
+- [x] [Review][Patch] Exercise compensation exhaustion through the durable worker and prove mark-failed is not attempted while accounting remains reserved [amplify/functions/orientation-guide/handler.test.ts:220]
+- [x] [Review][Patch] Drive the real 20-second Tavily AbortController timer rather than injecting an immediate AbortError [amplify/functions/orientation-guide/handler.test.ts:239]
+- [x] [Review][Patch] Prove an already FAILED Session returns before reservation or provider work, matching the terminal SUCCEEDED guard [amplify/functions/orientation-guide/handler.test.ts:288]
+- [x] [Review][Patch] Restore retained Tavily request-contract assertions for endpoint, authorization, method, topic, search depth, and result limit [amplify/functions/orientation-guide/handler.test.ts:320]
+- [x] [Review][Patch] Restore structural JSON-evidence and system-prompt assertions so prompt-injection protections cannot regress behind substring checks [amplify/functions/orientation-guide/handler.test.ts:352]
+- [x] [Review][Patch] Strengthen lifecycle update mocks and replay tests to verify the Session table/key/status conditions for RUNNING, SUCCEEDED, and FAILED writes [amplify/functions/orientation-guide/handler.test.ts:104]
+- [x] [Review][Patch] Prove an already-compensated replay wins over simultaneous counter-condition misses during rollback [amplify/functions/usage-counter/reservation.test.ts:235]
+- [x] [Review][Patch] Retry transient exact-Session read failures until the request deadline instead of treating an undefined Session as legacy success [src/App.jsx:139]
+- [x] [Review][Patch] Keep the active request ID through ambiguous-ack lookup failures and preserve the same-ID PENDING healing retry after recovery [src/App.jsx:237]
+- [x] [Review][Patch] Start the 300-second deadline before the starter call and bound starter and polling reads so unresolved network promises cannot leave loading indefinitely [src/App.jsx:135]
+- [x] [Review][Patch] Keep PENDING/RUNNING loading visible above rate-limit and Quick Draw branches, and prevent deliberate Quick Draw while generation is active [src/components/ContextEntry.jsx:29]
+- [x] [Review][Patch] Track and cancel the active poll wait during sign-out, effect cleanup, and flow replacement [src/App.jsx:188]
+- [x] [Review][Patch] Restore the stored Session Context when a resumed request reaches FAILED so the retained retry copy remains true after reload [src/App.jsx:170]
+- [x] [Review][Patch] Validate a SUCCEEDED or legacy Session's result shape before rendering Results, converting malformed records into the controlled generic failure [src/App.jsx:155]
+- [x] [Review][Patch] Guard the post-success rate-limit refresh against sign-out and newer authentication or orientation flows [src/App.jsx:122]
+- [x] [Review][Patch] Clear only the displayed result's Session ID on Back so another tab's newer recovery handle is not deleted [src/App.jsx:293]
+
+- [x] [Review][Patch] Treat the 300-second boundary as a recoverable indeterminate state: stop active polling, retain the exact Session ID for later recovery, and show truthful timeout copy that does not claim usage was untouched [src/App.jsx:223]
+- [x] [Review][Patch] Attach an SNS/email action to the exhausted-persistence alarm, assign Tony as owner, and document the response runbook without exposing Session content [amplify/backend.ts:63]
+- [x] [Review][Patch] Define an alarm-backed parked-`RUNNING` reconciliation exception for persistence/compensation exhaustion, including Tony ownership, response SLA/runbook, and downstream metrics/Story 3.5 handling [_bmad-output/planning-artifacts/architecture/architecture-tarot-spa-2026-07-10/ARCHITECTURE-SPINE.md:174]
+- [x] [Review][Patch] Complete AC 12 with a safe deployed synthetic failure that reserves then compensates before provider spend, recording exact-Session, durable-execution, counter, and alarm evidence without logging sensitive content [_bmad-output/implementation-artifacts/3-8-make-orientation-guide-generation-durable-and-asynchronous.md:303]
+
+- [x] [Review][Patch] Prove Tavily timeout success and Tavily/Bedrock no-retry behavior through the durable lifecycle, including a real 50-second Bedrock abort, one provider attempt, compensation ordering, and no downstream provider call after Tavily failure [amplify/functions/orientation-guide/handler.test.ts:230]
+- [x] [Review][Patch] Pin the complete successful persisted result contract, including spread-driven draw count/positions, lean cards, normalized Current Events metadata/truncation, and terminal timestamps [amplify/functions/orientation-guide/handler.test.ts:186]
+- [x] [Review][Patch] Exercise monthly-only and simultaneous monthly/daily cancellation through the durable lifecycle, proving monthly precedence and zero provider/compensation work [amplify/functions/orientation-guide/handler.test.ts:213]
+- [x] [Review][Patch] Strengthen reservation/rollback assertions and lifecycle fakes to verify the complete three-item transaction contract, exact mutation values, and transaction attempt counts [amplify/functions/usage-counter/reservation.test.ts:70]
+- [x] [Review][Patch] Prove rollback retries reuse a byte-identical transaction and compensation token after ambiguous transient failures [amplify/functions/usage-counter/reservation.test.ts:201]
+- [x] [Review][Patch] Cover starter configuration, generic Put, and duplicate Get failures, proving no worker invocation and no write after preflight configuration failure [amplify/functions/start-orientation-guide/handler.test.ts:76]
+- [x] [Review][Patch] Cover missing/corrupt worker Sessions and assert Config failure never reaches reservation, counters, or providers [amplify/functions/orientation-guide/handler.test.ts:348]
+- [x] [Review][Patch] Guard the initial aggregate-limit response with the orientation flow identity so stale status cannot undo a newer Daily-limit failure or hide a monthly/generation error [src/App.jsx:153]
+- [x] [Review][Patch] Treat a null exact-Session read after an acknowledged or ambiguous start as a bounded same-ID recovery state instead of immediately permitting a fresh UUID and possible duplicate paid execution [src/App.jsx:254]
+- [x] [Review][Patch] Add a synchronous in-flight submission guard and rapid double-submit test so two events before React rerenders cannot mint two request IDs [src/App.jsx:347]
+- [x] [Review][Patch] Centralize safe localStorage access and cover denied get/set/remove plus sign-out during a pending Session read without stale UI updates [src/App.jsx:35]
+- [x] [Review][Patch] Preserve safe Session Context when `getSession` classifies a resumed SUCCEEDED record as malformed, then verify the real utility rejection path restores it [src/utils/orientation.js:55]
+- [x] [Review][Patch] Enforce exact Session ID and allowed lifecycle values before every status branch, normalize blank failure codes, and strengthen completed-result element/card-count validation [src/utils/orientation.js:43]
+- [x] [Review][Patch] Restore the resumed Session's Spread as well as Context after terminal failure so the retained UX retry state is truthful [src/App.jsx:285]
+- [x] [Review][Patch] Replace invalid canonical `sessionId:reserve` / `sessionId:rollback` guidance with the deployed 35-character UUID-without-dashes plus `RES`/`RBK` derivation [_bmad-output/project-context.md:77]
+- [x] [Review][Patch] Supersede the story's stale 60-second worker timeout contract with the reviewed and deployed 90-second value [_bmad-output/implementation-artifacts/3-8-make-orientation-guide-generation-durable-and-asynchronous.md:50]
+- [x] [Review][Patch] Reconcile duplicate-start and ambiguous-ack documentation with the final status-aware matrix: same-ID heal only for PENDING; never restart RUNNING, terminal, legacy, or compensated Sessions [_bmad-output/implementation-artifacts/3-8-make-orientation-guide-generation-durable-and-asynchronous.md:79]
+- [x] [Review][Patch] Make alias-qualified Tavily probing after every worker deploy the canonical prerequisite and explicitly reject unqualified `$LATEST` evidence [_bmad-output/implementation-artifacts/3-8-make-orientation-guide-generation-durable-and-asynchronous.md:35]
+- [x] [Review][Patch] Reconcile stale planning contracts for Tavily's up-to-three/zero-on-timeout results, failed-Session Context/Spread retention, current durable latency, and Amplify's root `/` base [_bmad-output/planning-artifacts/prds/prd-tarot-spa-2026-07-06/prd.md:63]
+- [x] [Review][Patch] Record verification for the already-checked backend-test/frontend review patches, or return those items to unchecked until focused/full tests, lint, typecheck, build, and browser gates are evidenced [_bmad-output/implementation-artifacts/3-8-make-orientation-guide-generation-durable-and-asynchronous.md:150]
+- [x] [Review][Patch] Replace stale forward-looking migration and pre-correction completion notes with append-only superseding evidence that distinguishes sandbox verification from outstanding staging/main rollout [_bmad-output/implementation-artifacts/3-8-make-orientation-guide-generation-durable-and-asynchronous.md:298]
+
+- [x] [Review][Defer] Validate Config numbers as finite, positive, and appropriately integral/ranged rather than accepting every JavaScript `number` [amplify/functions/usage-counter/reservation.ts:18] — deferred, pre-existing
+- [x] [Review][Defer] Refresh Daily-limit UI state at the next UTC-day boundary for tabs left open overnight [src/App.jsx:153] — deferred, pre-existing
+
+#### Runtime and infrastructure re-review — 2026-07-22
+
+- [x] [Review][Decision] Choose the recovery guarantee for an accepted Session stranded in `PENDING` — selected an automated reconciler that detects stale Sessions, inspects the named durable execution, dispatches missing work, and terminalizes closed failures [amplify/functions/start-orientation-guide/handler.ts:98]
+- [x] [Review][Decision] Align durable-history retention with the reconciliation SLA — selected seven-day checkpoint retention to cover weekends while preserving the documented one-business-day response window [amplify/functions/orientation-guide/resource.ts:9]
+
+- [x] [Review][Patch] Alarm on `DurableExecutionFailed` and `DurableExecutionTimedOut` in addition to standard invocation `Errors`, so exhausted persistence, compensation failure, and the 300-second execution boundary notify Tony at the durable-execution level [amplify/backend.ts:71] — implemented and deployed
+- [x] [Review][Patch] Attach and monitor a dead-letter queue for asynchronously invoked durable executions so terminal `FAILED`, `STOPPED`, and `TIMED_OUT` events retain their Session-ID payload for reconciliation [amplify/backend.ts:64] — implemented and deployed
+- [x] [Review][Patch] Narrow starter and worker Session-table IAM from broad read/write grants to the exact `GetItem`/`PutItem` and `GetItem`/`UpdateItem` actions they execute [amplify/backend.ts:107] — implemented and deployed
+- [x] [Review][Patch] Add operation-scoped admission throttling for authenticated `startOrientationGuide` calls so exhausted or compromised accounts cannot create unlimited Session rows and durable executions before counter enforcement [amplify/backend.ts:255] — implemented and deployed
+- [x] [Review][Patch] Reject blank/whitespace Tavily titles and content in the worker so a paid `SUCCEEDED` result cannot be rejected as malformed by the stricter client validator [amplify/functions/orientation-guide/handler.ts:173] — implemented and covered
+- [x] [Review][Patch] Add dead-letter/error monitoring for the SNS-to-SES alert path so failure of the notification Lambda does not silently discard the sole operational page [amplify/backend.ts:69] — implemented and deployed
+- [x] [Review][Patch] Implement the selected automated reconciler for stale `PENDING` Sessions, including exact durable-execution inspection, safe missing-work dispatch, and terminalization of closed failures [amplify/functions/start-orientation-guide/handler.ts:98] — implemented, deployed, and observed running each minute without errors
+- [x] [Review][Patch] Increase durable checkpoint retention from one day to seven days so recovery evidence remains available throughout the one-business-day reconciliation window [amplify/functions/orientation-guide/resource.ts:9] — implemented and deployed
+
+#### Backend tests re-review — 2026-07-23
+
+- [x] [Review][Patch] Make the durable lifecycle fake enforce the exact consistent Session read and exact lifecycle expression values instead of hard-coding the state the production command was meant to write [amplify/functions/orientation-guide/handler.test.ts:80] — implemented and covered
+- [x] [Review][Patch] Pin retained worker semantics for legacy status-less Sessions and inverted-card active patterns so AC 11 and the moved prompt/query contract cannot regress silently [amplify/functions/orientation-guide/handler.test.ts:488] — implemented and covered
+- [x] [Review][Patch] Cover the accepted 10,000-character Context boundary and the conditional-create race whose consistent duplicate read returns no Session, proving fail-closed idempotency without worker invocation [amplify/functions/start-orientation-guide/handler.test.ts:76] — implemented and covered
+- [x] [Review][Patch] Prove alert delivery failures propagate to retry/DLQ handling and that fixed operational email copy cannot interpolate sensitive SNS Session content [amplify/functions/orientation-alert/handler.test.ts:13] — implemented and covered
+- [x] [Review][Patch] Complete reconciler coverage for exact execution-name matching, every closed durable status, both terminal updates, and propagation of unrelated Lambda/DynamoDB failures [amplify/functions/orientation-reconciler/handler.test.ts:37] — implemented and covered
+- [x] [Review][Patch] Cover partial Config records, exact daily/monthly acceptance boundaries, reservation retry exhaustion, and one-attempt idempotency-marker short circuits [amplify/functions/usage-counter/reservation.test.ts:53] — implemented and covered
+
 ## Dev Notes
+
+### Review supersession record — 2026-07-21
+
+This append-only record supersedes stale values in the original frozen contract and task prose above:
+
+- The worker Lambda timeout is **90 seconds**, not 60. Durable execution remains 300 seconds with one-day history retention.
+- The 300-second client boundary is an **indeterminate observation timeout**, not proof that the execution is dead. Polling stops, the exact active Session ID remains stored, truthful copy warns that usage may already be reserved, and “Check this request again” resumes that exact ID.
+- Worker-error notification is active through CloudWatch `AWS/Lambda Errors` → SNS → `orientation-alert` email. Tony owns acknowledgment within one hour and reconciliation within one business day under `docs/orientation-guide-reconciliation.md`.
+- Normal lifecycle is `PENDING → RUNNING → SUCCEEDED | FAILED`. A parked `RUNNING` Session is the alarm-backed exception for exhausted result persistence or unconfirmed compensation; it is excluded from delivered metrics and Story 3.5 judging until reconciled.
+- Canonical reservation/compensation tokens are the dashless UUID plus `RES` / `RBK` (35 characters). The old `sessionId:reserve` / `sessionId:rollback` text is invalid for DynamoDB.
+- Every worker deployment must be verified through the qualified `live` alias. A probe against unqualified `$LATEST` is rejected as evidence even if it succeeds.
+
+The final duplicate/ambiguous-start matrix is:
+
+| Exact Session state | Starter duplicate behavior | Client ambiguous-ack behavior |
+|---|---|---|
+| Absent | New requests create once; an ambiguous request waits a 15-second same-ID grace before controlled failure | Never mint a replacement ID during the grace window |
+| `PENDING` | Reinvoke the same qualified worker name/payload to heal create-before-invoke | Retry the starter once with the same ID and inputs, then follow that exact Session |
+| `RUNNING` | Return acknowledgment; never restart | Follow the exact Session only |
+| `SUCCEEDED` / legacy missing status | Return terminal acknowledgment; never restart | Render only after complete result validation |
+| `FAILED` | Return terminal acknowledgment; never restart | Restore retained Context/Spread and apply its stable failure treatment |
+| Compensated or otherwise stale `RUNNING` | Never restart | Follow/reconcile the exact Session; do not create paid replacement work |
+
+Planning artifacts now use direct Tavily search with up to three valid events (zero on timeout), failed-Session Context/Spread retention, ~34–36-second durable latency evidence, and Amplify Hosting's root `/` base.
 
 ### Why this story exists (read the proposal first)
 
@@ -270,6 +379,17 @@ GPT-5 Codex
 - 2026-07-20 UTC — Task 7 limit/reconciliation: version 3 delivered terminal Daily and Monthly failures with the frozen codes, correct Quick Draw/inline treatment, preserved Context, cleared active IDs, and no spend. Final Config is restored to 5/30; UTC crossed during the story, so July 19 remains count 5 and July 20 correctly records 3 paid successes; MonthlySpend is 0.24 = captured 0.15 + 3 × 0.03. All 11 Sessions are terminal.
 - 2026-07-20 UTC — Task 7 observability/browser: final version-3 execution was uniquely visible as `SUCCEEDED`; CloudWatch had zero hits for the distinctive synthetic Context phrase. The in-app browser surface rejected its own sandbox metadata, so one-off Playwright scratch scripts performed the real UI work and were deleted afterward. Anonymous 2/2 and credentialed 4/4 suites passed untouched. Compensation/persistence failures stayed LocalDurableTestRunner-only by design.
 - 2026-07-20 UTC — Task 8 final gate: 155/155 tests, lint, typecheck, production build, anonymous Playwright 2/2, and credentialed Playwright 4/4 passed on the final source state. The credential/content sweep was clean, the retained Results/e2e/config surfaces remained unchanged, and `playwright/.auth/user.json` remained ignored and untracked.
+- 2026-07-20 UTC — Review patch pass: resolved all three review decisions and applied nine patches covering same-ID starter healing, status-aware duplicate invocation, strongly consistent duplicate reads, checkpoint-stable accounting metadata, original-period compensation, replay marker precedence, infrastructure-failure terminalization, a 90-second worker timeout, and a no-action worker-error alarm. Full verification passed with 163/163 tests, lint, typecheck, production build, anonymous Playwright 2/2, and credentialed Playwright 4/4.
+- 2026-07-20 UTC — Review deployment: two attempted log-filter alarm designs exposed and cleanly rolled back an Amplify-generated Lambda version/AppSync dependency cycle. The cycle-free native `AWS/Lambda Errors` alarm deployed successfully with no actions; worker `live` now targets immutable version 4, the function timeout is 90 seconds, and the alarm is `OK`.
+- 2026-07-20 UTC — Review verification HALT: after SSO refresh, the newly deployed worker's credential-safe Tavily probe returned HTTP 401. No paid generation was attempted. Per the story's prerequisite, Tony must propagate the stored current secret directly to `amplify-tarotspa-tonyreyn-orientationguidelambda69-KzmpiW10SELD`, then the probe must return HTTP 200 before review closeout resumes.
+- 2026-07-20 UTC — Review verification resumed after Tony propagated the current secret: the credential-safe deployed-worker Tavily probe returned HTTP 200 with one result. No secret value was printed and no paid Bedrock generation was run. Backend/runtime review chunk 1 is complete; the story remains in progress pending the planned backend-test, frontend, and documentation review chunks.
+- 2026-07-20 UTC — Review alias correction: the first post-repair HTTP 200 proved only `$LATEST`; alias-qualified version 4 remained stale and returned HTTP 401. Published the corrected `$LATEST` as immutable version 5, moved `live` to version 5, and reran the alias-qualified probe: HTTP 200 with one result. No paid Bedrock generation was run. Future deploy verification must always probe `--qualifier live`.
+- 2026-07-21 UTC — Full review patching resumed after chunk triage. The frontend now treats the 300-second boundary as indeterminate and recoverable, validates exact complete result contracts, preserves safe Context/Spread, bounds missing-row recovery, prevents same-tick duplicate submission, and tolerates denied storage. Backend suites now pin complete transactions/results and real Tavily/Bedrock abort boundaries. Alarm email wiring and the Tony-owned reconciliation runbook were added. Deployment and synthetic compensated-failure evidence remain outstanding until local/browser gates pass.
+- 2026-07-23 UTC — Final review gates passed on the patched source: focused suites passed, full Vitest passed 211/211, lint/typecheck/build passed, anonymous Playwright passed 2/2, and credentialed Playwright passed 4/4. `git diff --check` and the credential/content sweep were clean. The Vite build retained its pre-existing >500 kB chunk advisory without failing.
+- 2026-07-23 UTC — Review notification deployment completed to the `tonyreynolds` sandbox in 102.548 seconds. The worker alarm was `OK` with one SNS action, the content-free alarm test invoked `orientation-alert` with no error-filter log events, and the alarm was returned to `OK`. The unchanged worker `live` alias remained on immutable version 5; its alias-qualified Tavily probe returned HTTP 200 with one result.
+- 2026-07-23 UTC — AC 12 compensated-failure verification used one content-safe synthetic exact Session with an invalid Spread so execution stopped at Draw before Tavily/Bedrock. Metadata-only durable history proved `reserve → draw failed → compensate → mark-failed`, with no provider steps. The exact Session reached `FAILED/GENERATION_FAILED`, both reservation markers existed, the handled durable execution reached `SUCCEEDED`, and DailyUsage/MonthlySpend deltas were both zero. The synthetic Session row and temporary verifier were removed afterward.
+- 2026-07-23 UTC — Sandbox verification is complete. Staging and `main` promotion/backfill remain separate release operations and were not performed by this review; each environment must deploy, backfill twice, probe the qualified `live` alias, and pass its own content-safe lifecycle/reconciliation checks before promotion.
+- 2026-07-23 UTC — Runtime/infrastructure re-review applied eight patches: durable failure/timeout alarms, worker and alert-path DLQs with monitoring, exact Session-table IAM, operation-scoped WAF admission throttling, strict Tavily event validation, an automated stale-`PENDING` reconciler, and seven-day durable history. The first deployment exposed a generated-stack dependency cycle and rolled back cleanly; operational resources were moved to the parent data stack and the second deployment completed successfully. Live evidence confirmed six `OK` alarms, worker DLQ plus seven-day retention, and three consecutive error-free one-minute reconciler executions. Local verification passed 215/215 tests under Node 24, typecheck, lint, build, and `git diff --check`.
 
 ### Completion Notes List
 
@@ -283,6 +403,8 @@ GPT-5 Codex
 - Task 7 complete: deployed/backfilled idempotently, measured ≤3-second acknowledgments and ~34–36-second durable completions, proved reload/exact-ID/duplicate/conflict/limit/counter/observability contracts live, fixed the production durable reserve-boundary defect found by the limit test, restored configuration, and removed all paid-test scratch code.
 - NFR5 evidence: headline acknowledgment 1,239 ms and end-to-end 35,663 ms; final post-fix acknowledgment 552 ms and end-to-end 34,094 ms.
 - Architecture erratum for Tony: spine AD-6's literal `sessionId:reserve` / `sessionId:rollback` tokens exceed DynamoDB's 36-character maximum; implementation uses the approved deterministic 35-character no-dashes UUID plus `RES` / `RBK` suffix.
+- Review supersession: the original 60-second worker, cleared-ID 300-second deadline, no-new-copy, and unconditional-terminal prose are historical. The verified contract is 90 seconds, retained exact-ID indeterminate recovery copy, and an alarm-backed parked-`RUNNING` operational exception.
+- Final review verification: 211/211 Vitest, lint, typecheck, build, anonymous Playwright 2/2, credentialed Playwright 4/4, deployed SNS/email alert path, alias-qualified Tavily HTTP 200, and a no-provider synthetic reserve/compensate lifecycle all passed. All 25 patch findings are resolved; two pre-existing items remain explicitly deferred.
 - Worker-test path: AWS `LocalDurableTestRunner` was used successfully for the named durable lifecycle, retries, compensation ordering, replay guard, timeout, and limit coverage; directly exported step bodies cover provider/prompt/triage boundaries.
 - Task 8 complete: every local and browser gate passed on the final source state, deployment-only follow-up is recorded, the credential/content sweep is clean, and Story 3.8 is ready for the integrated review with Story 3.3's retained UI.
 
@@ -300,11 +422,18 @@ GPT-5 Codex
 - `_bmad-output/planning-artifacts/prds/prd-tarot-spa-2026-07-06/prd.md`
 - `_bmad-output/planning-artifacts/ux-designs/ux-tarot-spa-2026-07-09/EXPERIENCE.md`
 - `_bmad-output/project-context.md`
+- `docs/orientation-guide-reconciliation.md`
 - `amplify/data/resource.ts`
 - `amplify/backend.ts`
+- `amplify/functions/orientation-alert/handler.test.ts`
+- `amplify/functions/orientation-alert/handler.ts`
+- `amplify/functions/orientation-alert/resource.ts`
 - `amplify/functions/orientation-guide/handler.test.ts`
 - `amplify/functions/orientation-guide/handler.ts`
 - `amplify/functions/orientation-guide/resource.ts`
+- `amplify/functions/orientation-reconciler/handler.test.ts`
+- `amplify/functions/orientation-reconciler/handler.ts`
+- `amplify/functions/orientation-reconciler/resource.ts`
 - `amplify/functions/start-orientation-guide/handler.test.ts`
 - `amplify/functions/start-orientation-guide/handler.ts`
 - `amplify/functions/start-orientation-guide/resource.ts`
@@ -324,3 +453,7 @@ GPT-5 Codex
 
 - 2026-07-19: Story created via create-story workflow from the approved sprint change proposal — status ready-for-dev.
 - 2026-07-20: Implemented, deployed, backfilled, live-verified, and passed all final gates — status review; next step is the integrated review of Story 3.8 with Story 3.3's retained UI.
+- 2026-07-20: Code-review patches implemented and deployed; status returned to in-progress pending the required Tavily secret propagation and HTTP 200 verification.
+- 2026-07-20: Backend/runtime review chunk 1 completed after the repaired configuration was published as worker version 5 and the alias-qualified Tavily probe passed; remaining review chunks keep the story in progress.
+- 2026-07-23: Integrated code review completed; all 25 patch findings were implemented and verified locally, in browser, and proportionally in the sandbox. Story status moved to done; staging/main rollout remains a release operation.
+- 2026-07-23: Runtime/infrastructure re-review resolved both decisions and applied, tested, deployed, and live-audited all eight resulting patches; Story 3.8 remains done.

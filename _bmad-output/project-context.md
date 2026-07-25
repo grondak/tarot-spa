@@ -69,14 +69,16 @@ _Critical implementation rules and patterns for this repository. Read before cha
 - The starter creates the owner-bound `PENDING` Session before starting background work.
 - Invoke a numbered worker version or controlled alias; never use `$LATEST` for production durable executions.
 - Worker input contains only Session id. Load Context and Spread from DynamoDB.
-- Session lifecycle is `PENDING → RUNNING → SUCCEEDED | FAILED`.
+- Normal Session lifecycle is `PENDING → RUNNING → SUCCEEDED | FAILED`. A Session may remain parked in `RUNNING` only when post-provider result persistence or required compensation exhausts retries; that is an alarm-backed operational exception, not a user-visible success or failure.
 - The client polls only `Session.get(sessionId)`. Listing Sessions or inferring completion from newest `createdAt` is prohibited.
-- Persist only the active Session id for reload recovery; clear it on sign-out or deliberate exit.
+- Persist only the active Session id for reload recovery; clear it on sign-out, deliberate exit, or confirmed terminal failure. A 300-second observation deadline is indeterminate: stop polling but retain the exact id for an explicit later check.
 - If the start response is ambiguous, query the already-known request/Session id before permitting another submission.
 - Durable steps are independently idempotent. Runtime replay does not make external side effects exactly-once.
-- Reservation token is derived as `sessionId:reserve`; compensation token is `sessionId:rollback`.
+- Reservation and compensation tokens remove UUID dashes and append `RES` / `RBK` respectively (35 characters), preserving deterministic distinct tokens within DynamoDB's 36-character limit.
 - Compensable pre-completion failures complete rollback before the Session transitions to `FAILED`. Once a successful Bedrock result is checkpointed, persistence retries from that checkpoint and the cost reservation remains because real provider spend occurred.
 - Durable execution history uses short retention and least-privilege IAM.
+- After every worker deploy, probe Tavily through the `live` alias before any paid generation; an unqualified `$LATEST` probe is not deployment evidence.
+- Worker Lambda errors page Tony by SNS/email. Tony acknowledges within one hour and reconciles parked `RUNNING` Sessions within one business day using `docs/orientation-guide-reconciliation.md`; never copy Context or Guide content into logs or tickets.
 - Quick Draw and draw-code sharing remain entirely separate from Orientation Guide Sessions.
 
 ### Testing

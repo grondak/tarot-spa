@@ -184,13 +184,13 @@ export async function reserveUsage(dynamo: CommandClient, input: UsageReservatio
       return;
     } catch (error) {
       const reasons = cancellationReasons(error);
+      if (reasons[2]?.Code === 'ConditionalCheckFailed') return;
       if (reasons[0]?.Code === 'ConditionalCheckFailed') {
         throw new Error('MONTHLY_BUDGET_EXHAUSTED');
       }
       if (reasons[1]?.Code === 'ConditionalCheckFailed') {
         throw new Error('DAILY_LIMIT_EXHAUSTED');
       }
-      if (reasons[2]?.Code === 'ConditionalCheckFailed') return;
       if (attempt === TRANSACTION_ATTEMPTS) throw error;
     }
   }

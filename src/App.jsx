@@ -13,19 +13,44 @@ import { getMyAccount } from './utils/account';
 import {
   getSession,
   getOrientationStatus,
+  isCompleteGuideSession,
   startOrientationGuide,
 } from './utils/orientation';
 
 const ORIENTATION_POLL_MS = 5000;
 const ORIENTATION_DEADLINE_MS = 300000;
+const ORIENTATION_MISSING_GRACE_MS = 15000;
 const ACTIVE_ORIENTATION_SESSION_KEY = 'tarotSpaActiveOrientationSession';
+const ORIENTATION_STATUS_UNKNOWN = 'GENERATION_STATUS_UNKNOWN';
+
+function getActiveOrientationSession() {
+  try {
+    return localStorage.getItem(ACTIVE_ORIENTATION_SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storeActiveOrientationSession(sessionId) {
+  try {
+    localStorage.setItem(ACTIVE_ORIENTATION_SESSION_KEY, sessionId);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function clearActiveOrientationSession(sessionId) {
-  if (
-    !sessionId
-    || localStorage.getItem(ACTIVE_ORIENTATION_SESSION_KEY) === sessionId
-  ) {
-    localStorage.removeItem(ACTIVE_ORIENTATION_SESSION_KEY);
+  try {
+    if (
+      !sessionId
+      || localStorage.getItem(ACTIVE_ORIENTATION_SESSION_KEY) === sessionId
+    ) {
+      localStorage.removeItem(ACTIVE_ORIENTATION_SESSION_KEY);
+    }
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -38,9 +63,69 @@ export default function App() {
   const [guideResult, setGuideResult] = useState(null);
   const [orientBusy, setOrientBusy] = useState(false);
   const [orientError, setOrientError] = useState(null);
+  const [orientContext, setOrientContext] = useState('');
+  const [orientSpreadKey, setOrientSpreadKey] = useState(null);
+  const [orientRecoveryRevision, setOrientRecoveryRevision] = useState(0);
   const authRequestId = useRef(0);
   const authStateRef = useRef('loading');
   const orientationFlowId = useRef(0);
+  const orientationDelays = useRef(new Set());
+  const orientationSubmitting = useRef(false);
+
+  const createOrientationDelay = useCallback((duration) => {
+    let settled = false;
+    let resolvePromise;
+    let timerId;
+    const entry = {
+      cancel: () => settle('cancelled'),
+    };
+
+    function settle(outcome) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timerId);
+      orientationDelays.current.delete(entry);
+      resolvePromise(outcome);
+    }
+
+    const promise = new Promise((resolve) => {
+      resolvePromise = resolve;
+      timerId = setTimeout(() => settle('elapsed'), Math.max(0, duration));
+    });
+    orientationDelays.current.add(entry);
+    return { promise, cancel: entry.cancel };
+  }, []);
+
+  const cancelOrientationDelays = useCallback(() => {
+    for (const entry of [...orientationDelays.current]) entry.cancel();
+  }, []);
+
+  const runUntilDeadline = useCallback(async (operation, deadline) => {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return { kind: 'timeout' };
+
+    const delay = createOrientationDelay(remaining);
+    try {
+      return await Promise.race([
+        Promise.resolve(operation).then(
+          (value) => ({ kind: 'value', value }),
+          (error) => ({ kind: 'error', error }),
+        ),
+        delay.promise.then((outcome) => ({
+          kind: outcome === 'elapsed' ? 'timeout' : 'cancelled',
+        })),
+      ]);
+    } finally {
+      delay.cancel();
+    }
+  }, [createOrientationDelay]);
+
+  const waitForOrientationPoll = useCallback(async (deadline) => {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return 'elapsed';
+    const delay = createOrientationDelay(Math.min(ORIENTATION_POLL_MS, remaining));
+    return delay.promise;
+  }, [createOrientationDelay]);
 
   useEffect(() => {
     async function refreshAuth() {
@@ -58,12 +143,16 @@ export default function App() {
           setAuthState('unauthenticated');
           if (sessionWasAuthenticated) {
             orientationFlowId.current += 1;
+            cancelOrientationDelays();
             clearActiveOrientationSession();
+            orientationSubmitting.current = false;
             setAuthScreen('landing');
             setSpreadKey(null);
             setCards([]);
             setOrientBusy(false);
             setOrientError(null);
+            setOrientContext('');
+            setOrientSpreadKey(null);
             setGuideResult(null);
           }
         }
@@ -72,10 +161,16 @@ export default function App() {
 
     refreshAuth();
     return Hub.listen('auth', refreshAuth);
-  }, []);
+  }, [cancelOrientationDelays]);
+
+  useEffect(() => () => {
+    orientationFlowId.current += 1;
+    cancelOrientationDelays();
+  }, [cancelOrientationDelays]);
 
   useEffect(() => {
     let active = true;
+    const flowId = orientationFlowId.current;
     if (authState !== 'authenticated') {
       return () => {
         active = false;
@@ -84,10 +179,12 @@ export default function App() {
 
     getOrientationStatus()
       .then((status) => {
-        if (active) setRateLimited(status?.limitExhausted === true);
+        if (active && orientationFlowId.current === flowId) {
+          setRateLimited(status?.limitExhausted === true);
+        }
       })
       .catch(() => {
-        if (active) setRateLimited(false);
+        if (active && orientationFlowId.current === flowId) setRateLimited(false);
       });
 
     return () => {
@@ -119,11 +216,29 @@ export default function App() {
     return true;
   }
 
-  const showGuideResult = useCallback((result) => {
+  const showGuideResult = useCallback((result, flowId) => {
     setGuideResult(result);
     getOrientationStatus()
-      .then((status) => setRateLimited(status?.limitExhausted === true))
+      .then((status) => {
+        if (
+          authStateRef.current === 'authenticated'
+          && orientationFlowId.current === flowId
+        ) {
+          setRateLimited(status?.limitExhausted === true);
+        }
+      })
       .catch(() => {});
+  }, []);
+
+  const restoreOrientationInput = useCallback((session) => {
+    if (typeof session?.context === 'string') setOrientContext(session.context);
+    if (
+      typeof session?.spreadKey === 'string'
+      && Object.hasOwn(SPREADS, session.spreadKey)
+    ) {
+      setOrientSpreadKey(session.spreadKey);
+    }
+    setOrientRecoveryRevision((revision) => revision + 1);
   }, []);
 
   const followSession = useCallback(async (
@@ -131,29 +246,78 @@ export default function App() {
     flowId,
     firstSession,
     missingIsError,
+    deadline,
+    restoreContextOnFailure,
   ) => {
-    const deadline = Date.now() + ORIENTATION_DEADLINE_MS;
     let session = firstSession;
+    let missingSince = null;
+
+    function finishWithError(errorCode, { clearSession = true } = {}) {
+      if (clearSession) clearActiveOrientationSession(sessionId);
+      setOrientError(errorCode);
+      setOrientBusy(false);
+      orientationSubmitting.current = false;
+    }
 
     while (orientationFlowId.current === flowId) {
+      if (Date.now() >= deadline) {
+        finishWithError(ORIENTATION_STATUS_UNKNOWN, { clearSession: false });
+        return;
+      }
+
       if (session === undefined) {
-        try {
-          session = await getSession(sessionId);
-        } catch {
-          session = undefined;
+        const read = await runUntilDeadline(getSession(sessionId), deadline);
+        if (orientationFlowId.current !== flowId || read.kind === 'cancelled') return;
+        if (read.kind === 'timeout') {
+          finishWithError(ORIENTATION_STATUS_UNKNOWN, { clearSession: false });
+          return;
         }
+        if (read.kind === 'error' || read.value === undefined) {
+          if (read.error?.message?.includes('MALFORMED_SESSION')) {
+            if (restoreContextOnFailure) restoreOrientationInput(read.error?.session);
+            finishWithError('GENERATION_FAILED');
+            return;
+          }
+          const waitOutcome = await waitForOrientationPoll(deadline);
+          if (orientationFlowId.current !== flowId || waitOutcome === 'cancelled') return;
+          continue;
+        }
+        session = read.value;
       }
       if (orientationFlowId.current !== flowId) return;
 
       if (session === null) {
+        if (missingIsError) {
+          missingSince ??= Date.now();
+          if (Date.now() - missingSince < ORIENTATION_MISSING_GRACE_MS) {
+            const waitOutcome = await waitForOrientationPoll(deadline);
+            if (orientationFlowId.current !== flowId || waitOutcome === 'cancelled') return;
+            session = undefined;
+            continue;
+          }
+          finishWithError('GENERATION_FAILED');
+          return;
+        }
         clearActiveOrientationSession(sessionId);
         setOrientBusy(false);
-        if (missingIsError) setOrientError('GENERATION_FAILED');
+        orientationSubmitting.current = false;
+        return;
+      }
+      missingSince = null;
+
+      if (session?.id !== sessionId) {
+        if (restoreContextOnFailure) restoreOrientationInput(session);
+        finishWithError('GENERATION_FAILED');
         return;
       }
 
       const status = session?.status ?? 'SUCCEEDED';
       if (status === 'SUCCEEDED') {
+        if (!isCompleteGuideSession(session, sessionId)) {
+          if (restoreContextOnFailure) restoreOrientationInput(session);
+          finishWithError('GENERATION_FAILED');
+          return;
+        }
         showGuideResult({
           spreadKey: session.spreadKey,
           context: session.context,
@@ -162,101 +326,199 @@ export default function App() {
           currentEvents: session.currentEvents,
           guide: session.guide,
           tavilyTimedOut: session.tavilyTimedOut,
-        });
+        }, flowId);
         setOrientBusy(false);
+        orientationSubmitting.current = false;
         return;
       }
 
       if (status === 'FAILED') {
         clearActiveOrientationSession(sessionId);
-        if (session.errorCode?.includes('DAILY_LIMIT_EXHAUSTED')) {
+        if (restoreContextOnFailure) restoreOrientationInput(session);
+        const errorCode = typeof session.errorCode === 'string' && session.errorCode.trim()
+          ? session.errorCode.trim()
+          : 'GENERATION_FAILED';
+        if (errorCode.includes('DAILY_LIMIT_EXHAUSTED')) {
           setRateLimited(true);
         } else {
-          setOrientError(session.errorCode || 'GENERATION_FAILED');
+          setOrientError(errorCode);
         }
         setOrientBusy(false);
+        orientationSubmitting.current = false;
         return;
       }
 
-      if (Date.now() >= deadline) {
+      if (status !== 'PENDING' && status !== 'RUNNING') {
+        clearActiveOrientationSession(sessionId);
+        if (restoreContextOnFailure) restoreOrientationInput(session);
+        finishWithError('GENERATION_FAILED', { clearSession: false });
+        return;
+      }
+
+      const waitOutcome = await waitForOrientationPoll(deadline);
+      if (orientationFlowId.current !== flowId || waitOutcome === 'cancelled') return;
+      session = undefined;
+    }
+  }, [restoreOrientationInput, runUntilDeadline, showGuideResult, waitForOrientationPoll]);
+
+  const resumeActiveOrientationSession = useCallback((sessionId) => {
+    if (!sessionId || orientationSubmitting.current) return null;
+    cancelOrientationDelays();
+    orientationSubmitting.current = true;
+    const flowId = ++orientationFlowId.current;
+    const deadline = Date.now() + ORIENTATION_DEADLINE_MS;
+    setOrientError(null);
+    setOrientBusy(true);
+    void followSession(sessionId, flowId, undefined, false, deadline, true)
+      .catch(() => {
+        if (orientationFlowId.current !== flowId) return;
         clearActiveOrientationSession(sessionId);
         setOrientError('GENERATION_FAILED');
         setOrientBusy(false);
-        return;
-      }
-
-      await new Promise((resolve) => {
-        setTimeout(
-          resolve,
-          Math.min(ORIENTATION_POLL_MS, deadline - Date.now()),
-        );
+        orientationSubmitting.current = false;
       });
-      session = undefined;
-    }
-  }, [showGuideResult]);
+    return flowId;
+  }, [cancelOrientationDelays, followSession]);
 
   useEffect(() => {
     if (authState !== 'authenticated') return undefined;
-    const sessionId = localStorage.getItem(ACTIVE_ORIENTATION_SESSION_KEY);
+    const sessionId = getActiveOrientationSession();
     if (!sessionId) return undefined;
-
-    const flowId = ++orientationFlowId.current;
-    void Promise.resolve().then(() => {
-      if (orientationFlowId.current !== flowId) return;
-      setOrientError(null);
-      setOrientBusy(true);
-      void followSession(sessionId, flowId, undefined, false);
-    });
+    const flowId = resumeActiveOrientationSession(sessionId);
 
     return () => {
-      if (orientationFlowId.current === flowId) {
+      if (flowId !== null && orientationFlowId.current === flowId) {
         orientationFlowId.current += 1;
+        cancelOrientationDelays();
       }
     };
-  }, [authState, followSession]);
+  }, [authState, cancelOrientationDelays, resumeActiveOrientationSession]);
 
   async function handleOrient(context, selectedSpreadKey) {
+    if (orientationSubmitting.current || getActiveOrientationSession()) return;
+    orientationSubmitting.current = true;
+    cancelOrientationDelays();
     const flowId = ++orientationFlowId.current;
-    const requestId = crypto.randomUUID();
+    const deadline = Date.now() + ORIENTATION_DEADLINE_MS;
+    let requestId;
+
+    function failGeneration() {
+      if (orientationFlowId.current !== flowId) return;
+      if (requestId) clearActiveOrientationSession(requestId);
+      setOrientError('GENERATION_FAILED');
+      setOrientBusy(false);
+      orientationSubmitting.current = false;
+    }
+
+    function markGenerationStatusUnknown() {
+      if (orientationFlowId.current !== flowId) return;
+      setOrientError(ORIENTATION_STATUS_UNKNOWN);
+      setOrientBusy(false);
+      orientationSubmitting.current = false;
+    }
+
     setOrientError(null);
     setOrientBusy(true);
-    localStorage.setItem(ACTIVE_ORIENTATION_SESSION_KEY, requestId);
-
     try {
-      await startOrientationGuide(requestId, context, selectedSpreadKey);
-    } catch (error) {
-      if (orientationFlowId.current !== flowId) return;
-      const message = error?.message || '';
+      requestId = crypto.randomUUID();
+      if (!storeActiveOrientationSession(requestId)) throw new Error('storage unavailable');
+    } catch {
+      failGeneration();
+      return;
+    }
+
+    const start = await runUntilDeadline(
+      startOrientationGuide(requestId, context, selectedSpreadKey),
+      deadline,
+    );
+    if (orientationFlowId.current !== flowId || start.kind === 'cancelled') return;
+
+    if (start.kind === 'timeout') {
+      markGenerationStatusUnknown();
+      return;
+    }
+
+    if (start.kind !== 'value') {
+      const message = start.kind === 'error' ? start.error?.message || '' : '';
       if (message.includes('IDEMPOTENCY_CONFLICT')) {
-        clearActiveOrientationSession(requestId);
-        setOrientError('GENERATION_FAILED');
-        setOrientBusy(false);
+        failGeneration();
         return;
       }
 
       let existingSession;
-      try {
-        existingSession = await getSession(requestId);
-      } catch {
-        existingSession = null;
+      const missingDeadline = Math.min(
+        deadline,
+        Date.now() + ORIENTATION_MISSING_GRACE_MS,
+      );
+      while (orientationFlowId.current === flowId) {
+        const read = await runUntilDeadline(getSession(requestId), deadline);
+        if (orientationFlowId.current !== flowId || read.kind === 'cancelled') return;
+        if (read.kind === 'timeout') {
+          markGenerationStatusUnknown();
+          return;
+        }
+        if (read.kind === 'error' || read.value === undefined) {
+          if (read.error?.message?.includes('MALFORMED_SESSION')) {
+            failGeneration();
+            return;
+          }
+          const waitOutcome = await waitForOrientationPoll(deadline);
+          if (orientationFlowId.current !== flowId || waitOutcome === 'cancelled') return;
+          continue;
+        }
+        if (read.value === null && Date.now() < missingDeadline) {
+          const waitOutcome = await waitForOrientationPoll(deadline);
+          if (orientationFlowId.current !== flowId || waitOutcome === 'cancelled') return;
+          continue;
+        }
+        existingSession = read.value;
+        break;
       }
-      if (orientationFlowId.current !== flowId) return;
+
       if (!existingSession) {
-        clearActiveOrientationSession(requestId);
-        setOrientError('GENERATION_FAILED');
-        setOrientBusy(false);
+        failGeneration();
         return;
       }
-      await followSession(requestId, flowId, existingSession, true);
+      if (existingSession.status === 'PENDING') {
+        const retry = await runUntilDeadline(
+          startOrientationGuide(requestId, context, selectedSpreadKey),
+          deadline,
+        );
+        if (orientationFlowId.current !== flowId || retry.kind === 'cancelled') return;
+        if (retry.kind === 'error') {
+          const retryMessage = retry.error?.message || '';
+          if (retryMessage.includes('IDEMPOTENCY_CONFLICT')) {
+            failGeneration();
+            return;
+          }
+        }
+      }
+
+      try {
+        await followSession(requestId, flowId, existingSession, true, deadline, false);
+      } catch {
+        failGeneration();
+      }
       return;
     }
 
-    await followSession(requestId, flowId, undefined, true);
+    try {
+      await followSession(requestId, flowId, undefined, true, deadline, false);
+    } catch {
+      failGeneration();
+    }
+  }
+
+  function handleResumeOrientation() {
+    const sessionId = getActiveOrientationSession();
+    if (sessionId) resumeActiveOrientationSession(sessionId);
   }
 
   function handleSignedOut() {
     authRequestId.current += 1;
     orientationFlowId.current += 1;
+    cancelOrientationDelays();
+    orientationSubmitting.current = false;
     authStateRef.current = 'unauthenticated';
     clearActiveOrientationSession();
     setAuthState('unauthenticated');
@@ -266,6 +528,8 @@ export default function App() {
     setRateLimited(false);
     setOrientBusy(false);
     setOrientError(null);
+    setOrientContext('');
+    setOrientSpreadKey(null);
     setGuideResult(null);
   }
 
@@ -278,10 +542,14 @@ export default function App() {
 
   function handleGuideBack() {
     orientationFlowId.current += 1;
-    clearActiveOrientationSession();
+    cancelOrientationDelays();
+    clearActiveOrientationSession(guideResult?.sessionId);
+    orientationSubmitting.current = false;
     setGuideResult(null);
     setOrientBusy(false);
     setOrientError(null);
+    setOrientContext('');
+    setOrientSpreadKey(null);
   }
 
   if (authState === 'loading') {
@@ -329,10 +597,14 @@ export default function App() {
       />
       ) : (
         <ContextEntry
+          key={`orientation-entry-${orientRecoveryRevision}`}
           rateLimited={rateLimited}
+          initialContext={orientContext}
+          initialSpreadKey={orientSpreadKey}
           orientBusy={orientBusy}
           orientError={orientError}
           onOrient={handleOrient}
+          onResumeOrientation={handleResumeOrientation}
           onQuickDrawSelect={handleSelect}
           onLoadCode={handleLoadCode}
         />

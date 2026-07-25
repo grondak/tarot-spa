@@ -115,6 +115,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
       const result = await deps.dynamo.send(new GetCommand({
         TableName: deps.tableNames.session,
         Key: { id: requestId },
+        ConsistentRead: true,
       })) as { Item?: ExistingSession };
       existing = result.Item;
 
@@ -127,11 +128,14 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
       }
     }
 
-    await invokeWorker(deps, requestId);
+    const status = existing ? existing.status ?? 'SUCCEEDED' : 'PENDING';
+    if (!existing || status === 'PENDING') {
+      await invokeWorker(deps, requestId);
+    }
 
     return {
       sessionId: requestId,
-      status: existing?.status ?? 'PENDING',
+      status,
     };
   };
 }

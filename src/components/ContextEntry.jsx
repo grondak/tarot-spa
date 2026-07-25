@@ -5,28 +5,32 @@ import SpreadSelector from './SpreadSelector';
 const CONTEXT_HINT = 'Tell me about your upcoming decision, and what you know or think you know about the situation.';
 const GENERATION_ERROR = 'Something went wrong generating your Guide — nothing was used up. Your context is still here; try again.';
 const MONTHLY_ERROR = "Everyone's shared monthly Guide budget is spent — Orientation Guides return when the month rolls over. Quick Draw is always free.";
+const STATUS_UNKNOWN = 'Your Guide is taking longer than expected. We kept this request so you can check it again; usage may already have been reserved.';
 
 export default function ContextEntry({
   rateLimited = false,
   initialContext = '',
+  initialSpreadKey = null,
   orientBusy = false,
   orientError = null,
   onOrient = () => {},
+  onResumeOrientation = () => {},
   onQuickDrawSelect,
   onLoadCode,
 }) {
   const [context, setContext] = useState(initialContext);
-  const [spreadKey, setSpreadKey] = useState(null);
+  const [spreadKey, setSpreadKey] = useState(initialSpreadKey);
   const [mode, setMode] = useState('orient');
+  const statusUnknown = orientError?.includes('GENERATION_STATUS_UNKNOWN') === true;
 
   function handleSubmit(event) {
     event.preventDefault();
-    if (orientBusy) return;
+    if (orientBusy || statusUnknown) return;
     if (!context.trim() || !spreadKey) return;
     onOrient(context.trim(), spreadKey);
   }
 
-  if (rateLimited || mode === 'quickdraw') {
+  if (!orientBusy && !orientError && (rateLimited || mode === 'quickdraw')) {
     return (
       <main className="min-h-screen bg-gray-950 px-4 py-12 text-white">
         <div className="mx-auto w-full max-w-2xl">
@@ -92,7 +96,7 @@ export default function ContextEntry({
           <div className="mt-8 flex justify-center">
             <button
               type="submit"
-              disabled={orientBusy || !context.trim() || !spreadKey}
+              disabled={orientBusy || statusUnknown || !context.trim() || !spreadKey}
               className="rounded-lg bg-indigo-600 px-8 py-3 font-semibold text-white hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Help Me Orient
@@ -103,18 +107,32 @@ export default function ContextEntry({
               Reading the cards and the world...
             </p>
           ) : orientError ? (
-            <p role="alert" className="mt-4 text-center text-sm text-red-400">
-              {orientError.includes('MONTHLY_BUDGET_EXHAUSTED')
-                ? MONTHLY_ERROR
-                : GENERATION_ERROR}
-            </p>
+            <div className="mt-4 text-center">
+              <p role="alert" className="text-sm text-red-400">
+                {statusUnknown
+                  ? STATUS_UNKNOWN
+                  : orientError.includes('MONTHLY_BUDGET_EXHAUSTED')
+                    ? MONTHLY_ERROR
+                    : GENERATION_ERROR}
+              </p>
+              {statusUnknown && (
+                <button
+                  type="button"
+                  onClick={onResumeOrientation}
+                  className="mt-4 rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                >
+                  Check this request again
+                </button>
+              )}
+            </div>
           ) : null}
         </form>
         <div className="mt-4 flex justify-center">
           <button
             type="button"
+            disabled={orientBusy}
             onClick={() => setMode('quickdraw')}
-            className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Draw for fun instead
           </button>

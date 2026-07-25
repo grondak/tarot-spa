@@ -12,11 +12,13 @@ const MONTHLY_ERROR = "Everyone's shared monthly Guide budget is spent — Orien
 let onOrient;
 let onQuickDrawSelect;
 let onLoadCode;
+let onResumeOrientation;
 
 beforeEach(() => {
   onOrient = vi.fn();
   onQuickDrawSelect = vi.fn();
   onLoadCode = vi.fn();
+  onResumeOrientation = vi.fn();
 });
 
 function renderEntry(props = {}) {
@@ -25,6 +27,7 @@ function renderEntry(props = {}) {
       onOrient={onOrient}
       onQuickDrawSelect={onQuickDrawSelect}
       onLoadCode={onLoadCode}
+      onResumeOrientation={onResumeOrientation}
       {...props}
     />,
   );
@@ -122,9 +125,32 @@ describe('ContextEntry canonical state', () => {
   });
 
   it('pre-fills the textarea from initialContext', () => {
-    renderEntry({ initialContext: 'Seeded from a previous session.' });
+    renderEntry({
+      initialContext: 'Seeded from a previous session.',
+      initialSpreadKey: 'decision',
+    });
 
     expect(screen.getByLabelText('Context')).toHaveValue('Seeded from a previous session.');
+    expect(spreadButton('decision')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('restores Context supplied after a resumed Session reaches a terminal failure', () => {
+    const { rerender } = renderEntry({ orientBusy: true });
+
+    rerender(
+      <ContextEntry
+        key="restored-session"
+        initialContext="Restored from the exact Session."
+        orientError="GENERATION_FAILED"
+        onOrient={onOrient}
+        onQuickDrawSelect={onQuickDrawSelect}
+        onLoadCode={onLoadCode}
+        onResumeOrientation={onResumeOrientation}
+      />,
+    );
+
+    expect(screen.getByLabelText('Context')).toHaveValue('Restored from the exact Session.');
+    expect(screen.getByRole('alert')).toHaveTextContent(GENERATION_ERROR);
   });
 
   it('shows the controlled loading treatment and blocks submits while pending', () => {
@@ -137,6 +163,14 @@ describe('ContextEntry canonical state', () => {
     expect(screen.getByRole('status')).toHaveTextContent(LOADING_COPY);
     expect(orientButton()).toBeDisabled();
     expect(onOrient).not.toHaveBeenCalled();
+  });
+
+  it('keeps loading ahead of rate-limit and Quick Draw navigation while pending', () => {
+    renderEntry({ orientBusy: true, rateLimited: true });
+
+    expect(screen.getByRole('status')).toHaveTextContent(LOADING_COPY);
+    expect(screen.queryByRole('heading', { name: 'Quick Draw' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Draw for fun instead' })).toBeDisabled();
   });
 
   it('shows the controlled generation error while preserving Context and Spread for retry', () => {
@@ -155,6 +189,22 @@ describe('ContextEntry canonical state', () => {
     renderEntry({ orientError: 'wrapped MONTHLY_BUDGET_EXHAUSTED response' });
 
     expect(screen.getByRole('alert')).toHaveTextContent(MONTHLY_ERROR);
+  });
+
+  it('shows a recoverable indeterminate state without permitting a fresh submission', () => {
+    renderEntry({ orientError: 'GENERATION_STATUS_UNKNOWN' });
+
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'Keep this request.' } });
+    fireEvent.click(spreadButton('decision'));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Your Guide is taking longer than expected. We kept this request so you can check it again; usage may already have been reserved.',
+    );
+    expect(orientButton()).toBeDisabled();
+    fireEvent.submit(orientButton().closest('form'));
+    expect(onOrient).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Check this request again' }));
+    expect(onResumeOrientation).toHaveBeenCalledOnce();
   });
 
   it('replaces a controlled error with the loading treatment on parent state change', () => {

@@ -95,7 +95,78 @@ describe('start-orientation-guide handler', () => {
     expect(deps.lambda.send).not.toHaveBeenCalled();
   });
 
-  it('returns an identical existing Session and re-issues only the idempotent invoke', async () => {
+  it('accepts Context at the exact 10,000-character boundary', async () => {
+    const deps = dependencies();
+    const boundaryEvent = {
+      ...event,
+      arguments: { ...event.arguments, context: 'x'.repeat(10_000) },
+    };
+
+    await expect(createHandler(deps)(boundaryEvent)).resolves.toEqual({
+      sessionId: REQUEST_ID,
+      status: 'PENDING',
+    });
+
+    const put = (deps.dynamo.send.mock.calls[0][0] as {
+      input: { Item: { context: string } };
+    }).input;
+    expect(put.Item.context).toHaveLength(10_000);
+    expect(deps.lambda.send).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { label: 'Session table', configure: (deps: ReturnType<typeof dependencies>) => {
+      deps.tableNames.session = '';
+    } },
+    { label: 'worker ARN', configure: (deps: ReturnType<typeof dependencies>) => {
+      deps.workerFunctionArn = '';
+    } },
+  ])('rejects missing $label configuration before writing or invoking', async ({ configure }) => {
+    const deps = dependencies();
+    configure(deps);
+
+    await expect(createHandler(deps)(event))
+      .rejects.toThrow('start-orientation-guide configuration is missing');
+
+    expect(deps.dynamo.send).not.toHaveBeenCalled();
+    expect(deps.lambda.send).not.toHaveBeenCalled();
+  });
+
+  it('propagates a generic conditional-create write failure without reading or invoking', async () => {
+    const deps = dependencies();
+    deps.dynamo.send.mockRejectedValueOnce(new Error('DynamoDB unavailable'));
+
+    await expect(createHandler(deps)(event)).rejects.toThrow('DynamoDB unavailable');
+
+    expect(deps.dynamo.send).toHaveBeenCalledOnce();
+    expect(deps.lambda.send).not.toHaveBeenCalled();
+  });
+
+  it('propagates a failed duplicate read without invoking the worker', async () => {
+    const deps = dependencies();
+    deps.dynamo.send
+      .mockRejectedValueOnce(conditionalFailure())
+      .mockRejectedValueOnce(new Error('duplicate read unavailable'));
+
+    await expect(createHandler(deps)(event)).rejects.toThrow('duplicate read unavailable');
+
+    expect(deps.dynamo.send).toHaveBeenCalledTimes(2);
+    expect(deps.lambda.send).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the conditional-create race read returns no Session', async () => {
+    const deps = dependencies();
+    deps.dynamo.send
+      .mockRejectedValueOnce(conditionalFailure())
+      .mockResolvedValueOnce({});
+
+    await expect(createHandler(deps)(event)).rejects.toThrow('IDEMPOTENCY_CONFLICT');
+
+    expect(deps.dynamo.send).toHaveBeenCalledTimes(2);
+    expect(deps.lambda.send).not.toHaveBeenCalled();
+  });
+
+  it('returns an identical RUNNING Session without starting a fresh execution', async () => {
     const deps = dependencies();
     deps.dynamo.send
       .mockRejectedValueOnce(conditionalFailure())
@@ -115,10 +186,37 @@ describe('start-orientation-guide handler', () => {
     });
 
     expect(deps.dynamo.send).toHaveBeenCalledTimes(2);
-    expect(deps.lambda.send).toHaveBeenCalledOnce();
+    expect(deps.lambda.send).not.toHaveBeenCalled();
     expect(deps.dynamo.send.mock.calls.map(
       ([command]) => (command as { constructor: { name: string } }).constructor.name,
     )).toEqual(['PutCommand', 'GetCommand']);
+    expect((deps.dynamo.send.mock.calls[1][0] as { input: unknown }).input).toEqual({
+      TableName: 'SessionTable',
+      Key: { id: REQUEST_ID },
+      ConsistentRead: true,
+    });
+  });
+
+  it('re-issues the named invoke only when an identical existing Session is PENDING', async () => {
+    const deps = dependencies();
+    deps.dynamo.send
+      .mockRejectedValueOnce(conditionalFailure())
+      .mockResolvedValueOnce({
+        Item: {
+          id: REQUEST_ID,
+          owner: 'account-1',
+          context: event.arguments.context,
+          spreadKey: 'single',
+          status: 'PENDING',
+        },
+      });
+
+    await expect(createHandler(deps)(event)).resolves.toEqual({
+      sessionId: REQUEST_ID,
+      status: 'PENDING',
+    });
+
+    expect(deps.lambda.send).toHaveBeenCalledOnce();
     expect(deps.dynamo.send.mock.invocationCallOrder[1])
       .toBeLessThan(deps.lambda.send.mock.invocationCallOrder[0]);
     expect((deps.lambda.send.mock.calls[0][0] as { input: unknown }).input).toMatchObject({
@@ -128,7 +226,36 @@ describe('start-orientation-guide handler', () => {
   });
 
   it.each([
+    ['SUCCEEDED', 'SUCCEEDED'],
+    ['FAILED', 'FAILED'],
+    [undefined, 'SUCCEEDED'],
+  ])('does not invoke an existing terminal or legacy Session with status %s', async (
+    existingStatus,
+    expectedStatus,
+  ) => {
+    const deps = dependencies();
+    deps.dynamo.send
+      .mockRejectedValueOnce(conditionalFailure())
+      .mockResolvedValueOnce({
+        Item: {
+          id: REQUEST_ID,
+          owner: 'account-1',
+          context: event.arguments.context,
+          spreadKey: 'single',
+          status: existingStatus,
+        },
+      });
+
+    await expect(createHandler(deps)(event)).resolves.toEqual({
+      sessionId: REQUEST_ID,
+      status: expectedStatus,
+    });
+    expect(deps.lambda.send).not.toHaveBeenCalled();
+  });
+
+  it.each([
     { existingOverride: { context: 'different context' }, label: 'input mismatch' },
+    { existingOverride: { spreadKey: 'system' }, label: 'spread mismatch' },
     { existingOverride: { owner: 'account-2' }, label: 'owner mismatch' },
   ])('rejects conflicting idempotency after an $label', async ({ existingOverride }) => {
     const deps = dependencies();
@@ -160,5 +287,17 @@ describe('start-orientation-guide handler', () => {
       sessionId: REQUEST_ID,
       status: 'PENDING',
     });
+  });
+
+  it('propagates unrelated worker invocation failures', async () => {
+    const deps = dependencies();
+    deps.lambda.send.mockRejectedValueOnce(new Error('worker invoke unavailable'));
+
+    await expect(createHandler(deps)(event)).rejects.toThrow('worker invoke unavailable');
+
+    expect(deps.dynamo.send).toHaveBeenCalledOnce();
+    expect(deps.lambda.send).toHaveBeenCalledOnce();
+    expect((deps.lambda.send.mock.calls[0][0] as { constructor: { name: string } })
+      .constructor.name).toBe('InvokeCommand');
   });
 });

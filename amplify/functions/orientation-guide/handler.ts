@@ -56,6 +56,12 @@ type Config = {
   monthlyBudget: number;
 };
 
+type ReservationClock = {
+  timestamp: string;
+  date: string;
+  month: string;
+};
+
 type BedrockClient = {
   send(
     command: unknown,
@@ -167,7 +173,10 @@ function buildUserMessage(
 function isCurrentEvent(item: unknown): item is CurrentEvent {
   if (typeof item !== 'object' || item === null) return false;
   const candidate = item as Record<string, unknown>;
-  return typeof candidate.title === 'string' && typeof candidate.content === 'string';
+  return typeof candidate.title === 'string'
+    && candidate.title.trim().length > 0
+    && typeof candidate.content === 'string'
+    && candidate.content.trim().length > 0;
 }
 
 export function createStepBodies(deps: HandlerDependencies = defaultDependencies) {
@@ -204,9 +213,25 @@ export function createStepBodies(deps: HandlerDependencies = defaultDependencies
     return readConfig(deps.dynamo, deps.tableNames.config);
   }
 
-  async function reserve(session: SessionRecord, config: Config) {
-    if (!session.owner) throw new Error('Orientation Guide Session owner is missing');
+  async function captureReservationClock(): Promise<ReservationClock> {
     const now = deps.now();
+    return {
+      timestamp: now.toISOString(),
+      date: utcDate(now),
+      month: utcMonth(now),
+    };
+  }
+
+  async function captureTimestamp() {
+    return deps.now().toISOString();
+  }
+
+  async function reserve(
+    session: SessionRecord,
+    config: Config,
+    clock: ReservationClock,
+  ) {
+    if (!session.owner) throw new Error('Orientation Guide Session owner is missing');
     try {
       await reserveUsage(deps.dynamo, {
         dailyTable: deps.tableNames.dailyUsage,
@@ -214,12 +239,12 @@ export function createStepBodies(deps: HandlerDependencies = defaultDependencies
         sessionTable: deps.tableNames.session,
         sessionId: session.id,
         accountId: session.owner,
-        date: utcDate(now),
-        month: utcMonth(now),
+        date: clock.date,
+        month: clock.month,
         estimate: COST_ESTIMATE_USD,
         dailyLimit: config.dailyLimit,
         monthlyBudget: config.monthlyBudget,
-        timestamp: now.toISOString(),
+        timestamp: clock.timestamp,
       });
       return { reserved: true as const, errorCode: null };
     } catch (error) {
@@ -352,19 +377,22 @@ export function createStepBodies(deps: HandlerDependencies = defaultDependencies
     }
   }
 
-  async function compensate(session: SessionRecord) {
+  async function compensate(
+    session: SessionRecord,
+    reservationClock: ReservationClock,
+    compensationTimestamp: string,
+  ) {
     if (!session.owner) throw new Error('Orientation Guide Session owner is missing');
-    const now = deps.now();
     await rollbackUsage(deps.dynamo, {
       dailyTable: deps.tableNames.dailyUsage,
       monthlyTable: deps.tableNames.monthlySpend,
       sessionTable: deps.tableNames.session,
       sessionId: session.id,
       accountId: session.owner,
-      date: utcDate(now),
-      month: utcMonth(now),
+      date: reservationClock.date,
+      month: reservationClock.month,
       estimate: COST_ESTIMATE_USD,
-      timestamp: now.toISOString(),
+      timestamp: compensationTimestamp,
     });
   }
 
@@ -395,6 +423,8 @@ export function createStepBodies(deps: HandlerDependencies = defaultDependencies
     loadSession,
     markRunning,
     readConfigSnapshot,
+    captureReservationClock,
+    captureTimestamp,
     reserve,
     draw,
     searchCurrentEvents,
@@ -420,16 +450,46 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
     if (status === 'SUCCEEDED' || status === 'FAILED') return;
 
     await context.step('mark-running', () => steps.markRunning(sessionId));
-    const config = await context.step(
-      'read-config',
-      () => steps.readConfigSnapshot(),
-    );
+    let config: Config;
+    try {
+      config = await context.step(
+        'read-config',
+        () => steps.readConfigSnapshot(),
+      );
+    } catch {
+      await context.step(
+        'mark-failed',
+        () => steps.markFailed(sessionId, 'GENERATION_FAILED'),
+      );
+      return;
+    }
 
-    const reservation = await context.step(
-      'reserve',
-      () => steps.reserve(session, config),
-      { retryStrategy: retryPresets.noRetry },
+    const reservationClock = await context.step(
+      'reservation-clock',
+      () => steps.captureReservationClock(),
     );
+    let reservation: Awaited<ReturnType<typeof steps.reserve>>;
+    try {
+      reservation = await context.step(
+        'reserve',
+        () => steps.reserve(session, config, reservationClock),
+        { retryStrategy: retryPresets.noRetry },
+      );
+    } catch {
+      const compensationTimestamp = await context.step(
+        'compensation-clock',
+        () => steps.captureTimestamp(),
+      );
+      await context.step(
+        'compensate',
+        () => steps.compensate(session, reservationClock, compensationTimestamp),
+      );
+      await context.step(
+        'mark-failed',
+        () => steps.markFailed(sessionId, 'GENERATION_FAILED'),
+      );
+      return;
+    }
     if (!reservation.reserved) {
       await context.step(
         'mark-failed',
@@ -462,7 +522,14 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
         { retryStrategy: retryPresets.noRetry },
       );
     } catch {
-      await context.step('compensate', () => steps.compensate(session));
+      const compensationTimestamp = await context.step(
+        'compensation-clock',
+        () => steps.captureTimestamp(),
+      );
+      await context.step(
+        'compensate',
+        () => steps.compensate(session, reservationClock, compensationTimestamp),
+      );
       await context.step(
         'mark-failed',
         () => steps.markFailed(sessionId, 'GENERATION_FAILED'),

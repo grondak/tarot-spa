@@ -67,15 +67,23 @@ describe('getSession', () => {
     client.models.Session.get.mockResolvedValue({
       data: {
         id: 'session-1',
-        cards: JSON.stringify([{ name: 'The Fool' }]),
-        currentEvents: JSON.stringify([{ title: 'An event' }]),
+        context: 'A decision.',
+        spreadKey: 'single',
+        cards: JSON.stringify([{ name: 'The Fool', position: 'Draw', inverted: false }]),
+        currentEvents: JSON.stringify([{ title: 'An event', content: 'Useful detail.' }]),
+        guide: 'A complete guide.',
+        tavilyTimedOut: false,
       },
     });
 
     await expect(getSession('session-1')).resolves.toEqual({
       id: 'session-1',
-      cards: [{ name: 'The Fool' }],
-      currentEvents: [{ title: 'An event' }],
+      context: 'A decision.',
+      spreadKey: 'single',
+      cards: [{ name: 'The Fool', position: 'Draw', inverted: false }],
+      currentEvents: [{ title: 'An event', content: 'Useful detail.' }],
+      guide: 'A complete guide.',
+      tavilyTimedOut: false,
       status: 'SUCCEEDED',
     });
     expect(client.models.Session.get).toHaveBeenCalledWith({ id: 'session-1' });
@@ -89,6 +97,101 @@ describe('getSession', () => {
       errors: [{ message: 'read denied' }],
     });
     await expect(getSession('hidden')).rejects.toThrow('read denied');
+  });
+
+  it.each([
+    {
+      label: 'invalid JSON',
+      data: {
+        id: 'session-1',
+        context: 'A decision.',
+        spreadKey: 'single',
+        cards: '{not-json',
+        currentEvents: '[]',
+        guide: 'A guide.',
+        tavilyTimedOut: false,
+        status: 'SUCCEEDED',
+      },
+    },
+    {
+      label: 'invalid result shape',
+      data: {
+        id: 'session-1',
+        context: 'A decision.',
+        spreadKey: 'single',
+        cards: null,
+        currentEvents: [],
+        guide: 'A guide.',
+        tavilyTimedOut: false,
+        status: 'SUCCEEDED',
+      },
+    },
+    {
+      label: 'wrong card count',
+      data: {
+        id: 'session-1',
+        context: 'A decision.',
+        spreadKey: 'single',
+        cards: [],
+        currentEvents: [],
+        guide: 'A guide.',
+        tavilyTimedOut: false,
+        status: 'SUCCEEDED',
+      },
+    },
+    {
+      label: 'malformed event element',
+      data: {
+        id: 'session-1',
+        context: 'A decision.',
+        spreadKey: 'single',
+        cards: [{ name: 'The Fool', position: 'Draw', inverted: false }],
+        currentEvents: [{ title: 'Missing content' }],
+        guide: 'A guide.',
+        tavilyTimedOut: false,
+        status: 'SUCCEEDED',
+      },
+    },
+  ])('rejects a SUCCEEDED Session with $label', async ({ data }) => {
+    client.models.Session.get.mockResolvedValue({ data });
+
+    const failure = getSession('session-1');
+    await expect(failure).rejects.toThrow('MALFORMED_SESSION');
+    await expect(failure).rejects.toMatchObject({
+      session: {
+        id: 'session-1',
+        context: 'A decision.',
+        spreadKey: 'single',
+      },
+    });
+  });
+
+  it.each(['PENDING', 'RUNNING', 'FAILED'])('rejects a mismatched id for %s', async (status) => {
+    client.models.Session.get.mockResolvedValue({
+      data: {
+        id: 'different-session',
+        context: 'Safe recovery context.',
+        spreadKey: 'decision',
+        status,
+      },
+    });
+
+    await expect(getSession('session-1')).rejects.toMatchObject({
+      message: 'MALFORMED_SESSION',
+      session: {
+        id: 'different-session',
+        context: 'Safe recovery context.',
+        spreadKey: 'decision',
+      },
+    });
+  });
+
+  it('rejects an unknown lifecycle status', async () => {
+    client.models.Session.get.mockResolvedValue({
+      data: { id: 'session-1', status: 'REPLAYING' },
+    });
+
+    await expect(getSession('session-1')).rejects.toThrow('MALFORMED_SESSION');
   });
 });
 

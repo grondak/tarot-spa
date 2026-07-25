@@ -60,10 +60,10 @@ This release also makes tarot-spa multiuser for the first time — a two-generat
 - **Draw** — the act of randomly selecting Cards for a Session according to the chosen Spread.
 - **Oblique Strategy** — the function a drawn Card serves: a provocation meant to jolt a new angle of thought, not a fortune or prediction. Governs how a Card's idea must be *used*, not literally referenced, in the Orientation Guide.
 - **Context** — the user's freeform account of their situation and observations, typed in ahead of a Draw.
-- **Current Events** — real-world items (3, sourced via the LLM's own internet search) woven into the Lens to ground it in the present moment.
+- **Current Events** — up to three real-world items sourced directly from Tavily and woven into the Lens to ground it in the present moment; a 20-second search timeout yields zero items and an ungrounded Guide.
 - **Lens** — the systems-thinking reframing pattern generated per-Session from the Draw + Current Events, expressed as an idea to view the Context through (not advice).
 - **Orientation Guide** — the essay-form output delivered to the user: the Lens applied to their Context. The product's core deliverable.
-- **Session** — one Orientation Guide attempt from accepted request through terminal outcome. A Session progresses through `PENDING`, `RUNNING`, and either `SUCCEEDED` or `FAILED`. A successful Session contains the Draw, Current Events, and Orientation Guide; a failed Session retains only the execution and failure information needed for recovery and operations.
+- **Session** — one Orientation Guide attempt from accepted request through terminal outcome. A Session normally progresses through `PENDING`, `RUNNING`, and either `SUCCEEDED` or `FAILED`. A successful Session contains the Draw, Current Events, and Orientation Guide; a failed Session retains its Context and Spread with the execution and failure information needed for truthful retry recovery. An alarm-backed parked `RUNNING` record is an exceptional reconciliation state, not a delivered Guide.
 - **Daily Orientation Limit** — a configurable per-Account cap on Orientation Guide requests per calendar day; the mechanism keeping the app cheap-as-free, paired with an aggregate monthly budget ceiling (see FR-10).
 - **Follow-Up Nudge** — *(Post-MVP concept, deferred — see §8.2)* a planned automated re-engagement touchpoint after a Session. In v1, this happens informally instead: Tony personally contacts early users directly to ask what they decided.
 - **Survey** — *(Post-MVP concept, deferred — see §8.2)* a planned structured response form for capturing decision outcomes at scale. Not built in v1 — Tony's direct contact with his friend circle serves the same purpose until usage outgrows what he can track by hand.
@@ -168,7 +168,7 @@ An authenticated user with remaining Daily Orientation Limit can initiate a dura
 - The accepted request creates an owner-readable `PENDING` Session before background generation begins.
 - The client follows that exact Session ID through `RUNNING` to `SUCCEEDED` or `FAILED`; it never infers completion from the user's newest Session.
 - System performs a Draw of Card(s) per the selected Spread.
-- System sources exactly 3 Current Events relevant to the Draw via the LLM's internet search capability.
+- System requests Current Events directly from Tavily, retaining up to three valid results; a 20-second timeout retains zero results and continues ungrounded.
 - System generates one Lens from the Draw + Current Events, then one Orientation Guide applying that Lens to the user's Context — in a single LLM call (one-shot; no follow-up turns within the app).
 - Orientation Guide is essay-form prose, uses the idea/pattern of the drawn Card(s) as an Oblique Strategy (not a literal card-name reference) to shape the discussion, and demonstrably incorporates specific details from the user's own Context rather than restating the Card's idea abstractly (the UJ-2 quality bar).
 - Orientation Guide structure: identifies where the pattern actually shows up in the user's situation, points out what the user is likely missing, challenges the user's framing if the underlying question itself is wrong, gives one non-obvious/counterintuitive implication, and suggests better next questions the user should be asking.
@@ -185,7 +185,7 @@ An authenticated user with remaining Daily Orientation Limit can initiate a dura
 - If the Current Events search exceeds 20 seconds without completing, the durable worker proceeds to the LLM without grounding. This timeout fallback is a successful, counted Session and is distinguished from an outright search failure (AD-14).
 
 **Notes:**
-- Submission acknowledgment targets ≤3 seconds and must remain comfortably inside AppSync's synchronous response ceiling. Full generation latency is measured separately: current live evidence is approximately 30.6–30.7 seconds. Generation may run longer than the initiating request while the UI remains in its loading state and follows the exact Session (see addendum.md).
+- Submission acknowledgment targets ≤3 seconds and must remain comfortably inside AppSync's synchronous response ceiling. Full generation latency is measured separately: current durable live evidence is approximately 34–36 seconds. Generation may run longer than the initiating request while the UI follows the exact Session (see addendum.md); after 300 seconds the client retains the id and offers an explicit later check because status is indeterminate.
 - `[NOTE FOR PM]` The "grounded vs. abstract" quality bar surfaced by UJ-2 is a prompt-design problem more than a spec-able requirement — expect iteration post-launch rather than a one-time fix. That said, before launch it's worth assembling a small held-out set of Context examples (one Erica-style/grounded, one Maya-style/abstract-miss-prone) with an explicit human pass/fail rubric, so this requirement has *something* concrete to test against pre-launch rather than waiting entirely on post-launch signal.
 
 ### 4.4 Daily Orientation Limit & Cost Controls
@@ -324,7 +324,7 @@ v1 is free for all First-Gen and Second-Gen Accounts; no payment mechanism exist
 - §4.1 FR-3 — The two-generation cap bounds invite-chain depth, not the total number of Accounts Tony can mint directly; aggregate spend is actually bounded by FR-10's budget ceiling, not by chain depth.
 - §4.2 FR-5 — Request-access form is purely transactional (email only); no persistence, no waitlist position, simple on-page acknowledgment only; no anti-abuse/dedup, so SM-1 volume can be inflated (accepted risk).
 - §4.3 FR-6 — A contextual hint is shown in the Context box; exact copy, and whether it varies by Spread, deferred (see Open Question 1).
-- §4.3 FR-8 — Prompt acknowledgment targets ≤3 seconds; measured full-generation latency is approximately 30.6–30.7 seconds and is handled asynchronously through exact-Session tracking.
+- §4.3 FR-8 — Prompt acknowledgment targets ≤3 seconds; measured durable full-generation latency is approximately 34–36 seconds and is handled asynchronously through exact-Session tracking.
 - §4.4 FR-9 — Daily Orientation Limit is configurable without a code deployment; exact admin interface deferred (see Open Question 3).
 - §4.4 FR-10 — "One request = one billable LLM call" may undercount real cost if Current Events search requires multiple underlying invocations; the $30/month ceiling is fixed regardless, Daily Orientation Limit and/or model choice are the tuning knobs.
 - §4.5 FR-12 — No formal audit trail links a minted key to a specific FR-5 request; tracked informally by Tony at this scale.

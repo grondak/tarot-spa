@@ -12,6 +12,12 @@
 
 - **Lifecycle rollout:** run `npm run backfill-sessions -- <env-name>` once after the Story 3.8 Session lifecycle schema first deploys to each staging/main environment. The conditional, idempotent migration marks only legacy rows without `status` as `SUCCEEDED` and copies their existing `updatedAt` to `completedAt`.
 - **Durable worker rollout:** the `live` alias automatically follows the worker's `currentVersion` on each deploy. In-flight durable executions remain pinned to the version on which they started; do not hand-pin or clean up a version while it still has an active execution.
+- **Version-pinned Tavily verification:** always run the credential-safe provider probe against `orientation-guide:live`, not unqualified `$LATEST`. If Amplify leaves the secret stale, direct propagation repairs only `$LATEST`; publish that corrected configuration as a new immutable version and move `live` to it before any paid generation. A later Amplify deploy may replace that manual alias target with CDK's new `currentVersion`, so repeat the alias-qualified probe after every worker deploy.
+
+## Deferred from: code review of 3-8-make-orientation-guide-generation-durable-and-asynchronous (2026-07-21)
+
+- Strengthen the pre-existing Config snapshot validation so `dailyLimit` and `monthlyBudget` must be finite, positive, and appropriately integral/ranged instead of accepting every JavaScript `number`.
+- Refresh the pre-existing Daily-limit UI state at the next UTC-day boundary so a tab left open overnight does not continue showing yesterday's exhausted state.
 
 ## Tracked from: Story 1.1 review, accepted-as-is (2026-07-12)
 
