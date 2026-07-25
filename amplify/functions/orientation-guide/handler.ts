@@ -1,5 +1,6 @@
 import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import {
   DynamoDBDocumentClient,
   GetCommand,
@@ -72,6 +73,7 @@ type BedrockClient = {
 type HandlerDependencies = {
   dynamo: CommandClient;
   bedrock: BedrockClient;
+  lambda: CommandClient;
   fetchFn: typeof fetch;
   tableNames: {
     session: string;
@@ -80,6 +82,7 @@ type HandlerDependencies = {
     config: string;
   };
   tavilyApiKey: string;
+  judgeFunctionArn: string;
   drawCards: (count: number) => Card[];
   now: () => Date;
 };
@@ -96,6 +99,7 @@ export const SYSTEM_PROMPT = "You generate Orientation Guides for Systems Thinki
 const defaultDependencies: HandlerDependencies = {
   dynamo: DynamoDBDocumentClient.from(new DynamoDBClient({})),
   bedrock: new BedrockRuntimeClient({}),
+  lambda: new LambdaClient({}),
   fetchFn: globalThis.fetch,
   tableNames: {
     session: process.env.SESSION_TABLE_NAME ?? '',
@@ -104,6 +108,7 @@ const defaultDependencies: HandlerDependencies = {
     config: process.env.CONFIG_TABLE_NAME ?? '',
   },
   tavilyApiKey: process.env.TAVILY_API_KEY ?? '',
+  judgeFunctionArn: process.env.ORIENTATION_JUDGE_FUNCTION_ARN ?? '',
   drawCards: shuffleAndDraw,
   now: () => new Date(),
 };
@@ -377,6 +382,21 @@ export function createStepBodies(deps: HandlerDependencies = defaultDependencies
     }
   }
 
+  async function judgeDispatch(sessionId: string) {
+    try {
+      if (!deps.judgeFunctionArn) {
+        throw new Error('orientation-judge function ARN is missing');
+      }
+      await deps.lambda.send(new InvokeCommand({
+        FunctionName: deps.judgeFunctionArn,
+        InvocationType: 'Event',
+        Payload: JSON.stringify({ sessionId }),
+      }));
+    } catch {
+      console.error('ORIENTATION_JUDGE_DISPATCH_FAILED', sessionId);
+    }
+  }
+
   async function compensate(
     session: SessionRecord,
     reservationClock: ReservationClock,
@@ -430,6 +450,7 @@ export function createStepBodies(deps: HandlerDependencies = defaultDependencies
     searchCurrentEvents,
     generateGuide,
     persistResult,
+    judgeDispatch,
     compensate,
     markFailed,
   };
@@ -552,6 +573,11 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
       console.error('ORIENTATION_GUIDE_PERSISTENCE_FAILED', sessionId);
       throw error;
     }
+
+    await context.step(
+      'judge-dispatch',
+      () => steps.judgeDispatch(sessionId),
+    );
   };
 }
 

@@ -4,7 +4,7 @@ baseline_commit: 609ef44
 
 # Story 3.5: Score Orientation Guide groundedness (async)
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -60,18 +60,18 @@ So that I have a real, trended signal on the "abstract miss" quality risk (FR8's
 
 ## Tasks / Subtasks
 
-- [ ] **Task 0: Environment pre-flight (standing retro item)** (AC: none — gate)
-  - [ ] Confirm `git log -1` is `609ef44` and the tree is clean before any change (this story's baseline). If a pre-existing uncommitted diff exists, STOP and re-read the 3.4 Task 0 precedent — preserve and land it separately, never discard it.
-  - [ ] All gates green at baseline: `npm test` (231 passing at 3.4 close — re-establish the real number, don't hardcode it), `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e` with and without `TAROT_E2E_EMAIL` set. Use the project-established Node 24 toolchain (Node 25 exposed a false `localStorage` failure in 3.4's pre-flight).
-  - [ ] AWS credentials valid; record sandbox baseline: Config `global` values, test-account DailyUsage for today UTC, MonthlySpend this month (for Task 6's exact-delta assertions).
-  - [ ] **Haiku probe:** using the inference-profile ID from pre-dev prerequisite 1, run one content-safe minimal `ConverseCommand` (a "reply with OK" nothing-message; never Context/Guide text) from the agent shell. Success proves model access + ID before any code depends on it. Failure → HALT for Tony (model access or ID problem — human-only fix).
-- [ ] **Task 1: Schema — `groundednessScore` on Session** (AC: 3)
-  - [ ] `amplify/data/resource.ts`: add `groundednessScore: a.float()` to the Session model. Nothing else changes — auth rule, other fields, and every custom operation stay byte-identical.
-  - [ ] No client util, component, or test changes — confirm with a grep that nothing in `src/` references the new field after implementation.
-  - [ ] No backfill script: pre-3.5 `SUCCEEDED` Sessions legitimately have no score ("scored Sessions" is 4.1's own filter). Absent ≠ zero — never write 0 as a default.
-- [ ] **Task 2: Judge Lambda — `amplify/functions/orientation-judge/`** (AC: 2, 3, 4, 5)
-  - [ ] `resource.ts` per the contract table — no secrets, not durable, 60s timeout.
-  - [ ] `handler.ts` with the house `createHandler(deps)` DI shape (deps: `{ dynamo, bedrock, tableNames: { session }, now }` — model the shape on the worker's, minus everything it doesn't need). Flow:
+- [x] **Task 0: Environment pre-flight (standing retro item)** (AC: none — gate)
+  - [x] Confirm `git log -1` is `609ef44` and the tree is clean before any change (this story's baseline). If a pre-existing uncommitted diff exists, STOP and re-read the 3.4 Task 0 precedent — preserve and land it separately, never discard it.
+  - [x] All gates green at baseline: `npm test` (231 passing at 3.4 close — re-establish the real number, don't hardcode it), `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e` with and without `TAROT_E2E_EMAIL` set. Use the project-established Node 24 toolchain (Node 25 exposed a false `localStorage` failure in 3.4's pre-flight).
+  - [x] AWS credentials valid; record sandbox baseline: Config `global` values, test-account DailyUsage for today UTC, MonthlySpend this month (for Task 6's exact-delta assertions).
+  - [x] **Haiku probe:** using the inference-profile ID from pre-dev prerequisite 1, run one content-safe minimal `ConverseCommand` (a "reply with OK" nothing-message; never Context/Guide text) from the agent shell. Success proves model access + ID before any code depends on it. Failure → HALT for Tony (model access or ID problem — human-only fix).
+- [x] **Task 1: Schema — `groundednessScore` on Session** (AC: 3)
+  - [x] `amplify/data/resource.ts`: add `groundednessScore: a.float()` to the Session model. Nothing else changes — auth rule, other fields, and every custom operation stay byte-identical.
+  - [x] No client util, component, or test changes — confirm with a grep that nothing in `src/` references the new field after implementation.
+  - [x] No backfill script: pre-3.5 `SUCCEEDED` Sessions legitimately have no score ("scored Sessions" is 4.1's own filter). Absent ≠ zero — never write 0 as a default.
+- [x] **Task 2: Judge Lambda — `amplify/functions/orientation-judge/`** (AC: 2, 3, 4, 5)
+  - [x] `resource.ts` per the contract table — no secrets, not durable, 60s timeout.
+  - [x] `handler.ts` with the house `createHandler(deps)` DI shape (deps: `{ dynamo, bedrock, tableNames: { session }, now }` — model the shape on the worker's, minus everything it doesn't need). Flow:
     1. Config guard: missing `SESSION_TABLE_NAME` → throw loud (mirrors worker/reconciler config guards).
     2. Input guard: missing/blank/non-string `event.sessionId` → log `ORIENTATION_JUDGE_BAD_INPUT`, return cleanly (garbage input must not throw — a throw buys two pointless async retries and alarm noise; contrast the worker, which throws because its starter always supplies the id).
     3. `GetCommand` the Session (`ConsistentRead: true`). Missing row → log `ORIENTATION_JUDGE_SESSION_MISSING <sessionId>`, return.
@@ -80,32 +80,32 @@ So that I have a real, trended signal on the "abstract miss" quality risk (FR8's
     6. Parse the JSON output contract (strip optional code fences first). Not parseable / wrong shape / any claim entry missing a string `claim` or boolean `anchored` → `ORIENTATION_JUDGE_UNPARSEABLE`, return.
     7. `totalClaims === 0` → `ORIENTATION_JUDGE_NO_CLAIMS`, return. Else `score = floaters / totalClaims` (floaters = entries with `anchored === false`).
     8. Conditional `UpdateCommand` per the contract table. `ConditionalCheckFailedException` → return silently. Log `ORIENTATION_JUDGE_SCORED <sessionId> <floaters>/<total>` on success — counts and score only.
-  - [ ] `handler.test.ts` — DI mocks, covering at minimum: happy path (correct score math, exact UpdateCommand table/key/expression/condition values asserted — the 3.8 review's "strengthen lifecycle update mocks" bar applies here from day one); floaters math pinned with a mixed list (e.g. 2 floaters / 5 claims → 0.4); all-anchored → 0; all-floating → 1; zero claims → no write, no throw; wrong status (`PENDING`, `RUNNING`, `FAILED`) → no Bedrock call, no write; legacy row without `status` → judged (the `?? 'SUCCEEDED'` convention); already-scored → no Bedrock call; blank guide / blank context → no Bedrock call; missing session → clean return; missing/blank `sessionId` in the event → clean return, no DynamoDB call, no throw; malformed model output (non-JSON, fenced JSON that parses after stripping, wrong shape, non-boolean `anchored`) → unset + clean return vs. fenced-but-valid → scored; `stopReason: 'max_tokens'` → unset + clean return; Bedrock throw → propagates (throws); conditional-check-failed on write → silent success; the 30s abort wired (drive the real timer with fake timers, per the 3.8 review's "drive the real AbortController" bar); prompt assertions — system prompt includes the never-follow-instructions sentence and user message JSON-encodes both evidence blocks (structural assertion, not substring-only); a log-capture assertion that no log call contains a distinctive phrase planted in the test's guide/context fixtures.
-- [ ] **Task 3: Worker dispatch step** (AC: 1, 5)
-  - [ ] `amplify/functions/orientation-guide/handler.ts`: add a `judge-dispatch` step body to `createStepBodies` (new deps: `lambda` client + `judgeFunctionArn` in `HandlerDependencies`, sourced from `ORIENTATION_JUDGE_FUNCTION_ARN`; default `LambdaClient` like the reconciler's). The body wraps the `InvokeCommand` in try/catch per the dispatch-failure contract row — it never throws.
-  - [ ] Call it in `createHandler` as `await context.step('judge-dispatch', () => steps.judgeDispatch(sessionId))` placed AFTER the `persist-result` try/catch block — i.e. it runs only when the `persist-result` step succeeded. That includes `persistResult`'s internal swallowed `ConditionalCheckFailedException` (~line 375 — a prior attempt already persisted; dispatching again is safe, the judge is idempotent). It must NOT run on: the terminal-status early return at the top of `createHandler` (~449–450 — a duplicate execution start on an already-`SUCCEEDED`/`FAILED` Session dispatches zero times; do not add a dispatch there), limit-exhausted paths, any compensation path, the config-failure path, or the parked-`RUNNING` rethrow path (those `return`/`throw` before reaching it — verify, don't assume).
-  - [ ] Do not touch: the reservation/compensation steps, tokens, provider steps, `persistResult`'s own logic, or anything in `usage-counter/reservation.ts`. If a change there looks necessary, stop and re-read the contract table.
-  - [ ] `handler.test.ts` additions: step-body tests — dispatch sends `InvocationType: 'Event'`, correct ARN, payload exactly `{ sessionId }`, and NO `DurableExecutionName`; a rejecting lambda client is swallowed (no throw) and logs the id-only marker. `LocalDurableTestRunner` lifecycle additions — happy path dispatches exactly once and still reaches `SUCCEEDED`; Tavily-timeout path dispatches (it's a success); an execution whose `load-session` finds an already-`SUCCEEDED` or already-`FAILED` Session dispatches ZERO times (pins the early-return placement); daily-limit path, monthly path, provider-failure/compensation path, and missing-config path each dispatch ZERO times; a `persist-result` conditional miss (session no longer `RUNNING` at persist time) still dispatches — pins the accepted spurious edge whose enforcement is the judge's status gate; a dispatch failure does not change the execution's `SUCCEEDED` outcome or trigger compensation (assert counters untouched).
-- [ ] **Task 4: `amplify/backend.ts` wiring** (AC: 1, 4)
-  - [ ] Everything in the backend.ts contract row: `defineBackend` entry, judge grants + env, worker's invoke grant + env, the Haiku Bedrock policy, and the judge Errors alarm on `workerFailureTopic`.
-  - [ ] `amplify/functions/orientation-alert/handler.ts`: generalize the fixed email body's first sentence from worker-specific wording to orientation-path wording (e.g. "An Orientation Guide worker execution failed" → "An Orientation Guide pipeline alarm fired (worker or judge)"), keeping the copy fixed/non-interpolating — the judge alarm now rides this topic and a judge breakage must not send Tony to the parked-`RUNNING` runbook as if work were stranded. Update the alert handler's fixed-copy test assertion to match. This is the ONLY orientation-alert change; the no-content-interpolation design is untouched.
-  - [ ] The judge is invoked unqualified (no version/alias): AD-11's version-pinning rule exists for *durable executions* whose in-flight state must survive deploys — a sub-minute stateless call doesn't need it, and adding an alias would be invented ceremony. One-line comment at the invoke-grant site noting this deliberate distinction (a security/infrastructure-constraint comment, allowed by house rules).
-- [ ] **Task 5: Reconciliation runbook addition** (AC: 1-adjacent)
-  - [ ] `docs/orientation-guide-reconciliation.md`: add one step to the parked-`RUNNING` procedure — after manually reconciling a parked Session to `SUCCEEDED`, optionally invoke the judge once by hand (`aws lambda invoke --function-name <orientation-judge> --invocation-type Event --payload '{"sessionId":"<id>"}'`), because the worker's dispatch step never ran for that Session. This implements AD-19's "ineligible for Story 3.5 judging until reconciled" clause; a reconciled-to-`FAILED` Session is never judged. Keep it to a few lines matching the doc's existing register.
-- [ ] **Task 6: Deploy + live verification (outcome-phrased; deliberate spend)** (AC: 1, 2, 3, 4, 5)
-  - [ ] `npx ampx sandbox --once` (schema + judge + worker + wiring). Then the standing post-deploy gate: alias-qualified Tavily probe (`--qualifier live`) returns HTTP 200 — 401 → HALT for Tony (pre-dev prerequisite 5). An unqualified `$LATEST` probe is not deployment evidence.
-  - [ ] **Headline (ACs 1–4):** one real UI generation as the test account (`npm run dev`, real Context + Spread). Outcomes: the Guide renders exactly as before with no new latency or UI change (the ack and Results timings match 3.8's evidence class); within ~a minute after `SUCCEEDED`, the Session row shows `groundednessScore` as a number in [0, 1]; the judge's CloudWatch log shows the `ORIENTATION_JUDGE_SCORED <id> <floaters>/<total>` line and the score matches floaters/total; DailyUsage +1 and MonthlySpend +0.03 exactly (the judge moved NEITHER counter beyond the generation's own reservation).
-  - [ ] **Sanity-check the signal (AC 2):** eyeball the scored essay privately (browser, not logs/artifacts): a Guide that names the Context's own specifics should score low (mostly anchored). Record only the numeric score and counts in the story record — never the essay or Context.
-  - [ ] **No-trigger paths (AC 1):** load Context Entry FIRST, then set `dailyLimit` = used count, then submit from the already-loaded form (sequencing matters — the rate-limited flag is computed at load, and a post-flip load degrades to Quick Draw with no submittable form, so no `FAILED` Session would ever exist to test). The submission → Rate-Limited degrade (`FAILED` Session) → confirm zero judge invocations for that Session id (CloudWatch: no judge log lines mentioning it; Session row has no score). Restore Config afterward.
-  - [ ] **Idempotency, live:** re-invoke the judge by hand with the already-scored headline sessionId → returns without a Bedrock call (log shows the `ALREADY_SCORED` marker), score unchanged.
-  - [ ] **Leakage sweep (privacy):** grep the judge's and worker's CloudWatch output for a distinctive phrase from the submitted test Context → zero hits.
-  - [ ] Optional second generation only if the first run's evidence is ambiguous; both Playwright modes stay green and untouched — no paid generation added to any always-on suite.
-  - [ ] Record final counter deltas (+1 generation / +$0.03, judge spend outside the gate ~$0.005–0.01) in the completion notes.
-- [ ] **Task 7: Close out (Definition of Done)**
-  - [ ] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e`.
-  - [ ] Sweep the diff and this story file for credentials and live Context/Guide content — counts and scores only; `playwright/.auth/` still untracked.
-  - [ ] deferred-work.md, two entries: (a) staging/main promotion needs Haiku model access enabled + the inference-profile smoke-confirmed in each target account/region before this story's code first deploys there (same protocol as the Opus entry); (b) the judge's clean-return leave-unset outcomes are alarm-invisible by design (scope decision 4) — when Story 4.1's average-`groundednessScore` metric lands, watch the scored-vs-`SUCCEEDED` rate; a persistent slide toward zero means the output contract or dispatch wiring silently broke.
-  - [ ] Update sprint-status.yaml (3-5 → review), commit with an isolated diff, push to `main`.
+  - [x] `handler.test.ts` — DI mocks, covering at minimum: happy path (correct score math, exact UpdateCommand table/key/expression/condition values asserted — the 3.8 review's "strengthen lifecycle update mocks" bar applies here from day one); floaters math pinned with a mixed list (e.g. 2 floaters / 5 claims → 0.4); all-anchored → 0; all-floating → 1; zero claims → no write, no throw; wrong status (`PENDING`, `RUNNING`, `FAILED`) → no Bedrock call, no write; legacy row without `status` → judged (the `?? 'SUCCEEDED'` convention); already-scored → no Bedrock call; blank guide / blank context → no Bedrock call; missing session → clean return; missing/blank `sessionId` in the event → clean return, no DynamoDB call, no throw; malformed model output (non-JSON, fenced JSON that parses after stripping, wrong shape, non-boolean `anchored`) → unset + clean return vs. fenced-but-valid → scored; `stopReason: 'max_tokens'` → unset + clean return; Bedrock throw → propagates (throws); conditional-check-failed on write → silent success; the 30s abort wired (drive the real timer with fake timers, per the 3.8 review's "drive the real AbortController" bar); prompt assertions — system prompt includes the never-follow-instructions sentence and user message JSON-encodes both evidence blocks (structural assertion, not substring-only); a log-capture assertion that no log call contains a distinctive phrase planted in the test's guide/context fixtures.
+- [x] **Task 3: Worker dispatch step** (AC: 1, 5)
+  - [x] `amplify/functions/orientation-guide/handler.ts`: add a `judge-dispatch` step body to `createStepBodies` (new deps: `lambda` client + `judgeFunctionArn` in `HandlerDependencies`, sourced from `ORIENTATION_JUDGE_FUNCTION_ARN`; default `LambdaClient` like the reconciler's). The body wraps the `InvokeCommand` in try/catch per the dispatch-failure contract row — it never throws.
+  - [x] Call it in `createHandler` as `await context.step('judge-dispatch', () => steps.judgeDispatch(sessionId))` placed AFTER the `persist-result` try/catch block — i.e. it runs only when the `persist-result` step succeeded. That includes `persistResult`'s internal swallowed `ConditionalCheckFailedException` (~line 375 — a prior attempt already persisted; dispatching again is safe, the judge is idempotent). It must NOT run on: the terminal-status early return at the top of `createHandler` (~449–450 — a duplicate execution start on an already-`SUCCEEDED`/`FAILED` Session dispatches zero times; do not add a dispatch there), limit-exhausted paths, any compensation path, the config-failure path, or the parked-`RUNNING` rethrow path (those `return`/`throw` before reaching it — verify, don't assume).
+  - [x] Do not touch: the reservation/compensation steps, tokens, provider steps, `persistResult`'s own logic, or anything in `usage-counter/reservation.ts`. If a change there looks necessary, stop and re-read the contract table.
+  - [x] `handler.test.ts` additions: step-body tests — dispatch sends `InvocationType: 'Event'`, correct ARN, payload exactly `{ sessionId }`, and NO `DurableExecutionName`; a rejecting lambda client is swallowed (no throw) and logs the id-only marker. `LocalDurableTestRunner` lifecycle additions — happy path dispatches exactly once and still reaches `SUCCEEDED`; Tavily-timeout path dispatches (it's a success); an execution whose `load-session` finds an already-`SUCCEEDED` or already-`FAILED` Session dispatches ZERO times (pins the early-return placement); daily-limit path, monthly path, provider-failure/compensation path, and missing-config path each dispatch ZERO times; a `persist-result` conditional miss (session no longer `RUNNING` at persist time) still dispatches — pins the accepted spurious edge whose enforcement is the judge's status gate; a dispatch failure does not change the execution's `SUCCEEDED` outcome or trigger compensation (assert counters untouched).
+- [x] **Task 4: `amplify/backend.ts` wiring** (AC: 1, 4)
+  - [x] Everything in the backend.ts contract row: `defineBackend` entry, judge grants + env, worker's invoke grant + env, the Haiku Bedrock policy, and the judge Errors alarm on `workerFailureTopic`.
+  - [x] `amplify/functions/orientation-alert/handler.ts`: generalize the fixed email body's first sentence from worker-specific wording to orientation-path wording (e.g. "An Orientation Guide worker execution failed" → "An Orientation Guide pipeline alarm fired (worker or judge)"), keeping the copy fixed/non-interpolating — the judge alarm now rides this topic and a judge breakage must not send Tony to the parked-`RUNNING` runbook as if work were stranded. Update the alert handler's fixed-copy test assertion to match. This is the ONLY orientation-alert change; the no-content-interpolation design is untouched.
+  - [x] The judge is invoked unqualified (no version/alias): AD-11's version-pinning rule exists for *durable executions* whose in-flight state must survive deploys — a sub-minute stateless call doesn't need it, and adding an alias would be invented ceremony. One-line comment at the invoke-grant site noting this deliberate distinction (a security/infrastructure-constraint comment, allowed by house rules).
+- [x] **Task 5: Reconciliation runbook addition** (AC: 1-adjacent)
+  - [x] `docs/orientation-guide-reconciliation.md`: add one step to the parked-`RUNNING` procedure — after manually reconciling a parked Session to `SUCCEEDED`, optionally invoke the judge once by hand (`aws lambda invoke --function-name <orientation-judge> --invocation-type Event --payload '{"sessionId":"<id>"}'`), because the worker's dispatch step never ran for that Session. This implements AD-19's "ineligible for Story 3.5 judging until reconciled" clause; a reconciled-to-`FAILED` Session is never judged. Keep it to a few lines matching the doc's existing register.
+- [x] **Task 6: Deploy + live verification (outcome-phrased; deliberate spend)** (AC: 1, 2, 3, 4, 5)
+  - [x] `npx ampx sandbox --once` (schema + judge + worker + wiring). Then the standing post-deploy gate: alias-qualified Tavily probe (`--qualifier live`) returns HTTP 200 — 401 → HALT for Tony (pre-dev prerequisite 5). An unqualified `$LATEST` probe is not deployment evidence.
+  - [x] **Headline (ACs 1–4):** one real UI generation as the test account (`npm run dev`, real Context + Spread). Outcomes: the Guide renders exactly as before with no new latency or UI change (the ack and Results timings match 3.8's evidence class); within ~a minute after `SUCCEEDED`, the Session row shows `groundednessScore` as a number in [0, 1]; the judge's CloudWatch log shows the `ORIENTATION_JUDGE_SCORED <id> <floaters>/<total>` line and the score matches floaters/total; DailyUsage +1 and MonthlySpend +0.03 exactly (the judge moved NEITHER counter beyond the generation's own reservation).
+  - [x] **Sanity-check the signal (AC 2):** eyeball the scored essay privately (browser, not logs/artifacts): a Guide that names the Context's own specifics should score low (mostly anchored). Record only the numeric score and counts in the story record — never the essay or Context.
+  - [x] **No-trigger paths (AC 1):** load Context Entry FIRST, then set `dailyLimit` = used count, then submit from the already-loaded form (sequencing matters — the rate-limited flag is computed at load, and a post-flip load degrades to Quick Draw with no submittable form, so no `FAILED` Session would ever exist to test). The submission → Rate-Limited degrade (`FAILED` Session) → confirm zero judge invocations for that Session id (CloudWatch: no judge log lines mentioning it; Session row has no score). Restore Config afterward.
+  - [x] **Idempotency, live:** re-invoke the judge by hand with the already-scored headline sessionId → returns without a Bedrock call (log shows the `ALREADY_SCORED` marker), score unchanged.
+  - [x] **Leakage sweep (privacy):** grep the judge's and worker's CloudWatch output for a distinctive phrase from the submitted test Context → zero hits.
+  - [x] Optional second generation only if the first run's evidence is ambiguous; both Playwright modes stay green and untouched — no paid generation added to any always-on suite.
+  - [x] Record final counter deltas (+1 generation / +$0.03, judge spend outside the gate ~$0.005–0.01) in the completion notes.
+- [x] **Task 7: Close out (Definition of Done)**
+  - [x] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e`.
+  - [x] Sweep the diff and this story file for credentials and live Context/Guide content — counts and scores only; `playwright/.auth/` still untracked.
+  - [x] deferred-work.md, two entries: (a) staging/main promotion needs Haiku model access enabled + the inference-profile smoke-confirmed in each target account/region before this story's code first deploys there (same protocol as the Opus entry); (b) the judge's clean-return leave-unset outcomes are alarm-invisible by design (scope decision 4) — when Story 4.1's average-`groundednessScore` metric lands, watch the scored-vs-`SUCCEEDED` rate; a persistent slide toward zero means the output contract or dispatch wiring silently broke.
+  - [x] Update sprint-status.yaml (3-5 → review), commit with an isolated diff, push to `main`.
 
 ## Dev Notes
 
@@ -187,12 +187,51 @@ Recent history (`609ef44` back through `6672642`) is Stories 3.8 + 3.4: durable 
 
 ### Agent Model Used
 
+GPT-5
+
+### Implementation Plan
+
+- Extend the Session schema, then implement and unit-test the isolated Haiku judge.
+- Add the failure-isolated durable dispatch step and lifecycle coverage without changing reservations or provider steps.
+- Wire least-privilege IAM, monitoring, alert copy, and reconciliation guidance before sandbox deployment and live outcome verification.
+
 ### Debug Log References
+
+- 2026-07-25 — Task 0: confirmed baseline `609ef44`; isolated the pre-existing story-creation artifacts in commit `b12df68`. Node 24 baseline gates passed: 231 Vitest tests, lint, typecheck, build, 2 unauthenticated Playwright tests, and 4 credential-enabled Playwright tests.
+- 2026-07-25 — Task 0 sandbox baseline: Config `dailyLimit=5`, `monthlyBudget=30`; test-account DailyUsage `2` for 2026-07-25 UTC; MonthlySpend `0.42` for 2026-07. The content-safe Haiku probe returned `OK` for `us.anthropic.claude-haiku-4-5-20251001-v1:0`.
+- 2026-07-25 — Task 6 deployment completed in 195.835 seconds: schema, judge Lambda, worker version/`live` alias, IAM, environment wiring, and judge alarm deployed successfully. The mandatory alias-qualified Tavily probe then returned HTTP 401 with zero results. Per the story's explicit HALT gate, no paid generation or live Session/config mutation was attempted.
+- 2026-07-25 — Task 6 resumed after the Tavily secret update: the corrected worker configuration was published as version 8, the `live` alias moved to it, and the alias-qualified probe returned HTTP 200 with one result before paid verification.
+- 2026-07-25 — Task 6 headline: UI acknowledgment took 38 ms and Results rendered in 38.732 s. The Session reached `SUCCEEDED`; the judge logged 5 floaters / 10 claims and stored `groundednessScore=0.5`. DailyUsage moved 2→3 and MonthlySpend moved 0.42→0.45 exactly.
+- 2026-07-25 — Task 6 safeguards: the already-scored reinvoke logged `ALREADY_SCORED` and retained 0.5; the preloaded-form daily-limit test produced a `FAILED`/`DAILY_LIMIT_EXHAUSTED` Session with no score and zero judge log events; Config was restored to `dailyLimit=5`, `monthlyBudget=30`; the private leakage marker had zero hits across worker and judge logs.
 
 ### Completion Notes List
 
+- Task 0 complete: the repository, local test toolchain, authenticated sandbox access, live counter baseline, and confirmed Haiku inference profile are ready for implementation.
+- Task 1 complete: Session now has one optional `groundednessScore` float; no default, backfill, authorization, custom-operation, or frontend change was introduced. Typecheck and all 231 regression tests pass.
+- Task 2 complete: the thin, stateless judge uses the confirmed Haiku profile, strict JSON claim validation, floaters-over-total scoring, legacy/idempotency/status gates, a conditional score write, content-free logs, and a real 30-second abort. Thirty focused judge tests and all 261 repository tests pass.
+- Task 3 complete: one post-persistence durable step invokes the ordinary judge Lambda asynchronously and swallows dispatch errors. Lifecycle coverage proves exactly-on-success placement, zero dispatch on every failure/terminal path, the accepted conditional-miss edge, and no counter compensation from dispatch failure. All 265 tests pass.
+- Task 4 complete: the backend graph now grants only Session GetItem/UpdateItem and Haiku invoke to the judge, unqualified invoke access from the worker, the required environment variables, and an Errors alarm on the existing topic. Alert copy is pipeline-wide and remains fixed/non-interpolating. Typecheck, lint, and all 265 tests pass.
+- Task 5 complete: the reconciliation procedure now offers one manual async judge invoke only after a parked Session is reconciled to `SUCCEEDED`, and explicitly forbids judging reconciled `FAILED` Sessions.
+- Task 6 complete: sandbox deployment and the repaired alias-qualified provider probe passed. One live UI generation kept the existing response flow, persisted a 0.5 score from 5/10 floaters, and moved only the generation counters (+1 / +$0.03). The Guide included all three checked Context specifics; no-trigger, idempotency, and log-leakage checks passed. No optional second generation was needed; estimated judge spend remained outside the reservation gate at roughly $0.005–0.01.
+- Task 7 complete: Node 24 gates are green (265 Vitest tests, lint, typecheck, build, and four Playwright tests across public and authenticated modes). The credential/content sweep and isolated-diff check passed, authentication state remains ignored, promotion/monitoring follow-ups are recorded, and Story 3.5 is ready for review.
+
 ### File List
+
+- _bmad-output/implementation-artifacts/3-5-score-orientation-guide-groundedness-async.md
+- _bmad-output/implementation-artifacts/deferred-work.md
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+- amplify/data/resource.ts
+- amplify/backend.ts
+- amplify/functions/orientation-alert/handler.test.ts
+- amplify/functions/orientation-alert/handler.ts
+- amplify/functions/orientation-judge/handler.test.ts
+- amplify/functions/orientation-judge/handler.ts
+- amplify/functions/orientation-judge/resource.ts
+- amplify/functions/orientation-guide/handler.test.ts
+- amplify/functions/orientation-guide/handler.ts
+- docs/orientation-guide-reconciliation.md
 
 ## Change Log
 
 - 2026-07-25: Story created via create-story workflow (ultimate context engine analysis) — status ready-for-dev.
+- 2026-07-25: Implemented, deployed, and live-verified asynchronous Haiku groundedness scoring — status review.

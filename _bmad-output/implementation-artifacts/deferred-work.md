@@ -27,3 +27,8 @@
 ## Deferred from: code review of 3-4-redraw-from-the-results-screen (2026-07-24)
 
 - "Tweak existing observation" clicked when the just-finished generation exhausted the daily limit lands on the spec'd Rate-Limited Intake (Quick Draw degrade) with the preserved Context invisible until the limit resets — an intersection of AC 1's always-present redraw buttons and UX-DR13's whole-screen degrade, not a code bug. Context is retained in App state and the redraw draft and resurfaces next day. Candidate UX polish: suppress or annotate the Tweak action when `rateLimited` is already known on Results.
+
+## Recorded for Story 3.5 (2026-07-25)
+
+- **Groundedness-judge rollout:** before Story 3.5 first deploys to each staging/main account and region, enable Bedrock Claude Haiku model access and smoke-confirm the configured inference-profile ID there, following the same protocol as the Opus rollout check.
+- **Silent scored-rate watch:** the judge's clean-return leave-unset outcomes are alarm-invisible by design. When Story 4.1 adds the average `groundednessScore` metric, also watch scored Sessions versus total `SUCCEEDED` Sessions; a persistent slide toward zero signals a silently broken model-output contract or dispatch path.

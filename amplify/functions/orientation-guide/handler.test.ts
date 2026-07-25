@@ -65,9 +65,11 @@ function dependencies(overrides: Record<string, unknown> = {}) {
     usageReserved: false,
     usageCompensated: false,
     persistFailuresRemaining: 0,
+    persistConditionalStatus: null as string | null,
     reserveError: null as unknown,
     compensateError: null as unknown,
     configError: null as unknown,
+    dispatchError: null as unknown,
     sessionMissing: false,
     operations: [] as string[],
     transactionInputs: [] as Record<string, unknown>[],
@@ -149,6 +151,10 @@ function dependencies(overrides: Record<string, unknown> = {}) {
           expect(values[':running']).toBe('RUNNING');
           expect(values[':succeeded']).toBe('SUCCEEDED');
           state.operations.push('persist-result');
+          if (state.persistConditionalStatus) {
+            state.session.status = state.persistConditionalStatus;
+            throw { name: 'ConditionalCheckFailedException' };
+          }
           if (state.persistFailuresRemaining > 0) {
             state.persistFailuresRemaining -= 1;
             throw new Error('transient persistence failure');
@@ -197,10 +203,18 @@ function dependencies(overrides: Record<string, unknown> = {}) {
       output: { message: { content: [{ text: 'A specific continuous essay.' }] } },
     }),
   };
+  const lambda = {
+    send: vi.fn<(command: unknown) => Promise<unknown>>(async () => {
+      state.operations.push('judge-dispatch');
+      if (state.dispatchError) throw state.dispatchError;
+      return {};
+    }),
+  };
 
   return {
     dynamo,
     bedrock,
+    lambda,
     fetchFn: vi.fn().mockResolvedValue(response()),
     tableNames: {
       session: 'SessionTable',
@@ -209,6 +223,7 @@ function dependencies(overrides: Record<string, unknown> = {}) {
       config: 'ConfigTable',
     },
     tavilyApiKey: 'secret-from-environment',
+    judgeFunctionArn: 'arn:aws:lambda:us-east-1:123456789012:function:orientation-judge',
     drawCards: vi.fn(() => [baseCard]),
     now: () => new Date('2026-07-19T18:00:05.000Z'),
     state,
@@ -263,6 +278,7 @@ describe('durable orientation-guide lifecycle', () => {
     expect(deps.state.reservationCount).toBe(1);
     expect(deps.state.compensationCount).toBe(0);
     expect(deps.bedrock.send).toHaveBeenCalledOnce();
+    expect(deps.lambda.send).toHaveBeenCalledOnce();
     const tavilyRequest = JSON.parse(
       (deps.fetchFn.mock.calls[0][1] as RequestInit).body as string,
     ) as { query: string };
@@ -284,6 +300,7 @@ describe('durable orientation-guide lifecycle', () => {
       'tavily',
       'bedrock',
       'persist-result',
+      'judge-dispatch',
     ]);
   });
 
@@ -302,6 +319,7 @@ describe('durable orientation-guide lifecycle', () => {
     expect(deps.state.operations.filter((item) => item === 'reserve')).toHaveLength(1);
     expect(deps.fetchFn).not.toHaveBeenCalled();
     expect(deps.bedrock.send).not.toHaveBeenCalled();
+    expect(deps.lambda.send).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -328,6 +346,7 @@ describe('durable orientation-guide lifecycle', () => {
     expect(deps.state.operations).not.toContain('compensate');
     expect(deps.fetchFn).not.toHaveBeenCalled();
     expect(deps.bedrock.send).not.toHaveBeenCalled();
+    expect(deps.lambda.send).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -384,6 +403,7 @@ describe('durable orientation-guide lifecycle', () => {
     }
     expect(deps.state.operations.indexOf('compensate'))
       .toBeLessThan(deps.state.operations.indexOf('mark-failed'));
+    expect(deps.lambda.send).not.toHaveBeenCalled();
   });
 
   it('does not mark FAILED when compensation cannot complete', async () => {
@@ -399,6 +419,7 @@ describe('durable orientation-guide lifecycle', () => {
     expect(deps.state.usageReserved).toBe(true);
     expect(deps.state.usageCompensated).toBe(false);
     expect(deps.state.operations).not.toContain('mark-failed');
+    expect(deps.lambda.send).not.toHaveBeenCalled();
   });
 
   it('aborts Tavily after 20 seconds and completes the durable lifecycle ungrounded', async () => {
@@ -436,6 +457,7 @@ describe('durable orientation-guide lifecycle', () => {
     expect(fetchFn).toHaveBeenCalledOnce();
     expect(deps.bedrock.send).toHaveBeenCalledOnce();
     expect(deps.state.compensationCount).toBe(0);
+    expect(deps.lambda.send).toHaveBeenCalledOnce();
   });
 
   it('aborts Bedrock after 50 seconds, compensates once, and marks FAILED', async () => {
@@ -474,6 +496,7 @@ describe('durable orientation-guide lifecycle', () => {
     expect(deps.state.operations.filter((item) => item === 'compensate')).toHaveLength(1);
     expect(deps.state.operations.indexOf('compensate'))
       .toBeLessThan(deps.state.operations.indexOf('mark-failed'));
+    expect(deps.lambda.send).not.toHaveBeenCalled();
   });
 
   it('retries only result persistence without calling Bedrock or reserving again', async () => {
@@ -487,6 +510,40 @@ describe('durable orientation-guide lifecycle', () => {
     expect(deps.state.operations.filter((item) => item === 'persist-result')).toHaveLength(3);
     expect(deps.state.reservationCount).toBe(1);
     expect(deps.bedrock.send).toHaveBeenCalledOnce();
+    expect(deps.lambda.send).toHaveBeenCalledOnce();
+  });
+
+  it('dispatches after a swallowed persist-result conditional miss', async () => {
+    const deps = dependencies();
+    deps.state.persistConditionalStatus = 'FAILED';
+
+    const { execution } = await run(deps);
+
+    expect(execution.getStatus()).toBe('SUCCEEDED');
+    expect(deps.state.session.status).toBe('FAILED');
+    expect(deps.state.operations.filter((item) => item === 'persist-result')).toHaveLength(1);
+    expect(deps.lambda.send).toHaveBeenCalledOnce();
+    expect(deps.state.compensationCount).toBe(0);
+  });
+
+  it('keeps the delivered result successful when judge dispatch fails', async () => {
+    const deps = dependencies();
+    deps.state.dispatchError = new Error('Lambda unavailable with private detail');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const { execution } = await run(deps);
+
+    expect(execution.getStatus()).toBe('SUCCEEDED');
+    expect(deps.state.session.status).toBe('SUCCEEDED');
+    expect(deps.lambda.send).toHaveBeenCalledOnce();
+    expect(deps.state.reservationCount).toBe(1);
+    expect(deps.state.compensationCount).toBe(0);
+    expect(error).toHaveBeenCalledWith(
+      'ORIENTATION_JUDGE_DISPATCH_FAILED',
+      SESSION_ID,
+    );
+    expect(error.mock.calls.flat().map(String).join('\n'))
+      .not.toContain('private detail');
   });
 
   it('does not compensate when result persistence retries are exhausted', async () => {
@@ -500,6 +557,7 @@ describe('durable orientation-guide lifecycle', () => {
     expect(deps.state.session.status).toBe('RUNNING');
     expect(deps.state.compensationCount).toBe(0);
     expect(deps.bedrock.send).toHaveBeenCalledOnce();
+    expect(deps.lambda.send).not.toHaveBeenCalled();
     expect(error).toHaveBeenCalledWith(
       'ORIENTATION_GUIDE_PERSISTENCE_FAILED',
       SESSION_ID,
@@ -519,6 +577,7 @@ describe('durable orientation-guide lifecycle', () => {
     expect(deps.state.reservationCount).toBe(0);
     expect(deps.fetchFn).not.toHaveBeenCalled();
     expect(deps.bedrock.send).not.toHaveBeenCalled();
+    expect(deps.lambda.send).not.toHaveBeenCalled();
     },
   );
 
@@ -539,10 +598,44 @@ describe('durable orientation-guide lifecycle', () => {
     expect(deps.state.operations).not.toContain('reserve');
     expect(deps.fetchFn).not.toHaveBeenCalled();
     expect(deps.bedrock.send).not.toHaveBeenCalled();
+    expect(deps.lambda.send).not.toHaveBeenCalled();
   });
 });
 
 describe('orientation-guide step bodies', () => {
+  it('dispatches the ordinary judge Lambda asynchronously with only the Session id', async () => {
+    const deps = dependencies();
+
+    await createStepBodies(deps).judgeDispatch(SESSION_ID);
+
+    expect(deps.lambda.send).toHaveBeenCalledOnce();
+    const input = (deps.lambda.send.mock.calls[0][0] as {
+      input: Record<string, unknown>;
+    }).input;
+    expect(input).toEqual({
+      FunctionName: deps.judgeFunctionArn,
+      InvocationType: 'Event',
+      Payload: JSON.stringify({ sessionId: SESSION_ID }),
+    });
+    expect(input).not.toHaveProperty('DurableExecutionName');
+  });
+
+  it('swallows judge dispatch failures and logs only the id marker', async () => {
+    const deps = dependencies();
+    deps.state.dispatchError = new Error('Lambda unavailable with private detail');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(createStepBodies(deps).judgeDispatch(SESSION_ID))
+      .resolves.toBeUndefined();
+
+    expect(error).toHaveBeenCalledWith(
+      'ORIENTATION_JUDGE_DISPATCH_FAILED',
+      SESSION_ID,
+    );
+    expect(error.mock.calls.flat().map(String).join('\n'))
+      .not.toContain('private detail');
+  });
+
   it('drops Tavily results whose title or content is blank after trimming', async () => {
     const deps = dependencies({
       fetchFn: vi.fn().mockResolvedValue(response([
@@ -845,6 +938,7 @@ describe('orientation-guide step bodies', () => {
     expect(configFailure.state.reservationCount).toBe(0);
     expect(configFailure.fetchFn).not.toHaveBeenCalled();
     expect(configFailure.bedrock.send).not.toHaveBeenCalled();
+    expect(configFailure.lambda.send).not.toHaveBeenCalled();
 
     const reserveFailure = dependencies();
     reserveFailure.state.reserveError = new Error('reservation unavailable');
@@ -859,5 +953,6 @@ describe('orientation-guide step bodies', () => {
     expect(reserveFailure.state.compensationCount).toBe(0);
     expect(reserveFailure.fetchFn).not.toHaveBeenCalled();
     expect(reserveFailure.bedrock.send).not.toHaveBeenCalled();
+    expect(reserveFailure.lambda.send).not.toHaveBeenCalled();
   });
 });

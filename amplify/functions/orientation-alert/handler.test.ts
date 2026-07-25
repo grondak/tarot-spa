@@ -33,7 +33,7 @@ describe('orientation-alert handler', () => {
       },
     });
     expect(input.Content.Simple.Body.Text.Data).toBe(
-      'An Orientation Guide worker execution failed. Check the CloudWatch alarm and the Story 3.8 reconciliation runbook. Do not copy Session Context or Guide content into tickets or logs.',
+      'An Orientation Guide pipeline alarm fired (worker or judge). Check the CloudWatch alarm before deciding whether the Story 3.8 reconciliation runbook applies. Do not copy Session Context or Guide content into tickets or logs.',
     );
     expect(JSON.stringify(input)).not.toContain(sensitiveSessionContent);
   });

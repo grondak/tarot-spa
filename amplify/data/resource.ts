@@ -41,6 +41,7 @@ const schema = a.schema({
       currentEvents: a.json(),
       guide: a.string(),
       tavilyTimedOut: a.boolean(),
+      groundednessScore: a.float(),
       status: a.enum(['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED']),
       errorCode: a.string(),
       completedAt: a.datetime(),

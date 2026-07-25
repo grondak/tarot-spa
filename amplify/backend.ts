@@ -28,6 +28,7 @@ import { postConfirmation } from './auth/post-confirmation/resource';
 import { checkInviteKey } from './functions/check-invite-key/resource';
 import { inviteKeyMint } from './functions/invite-key-mint/resource';
 import { orientationGuide } from './functions/orientation-guide/resource';
+import { orientationJudge } from './functions/orientation-judge/resource';
 import { orientationAlert } from './functions/orientation-alert/resource';
 import { orientationReconciler } from './functions/orientation-reconciler/resource';
 import { requestAccess } from './functions/request-access/resource';
@@ -42,6 +43,7 @@ const backend = defineBackend({
   inviteKeyMint,
   orientationAlert,
   orientationGuide,
+  orientationJudge,
   orientationReconciler,
   requestAccess,
   startOrientationGuide,
@@ -58,6 +60,7 @@ const redemptionLambda = backend.postConfirmation.resources.lambda;
 const checkInviteKeyLambda = backend.checkInviteKey.resources.lambda;
 const inviteKeyMintLambda = backend.inviteKeyMint.resources.lambda;
 const orientationGuideLambda = backend.orientationGuide.resources.lambda;
+const orientationJudgeLambda = backend.orientationJudge.resources.lambda;
 const orientationAlertLambda = backend.orientationAlert.resources.lambda;
 const orientationReconcilerLambda = backend.orientationReconciler.resources.lambda;
 const requestAccessLambda = backend.requestAccess.resources.lambda;
@@ -120,6 +123,21 @@ const workerFailureAlarm = new Alarm(
   },
 );
 workerFailureAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
+const judgeFailureAlarm = new Alarm(
+  operationalStack,
+  'OrientationJudgeFailureAlarm',
+  {
+    metric: orientationJudgeLambda.metricErrors({
+      period: Duration.minutes(5),
+      statistic: 'Sum',
+    }),
+    threshold: 1,
+    evaluationPeriods: 1,
+    comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+    treatMissingData: TreatMissingData.NOT_BREACHING,
+  },
+);
+judgeFailureAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
 const durableExecutionFailureAlarm = new Alarm(
   operationalStack,
   'OrientationGuideDurableExecutionFailureAlarm',
@@ -230,6 +248,19 @@ backend.orientationGuide.addEnvironment('SESSION_TABLE_NAME', sessionTable.table
 backend.orientationGuide.addEnvironment('DAILY_USAGE_TABLE_NAME', dailyUsageTable.tableName);
 backend.orientationGuide.addEnvironment('MONTHLY_SPEND_TABLE_NAME', monthlySpendTable.tableName);
 backend.orientationGuide.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
+// Version pinning protects durable executions; the stateless judge is deliberately unqualified.
+orientationJudgeLambda.grantInvoke(orientationGuideLambda);
+backend.orientationGuide.addEnvironment(
+  'ORIENTATION_JUDGE_FUNCTION_ARN',
+  orientationJudgeLambda.functionArn,
+);
+
+sessionTable.grant(
+  orientationJudgeLambda,
+  'dynamodb:GetItem',
+  'dynamodb:UpdateItem',
+);
+backend.orientationJudge.addEnvironment('SESSION_TABLE_NAME', sessionTable.tableName);
 
 sessionTable.grant(
   startOrientationGuideLambda,
@@ -290,6 +321,17 @@ orientationGuideLambda.addToRolePolicy(new PolicyStatement({
       resourceName: 'us.anthropic.claude-opus-4-6-v1',
     }),
     'arn:aws:bedrock:*::foundation-model/anthropic.claude-opus-4-6-v1',
+  ],
+}));
+orientationJudgeLambda.addToRolePolicy(new PolicyStatement({
+  actions: ['bedrock:InvokeModel'],
+  resources: [
+    dataStack.formatArn({
+      service: 'bedrock',
+      resource: 'inference-profile',
+      resourceName: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+    }),
+    'arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0',
   ],
 }));
 
