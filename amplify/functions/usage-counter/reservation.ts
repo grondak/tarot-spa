@@ -2,6 +2,20 @@ import { GetCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 
 export type CommandClient = { send(command: unknown): Promise<unknown> };
 
+export function isErrorNamed(error: unknown, name: string) {
+  return typeof error === 'object'
+    && error !== null
+    && 'name' in error
+    && error.name === name;
+}
+
+// Legacy pre-3.8 Session rows carry no status attribute; the pipeline treats a
+// missing status as SUCCEEDED. The orientation-judge ConditionExpression
+// re-encodes this convention as `attribute_not_exists(#s)` — keep them in sync.
+export function effectiveStatus(session: { status?: string }) {
+  return session.status ?? 'SUCCEEDED';
+}
+
 type Config = {
   dailyLimit: number;
   monthlyBudget: number;

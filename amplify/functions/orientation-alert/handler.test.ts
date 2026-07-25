@@ -28,7 +28,7 @@ describe('orientation-alert handler', () => {
       Destination: { ToAddresses: ['operator@example.com'] },
       Content: {
         Simple: {
-          Subject: { Data: 'tarot-spa Orientation Guide worker alert' },
+          Subject: { Data: 'tarot-spa Orientation Guide pipeline alert' },
         },
       },
     });

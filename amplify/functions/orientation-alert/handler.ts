@@ -37,7 +37,7 @@ export function createHandler(deps: Dependencies = defaultDependencies) {
       Destination: { ToAddresses: [deps.cutoutEmail] },
       Content: {
         Simple: {
-          Subject: { Data: 'tarot-spa Orientation Guide worker alert' },
+          Subject: { Data: 'tarot-spa Orientation Guide pipeline alert' },
           Body: {
             Text: {
               Data: 'An Orientation Guide pipeline alarm fired (worker or judge). Check the CloudWatch alarm before deciding whether the Story 3.8 reconciliation runbook applies. Do not copy Session Context or Guide content into tickets or logs.',

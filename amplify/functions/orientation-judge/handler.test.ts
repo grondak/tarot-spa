@@ -237,6 +237,8 @@ describe('orientation-judge handler', () => {
     ['non-boolean anchored', '{"claims":[{"claim":"A","anchored":"yes"}]}'],
     ['extra top-level data', '{"claims":[{"claim":"A","anchored":true}],"essay":"private"}'],
     ['extra claim data', '{"claims":[{"claim":"A","anchored":true,"anchor":"private"}]}'],
+    ['blank claim', '{"claims":[{"claim":"","anchored":false}]}'],
+    ['whitespace-only claim', '{"claims":[{"claim":"   ","anchored":true}]}'],
   ])('leaves %s model output unset', async (_label, text) => {
     const deps = dependencies();
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);

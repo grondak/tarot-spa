@@ -28,7 +28,7 @@ The alarm watches the durable worker Lambda `Errors` metric. A Session can remai
    - If compensation is already marked, do not decrement counters again; terminalize to `FAILED` conditionally.
    - If the Session is already terminal, make no state change and treat the alarm as a replay or unrelated worker error.
 5. Verify the exact Session is terminal, counter changes occurred no more than once, and the durable execution/alarm state is understood.
-6. If the Session was manually reconciled to `SUCCEEDED`, optionally invoke the judge once because the worker's dispatch step never ran: `aws lambda invoke --function-name <orientation-judge> --invocation-type Event --payload '{"sessionId":"<id>"}' <output-file>`. Never judge a Session reconciled to `FAILED`.
+6. If the Session was manually reconciled to `SUCCEEDED`, optionally invoke the judge once because the worker's dispatch step never ran: `aws lambda invoke --function-name <orientation-judge> --invocation-type Event --cli-binary-format raw-in-base64-out --payload '{"sessionId":"<id>"}' <output-file>`. Never judge a Session reconciled to `FAILED`.
 7. Record content-safe evidence in the Story 3.8 verification log: Session ID may be abbreviated or omitted; include lifecycle transition, execution status, counter deltas, worker version, and alarm disposition.
 
 ## Escalation and safeguards

@@ -10,6 +10,7 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
+import { isErrorNamed } from '../usage-counter/reservation';
 
 type CommandClient = {
   send(command: unknown): Promise<unknown>;
@@ -53,13 +54,6 @@ const defaultDependencies: Dependencies = {
   workerQualifier: process.env.ORIENTATION_GUIDE_FUNCTION_QUALIFIER ?? '',
   now: () => new Date(),
 };
-
-function isErrorNamed(error: unknown, name: string) {
-  return typeof error === 'object'
-    && error !== null
-    && 'name' in error
-    && error.name === name;
-}
 
 async function invokeMissingExecution(deps: Dependencies, sessionId: string) {
   try {

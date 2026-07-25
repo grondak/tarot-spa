@@ -6,6 +6,7 @@ import {
   PutCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { SPREADS } from '../../../src/utils/deck';
+import { effectiveStatus, isErrorNamed } from '../usage-counter/reservation';
 
 type StartOrientationGuideEvent = {
   identity?: { sub?: string } | null;
@@ -49,13 +50,6 @@ const defaultDependencies: HandlerDependencies = {
   workerFunctionArn: process.env.ORIENTATION_GUIDE_FUNCTION_ARN ?? '',
   now: () => new Date(),
 };
-
-function isErrorNamed(error: unknown, name: string) {
-  return typeof error === 'object'
-    && error !== null
-    && 'name' in error
-    && error.name === name;
-}
 
 async function invokeWorker(
   deps: HandlerDependencies,
@@ -128,7 +122,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
       }
     }
 
-    const status = existing ? existing.status ?? 'SUCCEEDED' : 'PENDING';
+    const status = existing ? effectiveStatus(existing) : 'PENDING';
     if (!existing || status === 'PENDING') {
       await invokeWorker(deps, requestId);
     }

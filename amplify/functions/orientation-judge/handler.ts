@@ -5,6 +5,7 @@ import {
   GetCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
+import { effectiveStatus, isErrorNamed } from '../usage-counter/reservation';
 
 type SessionRecord = {
   id?: string;
@@ -49,13 +50,6 @@ const defaultDependencies: HandlerDependencies = {
   now: () => new Date(),
 };
 
-function isErrorNamed(error: unknown, name: string) {
-  return typeof error === 'object'
-    && error !== null
-    && 'name' in error
-    && error.name === name;
-}
-
 function isNonBlankString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -83,7 +77,7 @@ function parseClaims(text: string): Claim[] | undefined {
       typeof claim === 'object'
       && claim !== null
       && Object.keys(claim).length === 2
-      && typeof (claim as { claim?: unknown }).claim === 'string'
+      && isNonBlankString((claim as { claim?: unknown }).claim)
       && typeof (claim as { anchored?: unknown }).anchored === 'boolean'
     ))) {
       return undefined;
@@ -165,7 +159,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
       return;
     }
 
-    const status = session.status ?? 'SUCCEEDED';
+    const status = effectiveStatus(session);
     if (status !== 'SUCCEEDED') {
       console.log(`ORIENTATION_JUDGE_WRONG_STATUS ${sessionId} ${status}`);
       return;

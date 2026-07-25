@@ -13,6 +13,8 @@ import {
 } from '@aws/durable-execution-sdk-js';
 import { SPREADS, shuffleAndDraw } from '../../../src/utils/deck';
 import {
+  effectiveStatus,
+  isErrorNamed,
   readConfig,
   reserveUsage,
   rollbackUsage,
@@ -112,13 +114,6 @@ const defaultDependencies: HandlerDependencies = {
   drawCards: shuffleAndDraw,
   now: () => new Date(),
 };
-
-function isErrorNamed(error: unknown, name: string) {
-  return typeof error === 'object'
-    && error !== null
-    && 'name' in error
-    && error.name === name;
-}
 
 function errorContains(error: unknown, code: string): boolean {
   if (typeof error === 'string') return error.includes(code);
@@ -467,7 +462,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
       'load-session',
       () => steps.loadSession(sessionId),
     );
-    const status = session.status ?? 'SUCCEEDED';
+    const status = effectiveStatus(session);
     if (status === 'SUCCEEDED' || status === 'FAILED') return;
 
     await context.step('mark-running', () => steps.markRunning(sessionId));
