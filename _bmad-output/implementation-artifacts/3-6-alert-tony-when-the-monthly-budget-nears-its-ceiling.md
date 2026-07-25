@@ -4,7 +4,7 @@ baseline_commit: 49682b3
 
 # Story 3.6: Alert Tony when the monthly budget nears its ceiling
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -90,11 +90,11 @@ Do not interpolate the real SNS message content into this email (see Contract va
   - [x] **Delivery verification (AC 1 — the actually-testable part without waiting on real billing data, which AD-6 already documents as lagging):** `aws sns publish --topic-arn <budgetAlertTopic ARN> --message "story-3.6 manual verification"` and confirm the fixed-copy email arrives at the `CUTOUT_EMAIL` inbox within a couple minutes, with exactly the Subject/Body from the Copy section (not the raw test message — proving the Lambda ignores message content as designed). This is the accepted verification boundary: real threshold-crossing is not simulated (would require real spend or waiting on AWS's billing-data lag), only the delivery path is exercised end-to-end.
   - [x] **No-alert-fires sanity (AC 2):** confirm no email arrived from an untouched deploy before the manual publish above — i.e. don't publish the test message until after confirming this.
   - [x] Do not attempt to force a real budget breach. No new spend is required or appropriate for this story.
-- [ ] **Task 4: Close out (Definition of Done)**
+- [x] **Task 4: Close out (Definition of Done)**
   - [x] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`. (No `npm run test:e2e` impact expected — zero `src/` changes — but run it anyway per the standing closeout gate.)
   - [x] Sweep the diff and this story file for credentials/secrets; no dollar figures beyond the already-public `$30`/`80%` design constants; no AWS account ID committed anywhere in code (the live-verification AWS CLI commands used it locally only).
   - [x] `deferred-work.md`: record (a) the accepted Config-vs-CDK-constant budget-ceiling drift (Contract values table), flagged for revisit if/when Story 4.3 ships and Tony wants them kept in sync; (b) the accepted per-environment Budget duplication risk once `staging`/`main` branches are eventually stood up as persistent parallel environments (Dev Notes scope decision 3) — each would mint its own `AWS::Budgets::Budget` watching the same real account-level spend, producing duplicate (not incorrect) notifications; revisit only if that actually starts happening.
-  - [ ] Update `sprint-status.yaml` (3-6 → review), commit with an isolated diff, push to `main`.
+  - [x] Update `sprint-status.yaml` (3-6 → review), commit with an isolated diff, push to `main`.
 
 ## Dev Notes
 
@@ -185,6 +185,8 @@ GPT-5
 - Task 2 complete: wired the $30 monthly Budget and 80% ACTUAL threshold to an exact-budget-ARN/account-scoped SNS topic, budget-alert Lambda/DLQ, SES policy, and Lambda Errors alarm; 270/270 tests, lint, typecheck, build, and diff checks passed.
 - Task 3 complete: deployed the sandbox; verified the live Budget, notification, SNS subscriber, hardened topic policy, no-alert precondition, and clean Lambda execution; Tony confirmed the exact fixed-copy email arrived.
 - Task 4 closeout gates: 270/270 tests, lint, typecheck, build, and 4/4 Playwright tests passed; credential/account-id sweep was clean; accepted Config drift and parallel-environment duplication risks were recorded.
+- Task 4 complete: sprint tracking moved to review and the isolated implementation commit `4fcd79c` was pushed to `origin/main`.
+- Definition of Done complete: every task and AC is satisfied, the final 270/270 regression pass is green, the seven-file inventory matches the implementation commit, and Story 3.6 is ready for review.
 
 ### File List
 
@@ -201,3 +203,4 @@ GPT-5
 - 2026-07-25: Story created via create-story workflow — status ready-for-dev.
 - 2026-07-25: Review pass (checklist-driven, web-verified) — fixed 3 critical issues (unscoped SNS resource-policy grant hardened with confused-deputy conditions per a verified working CDK reference; missing `budgetAlertLambda` local-const declaration made explicit; missing CDK construct ids added for the new DLQ/Budget/Alarm), corrected an overcautious region-restriction hedge after checking two working reference implementations, and restructured the fixed email copy into its own Copy section. Status remains ready-for-dev.
 - 2026-07-25: Second review pass — the `budgetAlertLambda` const-declaration fix from round 1 had only reached the contract table, not the actual Task 2 checklist (which still used the variable without ever declaring it); added an explicit Task 2 bullet. Also tightened the SNS resource policy's `aws:SourceArn` condition from the reference implementation's account-wide wildcard to the exact budget ARN, via a new shared `monthlyBudgetName` computed once and reused by both the policy and the `CfnBudget`. Status remains ready-for-dev.
+- 2026-07-25: Implemented, deployed, and live-verified AWS Budgets → SNS → budget-alert Lambda → SES monthly budget alerting; all local and browser gates passed and status moved to review.
