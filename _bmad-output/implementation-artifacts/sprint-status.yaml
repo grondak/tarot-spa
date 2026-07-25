@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-11
-last_updated: 2026-07-25 (story 3.7 created, ready-for-dev)
+last_updated: 2026-07-25 (story 3.7 implemented, review)
 project: tarot-spa
 project_key: NOKEY
 tracking_system: file-system
@@ -74,7 +74,7 @@ development_status:
   3-4-redraw-from-the-results-screen: done
   3-5-score-orientation-guide-groundedness-async: done
   3-6-alert-tony-when-the-monthly-budget-nears-its-ceiling: done
-  3-7-draw-for-fun-without-spending-your-daily-limit-authenticated-quick-draw: ready-for-dev
+  3-7-draw-for-fun-without-spending-your-daily-limit-authenticated-quick-draw: review
   epic-3-retrospective: optional
 
   epic-4: backlog

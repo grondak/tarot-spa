@@ -255,6 +255,17 @@ describe('ContextEntry rate-limited state', () => {
 });
 
 describe('ContextEntry deliberate quick draw', () => {
+  it('draws through onQuickDrawSelect without orienting when a spread is clicked', () => {
+    renderEntry();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draw for fun instead' }));
+    fireEvent.click(spreadButton('single'));
+
+    expect(onQuickDrawSelect).toHaveBeenCalledTimes(1);
+    expect(onQuickDrawSelect).toHaveBeenCalledWith('single');
+    expect(onOrient).not.toHaveBeenCalled();
+  });
+
   it('switches to Quick Draw without the note and returns with Context intact', () => {
     renderEntry();
 

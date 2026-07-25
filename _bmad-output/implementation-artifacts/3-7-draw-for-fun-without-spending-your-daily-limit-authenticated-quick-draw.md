@@ -4,7 +4,7 @@ baseline_commit: 84f8a9faa13b263e248c90945ed0ed295e27006e
 
 # Story 3.7: Draw for fun without spending your daily limit (authenticated Quick Draw)
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -43,25 +43,25 @@ So that I can play with the deck without spending a limited resource I might wan
 
 ## Tasks / Subtasks
 
-- [ ] **Task 0: Environment pre-flight** (AC: none — gate)
-  - [ ] Confirm `git log -1` is `84f8a9f` and the tree is clean before any change. If pre-existing uncommitted work exists, isolate and commit it separately first (standing 3.4/3.5/3.6 precedent) — never discard it.
-  - [ ] Baseline gates green: `npm test` (270/270 expected — confirm the real number, don't assume), `npm run lint`, `npm run typecheck`, `npm run build`.
-  - [ ] Confirm the test account still works: `npm run dev`, log in via the UI, confirm `Help Me Orient` renders as the authenticated home.
-- [ ] **Task 1: Close the AC 1 test-coverage gap** (AC: 1)
-  - [ ] `src/components/ContextEntry.test.jsx`, `describe('ContextEntry deliberate quick draw')` block: add one test alongside the existing "switches to Quick Draw... and returns with Context intact" test. New test: after clicking `Draw for fun instead`, click a spread button (e.g. `spreadButton('single')`) and assert `onQuickDrawSelect` was called exactly once with the key, and `onOrient` was never called. This is the one real gap — the existing rate-limited-state test already proves this wiring for the *rate-limited* entry point (`'draws through onQuickDrawSelect when a spread is clicked'`), but no test yet proves it for the *deliberate* entry point, which is this story's actual subject (AC 1's "no LLM call" guarantee, exercised via the path this story is named for).
-  - [ ] Do not duplicate or restructure any other existing test in this file — the rest of AC 1/2/3 already has direct coverage (see References).
-- [ ] **Task 2: Formalize the two open decisions** (AC: none — documentation, binds future stories)
-  - [ ] Add an entry to `_bmad-output/implementation-artifacts/deferred-work.md` under a new `## Recorded for Story 3.7 (2026-07-25)` heading recording Scope decision 1 (SpreadView round-trip mode reset, accepted-as-is, Tony 2026-07-25) verbatim enough that a future story can find it without re-deriving the mechanism.
-  - [ ] No code change for Scope decision 2 (copy approval) — it is a status change in this story record only, not a diff.
-- [ ] **Task 3: Full regression + verification** (AC: 1, 2, 3)
-  - [ ] `npm test`, `npm run lint`, `npm run typecheck`, `npm run build` — all green with the new test included.
-  - [ ] `npm run test:e2e` with `TAROT_E2E_EMAIL`/`TAROT_E2E_PASSWORD` set: confirm `e2e/authenticated.spec.js`'s existing "authenticated home is Context Entry with a working quick-draw bridge" test still passes unmodified — it already exercises AC 1 (bridge reaches a real card draw with no LLM path) and AC 2 (`← Back` returns to `Help Me Orient`). No new e2e test is required; this existing spec already covers this story's live-reachable ACs. Also run with `TAROT_E2E_EMAIL` unset to confirm the public-only path stays green.
-  - [ ] Live spot-check (`npm run dev`, logged in): reach Quick Draw via `Draw for fun instead`, draw a card, confirm no network/LLM activity accompanies the draw (Network tab — only the existing account-load/GraphQL calls, nothing draw-related), then `Back to Help Me Orient` returns with Context intact (AC 1, 2). AC 3 (rate-limited default) has no new live check — its accepted evidence is the existing Vitest suite (Scope decision 3).
-- [ ] **Task 4: Close out (Definition of Done)**
-  - [ ] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e`.
-  - [ ] Sweep the diff and this story file for credentials — this story touches no secrets, but the standing sweep still applies.
-  - [ ] Update `sprint-status.yaml` (3-7 → review).
-  - [ ] Commit the small diff (expected: `ContextEntry.test.jsx`, `deferred-work.md`, `sprint-status.yaml`, this story file) and push to `main`.
+- [x] **Task 0: Environment pre-flight** (AC: none — gate)
+  - [x] Confirm `git log -1` is `84f8a9f` and the tree is clean before any change. If pre-existing uncommitted work exists, isolate and commit it separately first (standing 3.4/3.5/3.6 precedent) — never discard it.
+  - [x] Baseline gates green: `npm test` (270/270 expected — confirm the real number, don't assume), `npm run lint`, `npm run typecheck`, `npm run build`.
+  - [x] Confirm the test account still works: `npm run dev`, log in via the UI, confirm `Help Me Orient` renders as the authenticated home.
+- [x] **Task 1: Close the AC 1 test-coverage gap** (AC: 1)
+  - [x] `src/components/ContextEntry.test.jsx`, `describe('ContextEntry deliberate quick draw')` block: add one test alongside the existing "switches to Quick Draw... and returns with Context intact" test. New test: after clicking `Draw for fun instead`, click a spread button (e.g. `spreadButton('single')`) and assert `onQuickDrawSelect` was called exactly once with the key, and `onOrient` was never called. This is the one real gap — the existing rate-limited-state test already proves this wiring for the *rate-limited* entry point (`'draws through onQuickDrawSelect when a spread is clicked'`), but no test yet proves it for the *deliberate* entry point, which is this story's actual subject (AC 1's "no LLM call" guarantee, exercised via the path this story is named for).
+  - [x] Do not duplicate or restructure any other existing test in this file — the rest of AC 1/2/3 already has direct coverage (see References).
+- [x] **Task 2: Formalize the two open decisions** (AC: none — documentation, binds future stories)
+  - [x] Add an entry to `_bmad-output/implementation-artifacts/deferred-work.md` under a new `## Recorded for Story 3.7 (2026-07-25)` heading recording Scope decision 1 (SpreadView round-trip mode reset, accepted-as-is, Tony 2026-07-25) verbatim enough that a future story can find it without re-deriving the mechanism.
+  - [x] No code change for Scope decision 2 (copy approval) — it is a status change in this story record only, not a diff.
+- [x] **Task 3: Full regression + verification** (AC: 1, 2, 3)
+  - [x] `npm test`, `npm run lint`, `npm run typecheck`, `npm run build` — all green with the new test included.
+  - [x] `npm run test:e2e` with `TAROT_E2E_EMAIL`/`TAROT_E2E_PASSWORD` set: confirm `e2e/authenticated.spec.js`'s existing "authenticated home is Context Entry with a working quick-draw bridge" test still passes unmodified — it already exercises AC 1 (bridge reaches a real card draw with no LLM path) and AC 2 (`← Back` returns to `Help Me Orient`). No new e2e test is required; this existing spec already covers this story's live-reachable ACs. Also run with `TAROT_E2E_EMAIL` unset to confirm the public-only path stays green.
+  - [x] Live spot-check (`npm run dev`, logged in): reach Quick Draw via `Draw for fun instead`, draw a card, confirm no network/LLM activity accompanies the draw (Network tab — only the existing account-load/GraphQL calls, nothing draw-related), then `Back to Help Me Orient` returns with Context intact (AC 1, 2). AC 3 (rate-limited default) has no new live check — its accepted evidence is the existing Vitest suite (Scope decision 3).
+- [x] **Task 4: Close out (Definition of Done)**
+  - [x] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e`.
+  - [x] Sweep the diff and this story file for credentials — this story touches no secrets, but the standing sweep still applies.
+  - [x] Update `sprint-status.yaml` (3-7 → review).
+  - [x] Commit the small diff (expected: `ContextEntry.test.jsx`, `deferred-work.md`, `sprint-status.yaml`, this story file) and push to `main`.
 
 ## Dev Notes
 
@@ -111,13 +111,36 @@ Recent history (`84f8a9f` back through `4fcd79c`) is Story 3.6's implementation 
 
 ### Agent Model Used
 
+OpenAI Codex (GPT-5)
+
+### Implementation Plan
+
+- Preserve the existing Quick Draw implementation and close only the deliberate-entry callback coverage gap with one focused component test.
+- Record the accepted SpreadView round-trip reset in deferred work, then verify all unit, static, build, authenticated, unauthenticated, and live-reachable flows before close-out.
+
 ### Debug Log References
+
+- 2026-07-25: Pre-flight found the Story 3.7 draft and its `ready-for-dev` sprint entry uncommitted on baseline `84f8a9f`; isolated them in commit `15ae686` before implementation.
+- 2026-07-25: In-app browser connection was unavailable before page load due missing sandbox metadata; used the repository's authenticated Playwright setup and spec as the credential-safe UI fallback.
+- 2026-07-25: Task 1's test was green on addition because Story 3.1 had already forward-delivered the callback behavior; no artificial production regression was introduced solely to manufacture a red phase.
+- 2026-07-25: Live network spot-check initially classified all POSTs as draw-related; refined the assertion to the story's actual forbidden signals. Observed only delayed Cognito/AppSync account-loading calls and zero generation/provider requests.
 
 ### Completion Notes List
 
+- Task 0 complete: confirmed baseline `84f8a9f`, isolated pre-existing story-authoring work, passed 270/270 baseline tests plus lint/typecheck/build, and passed the authenticated account setup and Context Entry Quick Draw bridge spec.
+- Task 1 complete: added the sole deliberate Quick Draw callback test; focused ContextEntry coverage passed 21/21 and the full suite passed 271/271 with lint, typecheck, and build green.
+- Task 2 complete: recorded the accepted-as-is SpreadView round-trip mode reset and preserved the approved bridge copy without code changes; full regression remained 271/271.
+- Task 3 complete: passed 271/271 unit tests, lint, typecheck, build, 4/4 authenticated E2E cases, and 2/2 public-only E2E cases. Live verification rendered a card with no Orientation Guide/provider request, preserved Context through the direct Quick Draw return, and returned from SpreadView to Context Entry.
+- Task 4 complete: exact four-file diff passed whitespace and credential sweeps; all tasks, ACs, and Definition of Done gates are satisfied and the story is ready for review.
+
 ### File List
 
+- _bmad-output/implementation-artifacts/3-7-draw-for-fun-without-spending-your-daily-limit-authenticated-quick-draw.md
+- _bmad-output/implementation-artifacts/deferred-work.md
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+- src/components/ContextEntry.test.jsx
 ## Change Log
 
 - 2026-07-25: Story created via create-story workflow. Discovered during research that Story 3.1 had already forward-delivered this story's entire feature surface (the Quick Draw bridge) with existing unit + e2e coverage; scope reduced accordingly to one test-coverage gap plus formalizing two decisions Story 3.1 explicitly deferred. Tony confirmed (2026-07-25) the SpreadView round-trip mode-reset quirk should be documented as accepted, not fixed. Status: ready-for-dev.
 - 2026-07-25: Review pass (checklist-driven) — re-verified every factual claim against the live repo rather than trusting the first pass: `git log 4fcd79c..84f8a9f` confirmed the git-intelligence claim (Story 3.6 was `amplify/**`-only, zero `src/`), `npm test` reconfirmed 270/270, and the 3.1 story-file quotes were checked verbatim. Fixed one clerical error (Scope decision 2 miscounted the shipped-stories list as "Three" when four were named: 3.2, 3.4, 3.5, 3.6). No other defects found — task instructions, file-scope guardrails, and AC-to-evidence mapping all checked out. Status remains ready-for-dev.
+- 2026-07-25: Implemented Story 3.7 by adding the deliberate Quick Draw callback guard test, recording the accepted SpreadView round-trip reset, and completing unit/static/build/E2E/live verification. Status: review.

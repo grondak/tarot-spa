@@ -38,6 +38,10 @@
 - **Config-vs-CDK budget-ceiling drift:** the in-app MonthlySpend gate reads Config's live `monthlyBudget`, while the secondary AWS Budget uses the independently maintained synth-time `MONTHLY_BUDGET_CEILING_USD` constant. Both currently use $30. Revisit if Story 4.3 ships and Tony wants Admin Dashboard budget edits to keep the AWS Budget synchronized.
 - **Parallel-environment Budget duplication:** each future persistent `staging`/`main` environment in the same AWS account would create its own AWS Budget watching the same account-level spend, producing duplicate rather than incorrect notifications. Revisit only if persistent parallel environments are actually introduced and duplicate alerts begin occurring.
 
+## Recorded for Story 3.7 (2026-07-25)
+
+- **Authenticated Quick Draw round-trip mode reset is accepted as-is (Tony, 2026-07-25):** deliberate Quick Draw mode is local `useState` in `ContextEntry`. Selecting a spread unmounts `ContextEntry` while `SpreadView` is shown, so clicking `SpreadView`'s `← Back` remounts a fresh `ContextEntry` in canonical `orient` mode rather than restoring `quickdraw`. This is not a bug to fix absent a new requirement: AC 2 is satisfied by the direct `Back to Help Me Orient` button, which does not unmount `ContextEntry` and preserves the entered Context and selected Spread. Do not lift `mode` into `App.jsx` or add sticky-mode state solely for this round trip.
+
 ## Deferred from: code review of story-3.6 (2026-07-25)
 
 - **Fixed alert copy triplicated with no shared source of truth** — the exact Subject/Body strings are independently typed in `handler.ts`, `handler.test.ts`, and the story's Copy section; a wording change requires three synchronized edits. Inherited from `orientation-alert`'s established convention, not new to this story.
