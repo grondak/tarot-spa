@@ -21,6 +21,7 @@ const ORIENTATION_POLL_MS = 5000;
 const ORIENTATION_DEADLINE_MS = 300000;
 const ORIENTATION_MISSING_GRACE_MS = 15000;
 const ACTIVE_ORIENTATION_SESSION_KEY = 'tarotSpaActiveOrientationSession';
+const ORIENTATION_REDRAW_CONTEXT_KEY = 'tarotSpaOrientationRedrawContext';
 const ORIENTATION_STATUS_UNKNOWN = 'GENERATION_STATUS_UNKNOWN';
 
 function getActiveOrientationSession() {
@@ -54,6 +55,32 @@ function clearActiveOrientationSession(sessionId) {
   }
 }
 
+function getOrientationRedrawContext() {
+  try {
+    return localStorage.getItem(ORIENTATION_REDRAW_CONTEXT_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function storeOrientationRedrawContext(context) {
+  try {
+    localStorage.setItem(ORIENTATION_REDRAW_CONTEXT_KEY, context);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearOrientationRedrawContext() {
+  try {
+    localStorage.removeItem(ORIENTATION_REDRAW_CONTEXT_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default function App() {
   const [authState, setAuthState] = useState('loading');
   const [authScreen, setAuthScreen] = useState('landing');
@@ -63,7 +90,7 @@ export default function App() {
   const [guideResult, setGuideResult] = useState(null);
   const [orientBusy, setOrientBusy] = useState(false);
   const [orientError, setOrientError] = useState(null);
-  const [orientContext, setOrientContext] = useState('');
+  const [orientContext, setOrientContext] = useState(getOrientationRedrawContext);
   const [orientSpreadKey, setOrientSpreadKey] = useState(null);
   const [orientRecoveryRevision, setOrientRecoveryRevision] = useState(0);
   const authRequestId = useRef(0);
@@ -141,6 +168,8 @@ export default function App() {
           const sessionWasAuthenticated = authStateRef.current === 'authenticated';
           authStateRef.current = 'unauthenticated';
           setAuthState('unauthenticated');
+          clearOrientationRedrawContext();
+          setOrientContext('');
           if (sessionWasAuthenticated) {
             orientationFlowId.current += 1;
             cancelOrientationDelays();
@@ -396,6 +425,7 @@ export default function App() {
 
   async function handleOrient(context, selectedSpreadKey) {
     if (orientationSubmitting.current || getActiveOrientationSession()) return;
+    clearOrientationRedrawContext();
     orientationSubmitting.current = true;
     cancelOrientationDelays();
     const flowId = ++orientationFlowId.current;
@@ -521,6 +551,7 @@ export default function App() {
     orientationSubmitting.current = false;
     authStateRef.current = 'unauthenticated';
     clearActiveOrientationSession();
+    clearOrientationRedrawContext();
     setAuthState('unauthenticated');
     setAuthScreen('landing');
     setSpreadKey(null);
@@ -540,16 +571,30 @@ export default function App() {
     setAuthState('authenticated');
   }
 
-  function handleGuideBack() {
+  function handleRedraw(preserveContext) {
+    const context = preserveContext ? (guideResult?.context ?? '') : '';
     orientationFlowId.current += 1;
     cancelOrientationDelays();
     clearActiveOrientationSession(guideResult?.sessionId);
+    if (preserveContext) {
+      storeOrientationRedrawContext(context);
+    } else {
+      clearOrientationRedrawContext();
+    }
     orientationSubmitting.current = false;
-    setGuideResult(null);
     setOrientBusy(false);
     setOrientError(null);
-    setOrientContext('');
+    setOrientContext(context);
     setOrientSpreadKey(null);
+    setGuideResult(null);
+  }
+
+  function handleRedrawFresh() {
+    handleRedraw(false);
+  }
+
+  function handleRedrawTweak() {
+    handleRedraw(true);
   }
 
   if (authState === 'loading') {
@@ -585,7 +630,8 @@ export default function App() {
       {guideResult ? (
         <OrientationGuideResults
           result={guideResult}
-          onBack={handleGuideBack}
+          onRedrawFresh={handleRedrawFresh}
+          onRedrawTweak={handleRedrawTweak}
         />
       ) : spreadKey ? (
       <SpreadView

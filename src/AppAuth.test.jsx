@@ -851,7 +851,7 @@ describe('App authenticated sign-out round trip', () => {
       .not.toBeInTheDocument();
   });
 
-  it('clears the stored ID on Results Back and sign-out', async () => {
+  it('clears the stored ID on a fresh redraw and sign-out', async () => {
     render(<App />);
 
     expect(await screen.findByLabelText('Context')).toBeVisible();
@@ -859,17 +859,141 @@ describe('App authenticated sign-out round trip', () => {
     fireEvent.click(screen.getByRole('button', { name: /Single Card/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
     expect(await screen.findByText('The generated guide.')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: '← Back' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Provide another observation' }));
     expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBeNull();
 
     localStorage.setItem(
       'tarotSpaActiveOrientationSession',
       '12345678-1234-4234-9234-123456789012',
     );
+    localStorage.setItem('tarotSpaOrientationRedrawContext', 'Discard this draft.');
     fireEvent.click(screen.getByRole('button', { name: 'Log Out' }));
     expect(await screen.findByRole('button', { name: 'I have an Invite Key' })).toBeVisible();
     expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBeNull();
+    expect(localStorage.getItem('tarotSpaOrientationRedrawContext')).toBeNull();
   });
+
+  it('returns to a blank Context Entry with no Spread after a fresh redraw', async () => {
+    render(<App />);
+
+    expect(await screen.findByLabelText('Context')).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'A decision.' } });
+    fireEvent.click(screen.getByRole('button', { name: /Single Card/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
+    expect(await screen.findByText('The generated guide.')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Provide another observation' }));
+
+    expect(screen.getByLabelText('Context')).toHaveValue('');
+    expect(screen.queryByRole('button', { pressed: true })).toBeNull();
+    expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBeNull();
+    expect(localStorage.getItem('tarotSpaOrientationRedrawContext')).toBeNull();
+  });
+
+  it('restores the exact prior Context with no Spread after a tweak redraw reload', async () => {
+    const { unmount } = render(<App />);
+
+    expect(await screen.findByLabelText('Context')).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'A decision.' } });
+    fireEvent.click(screen.getByRole('button', { name: /Single Card/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
+    expect(await screen.findByText('The generated guide.')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tweak existing observation' }));
+
+    expect(screen.getByLabelText('Context')).toHaveValue('A decision.');
+    expect(screen.queryByRole('button', { pressed: true })).toBeNull();
+    expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBeNull();
+    expect(localStorage.getItem('tarotSpaOrientationRedrawContext')).toBe('A decision.');
+
+    unmount();
+    render(<App />);
+
+    expect(await screen.findByLabelText('Context')).toHaveValue('A decision.');
+    expect(screen.queryByRole('button', { pressed: true })).toBeNull();
+    expect(screen.queryByText('The generated guide.')).not.toBeInTheDocument();
+  });
+
+  it('still returns to Context Entry when redraw-draft storage is denied', async () => {
+    localStorage.setItem(
+      'tarotSpaActiveOrientationSession',
+      '12345678-1234-4234-9234-123456789012',
+    );
+    const originalSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function setItem(key, value) {
+      if (key === 'tarotSpaOrientationRedrawContext') {
+        throw new Error('redraw storage denied');
+      }
+      return originalSetItem.call(this, key, value);
+    });
+    render(<App />);
+
+    expect(await screen.findByText('The generated guide.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Tweak existing observation' }));
+
+    expect(screen.getByLabelText('Context')).toHaveValue('A decision.');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBeNull();
+  });
+
+  it.each([
+    {
+      redrawAction: 'Provide another observation',
+      submittedContext: 'A fresh observation.',
+    },
+    {
+      redrawAction: 'Tweak existing observation',
+      submittedContext: 'A decision, revised.',
+    },
+  ])(
+    'reuses the normal async submit path after $redrawAction',
+    async ({ redrawAction, submittedContext }) => {
+      const firstSessionId = '12345678-1234-4234-9234-123456789012';
+      const secondSessionId = 'abcdefab-cdef-4abc-9def-abcdefabcdef';
+      globalThis.crypto.randomUUID
+        .mockReturnValueOnce(firstSessionId)
+        .mockReturnValueOnce(secondSessionId);
+      startOrientationGuide.mockImplementation(async (sessionId) => ({
+        sessionId,
+        status: 'PENDING',
+      }));
+      getSession.mockImplementation(async (sessionId) => ({
+        id: sessionId,
+        spreadKey: 'single',
+        context: sessionId === firstSessionId ? 'A decision.' : submittedContext,
+        status: 'SUCCEEDED',
+        cards: resultCards('single'),
+        currentEvents: [],
+        guide: sessionId === firstSessionId
+          ? 'The generated guide.'
+          : 'The redrawn guide.',
+        tavilyTimedOut: false,
+      }));
+      render(<App />);
+
+      expect(await screen.findByLabelText('Context')).toBeVisible();
+      fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'A decision.' } });
+      fireEvent.click(screen.getByRole('button', { name: /Single Card/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
+      expect(await screen.findByText('The generated guide.')).toBeVisible();
+
+      fireEvent.click(screen.getByRole('button', { name: redrawAction }));
+      fireEvent.change(screen.getByLabelText('Context'), {
+        target: { value: submittedContext },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /Single Card/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
+
+      expect(await screen.findByText('The redrawn guide.')).toBeVisible();
+      expect(startOrientationGuide).toHaveBeenCalledTimes(2);
+      expect(startOrientationGuide.mock.calls).toEqual([
+        [firstSessionId, 'A decision.', 'single'],
+        [secondSessionId, submittedContext, 'single'],
+      ]);
+      expect(firstSessionId).not.toBe(secondSessionId);
+      expect(localStorage.getItem('tarotSpaOrientationRedrawContext')).toBeNull();
+    },
+  );
 
   it('does not clear another tab\'s newer active ID when leaving an older result', async () => {
     render(<App />);
@@ -882,7 +1006,7 @@ describe('App authenticated sign-out round trip', () => {
 
     const newerSessionId = 'abcdefab-cdef-4abc-9def-abcdefabcdef';
     localStorage.setItem('tarotSpaActiveOrientationSession', newerSessionId);
-    fireEvent.click(screen.getByRole('button', { name: '← Back' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Provide another observation' }));
 
     expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBe(newerSessionId);
   });
@@ -901,7 +1025,7 @@ describe('App authenticated sign-out round trip', () => {
     fireEvent.click(screen.getByRole('button', { name: /Single Card/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
     expect(await screen.findByText('The generated guide.')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: '← Back' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Provide another observation' }));
 
     await act(async () => resolveStaleStatus({ limitExhausted: true }));
 

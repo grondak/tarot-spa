@@ -6,11 +6,13 @@ import OrientationGuideResults from './OrientationGuideResults';
 
 const TIMEOUT_NOTE = 'The news is slow today — this Guide worked from the cards and your own words alone.';
 
-let onBack;
+let onRedrawFresh;
+let onRedrawTweak;
 let result;
 
 beforeEach(() => {
-  onBack = vi.fn();
+  onRedrawFresh = vi.fn();
+  onRedrawTweak = vi.fn();
   result = {
     spreadKey: 'decision',
     cards: [
@@ -40,7 +42,8 @@ function renderResults(overrides = {}) {
   return render(
     <OrientationGuideResults
       result={{ ...result, ...overrides }}
-      onBack={onBack}
+      onRedrawFresh={onRedrawFresh}
+      onRedrawTweak={onRedrawTweak}
     />,
   );
 }
@@ -107,20 +110,37 @@ describe('OrientationGuideResults', () => {
     expect(paragraphs[0].closest('section')).toHaveClass('mx-auto', 'w-full', 'max-w-2xl');
   });
 
-  it('has exactly one aria-hidden ornamental divider above the Back action', () => {
+  it('has exactly one aria-hidden ornamental divider above both redraw actions', () => {
     renderResults();
 
     const glyphs = screen.getAllByText('❦');
     expect(glyphs).toHaveLength(1);
-    expect(glyphs[0].closest('[aria-hidden="true"]')).not.toBeNull();
-    expect(screen.getByRole('button', { name: '← Back' })).toBeVisible();
+    const divider = glyphs[0].closest('[aria-hidden="true"]');
+    const freshButton = screen.getByRole('button', { name: 'Provide another observation' });
+    expect(divider).not.toBeNull();
+    expect(divider.compareDocumentPosition(freshButton)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(freshButton).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Tweak existing observation' }),
+    ).toBeVisible();
   });
 
-  it('calls onBack once and adds no custom sharing affordance', () => {
+  it('calls only onRedrawFresh for another observation and adds no sharing affordance', () => {
     renderResults();
 
-    fireEvent.click(screen.getByRole('button', { name: '← Back' }));
-    expect(onBack).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Provide another observation' }));
+    expect(onRedrawFresh).toHaveBeenCalledTimes(1);
+    expect(onRedrawTweak).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /copy|share/i })).not.toBeInTheDocument();
+  });
+
+  it('calls only onRedrawTweak for the existing observation', () => {
+    renderResults();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tweak existing observation' }));
+    expect(onRedrawTweak).toHaveBeenCalledTimes(1);
+    expect(onRedrawFresh).not.toHaveBeenCalled();
   });
 });

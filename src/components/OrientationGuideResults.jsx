@@ -6,7 +6,11 @@ import { gridClass } from './SpreadView';
 
 const TIMEOUT_NOTE = 'The news is slow today — this Guide worked from the cards and your own words alone.';
 
-export default function OrientationGuideResults({ result, onBack }) {
+export default function OrientationGuideResults({
+  result,
+  onRedrawFresh,
+  onRedrawTweak,
+}) {
   const spread = SPREADS[result.spreadKey];
   const cards = result.cards
     .map(({ name, position, inverted }) => {
@@ -88,13 +92,20 @@ export default function OrientationGuideResults({ result, onBack }) {
         <div className="mt-12">
           <OrnamentalDivider />
         </div>
-        <div className="mt-12 flex justify-center">
+        <div className="mt-12 flex flex-wrap justify-center gap-3">
           <button
             type="button"
-            onClick={onBack}
+            onClick={onRedrawFresh}
             className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
-            ← Back
+            Provide another observation
+          </button>
+          <button
+            type="button"
+            onClick={onRedrawTweak}
+            className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            Tweak existing observation
           </button>
         </div>
       </section>
