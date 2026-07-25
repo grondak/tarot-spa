@@ -4,7 +4,7 @@ baseline_commit: 609ef44
 
 # Story 3.5: Score Orientation Guide groundedness (async)
 
-Status: review
+Status: done
 
 ## Story
 
@@ -239,3 +239,4 @@ GPT-5
 - 2026-07-25: Story created via create-story workflow (ultimate context engine analysis) — status ready-for-dev.
 - 2026-07-25: Implemented, deployed, and live-verified asynchronous Haiku groundedness scoring — status review.
 - 2026-07-25: First code review (8-angle finder sweep + spec-grounded verify pass over `609ef44..32d10d2`): 15 deduplicated candidates, 10 refuted as spec-prescribed or spec-accepted (incl. the four-finder judge-ARN blind spot — already recorded in scope decision 4 / deferred-work), 5 findings fixed. (1) Runbook + Task 5 judge invoke command gained `--cli-binary-format raw-in-base64-out` (failed verbatim under AWS CLI v2 base64 default). (2) `parseClaims` now requires non-blank claim strings, so a degenerate blank-claim reply takes the `UNPARSEABLE` leave-unset path instead of writing a fabricated 1.0 score — two new pinned test cases. (3) Alert email Subject generalized to `pipeline alert`, matching the body copy this story already generalized (fixed copy, still non-interpolating). (4) `isErrorNamed` extracted to `usage-counter/reservation.ts` (AD-4 plain-utility precedent); four byte-identical local copies removed (starter, worker, reconciler, judge). (5) New shared `effectiveStatus()` owns the missing-status-means-SUCCEEDED convention at the three JS sites; the judge's ConditionExpression arm stays hand-encoded with a sync note on the helper. 267/267 tests, lint, typecheck green. Status remains review.
+- 2026-07-25: Review accepted; Story 3.5 marked done.
