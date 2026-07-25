@@ -9,7 +9,8 @@ import {
   TreatMissingData,
 } from 'aws-cdk-lib/aws-cloudwatch';
 import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
-import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { CfnBudget } from 'aws-cdk-lib/aws-budgets';
+import { PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import {
   Alias,
   CfnFunction,
@@ -25,6 +26,7 @@ import { CfnWebACL, CfnWebACLAssociation } from 'aws-cdk-lib/aws-wafv2';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { postConfirmation } from './auth/post-confirmation/resource';
+import { budgetAlert } from './functions/budget-alert/resource';
 import { checkInviteKey } from './functions/check-invite-key/resource';
 import { inviteKeyMint } from './functions/invite-key-mint/resource';
 import { orientationGuide } from './functions/orientation-guide/resource';
@@ -35,10 +37,15 @@ import { requestAccess } from './functions/request-access/resource';
 import { startOrientationGuide } from './functions/start-orientation-guide/resource';
 import { usageCounter } from './functions/usage-counter/resource';
 
+// This synth-time ceiling mirrors Config's seed default but does not follow live Config edits.
+const MONTHLY_BUDGET_CEILING_USD = 30;
+const MONTHLY_BUDGET_WARNING_THRESHOLD_PERCENT = 80;
+
 const backend = defineBackend({
   auth,
   data,
   postConfirmation,
+  budgetAlert,
   checkInviteKey,
   inviteKeyMint,
   orientationAlert,
@@ -57,6 +64,7 @@ const inviteKeyTable = backend.data.resources.tables.InviteKey;
 const monthlySpendTable = backend.data.resources.tables.MonthlySpend;
 const sessionTable = backend.data.resources.tables.Session;
 const redemptionLambda = backend.postConfirmation.resources.lambda;
+const budgetAlertLambda = backend.budgetAlert.resources.lambda;
 const checkInviteKeyLambda = backend.checkInviteKey.resources.lambda;
 const inviteKeyMintLambda = backend.inviteKeyMint.resources.lambda;
 const orientationGuideLambda = backend.orientationGuide.resources.lambda;
@@ -72,6 +80,15 @@ const usageCounterLambda = backend.usageCounter.resources.lambda;
 // in this account/region, matching the existing User Pool wildcard rationale below.
 const dataStack = Stack.of(accountTable);
 const operationalStack = Stack.of(backend.data.resources.graphqlApi);
+const backendNamespace = accountTable.node.tryGetContext('amplify-backend-namespace');
+const backendName = accountTable.node.tryGetContext('amplify-backend-name');
+if (!backendNamespace || !backendName) {
+  // The SSM paths and Budget name must be unique per environment.
+  throw new Error(
+    'Missing amplify-backend-namespace/amplify-backend-name CDK context — refusing to fall back to a shared SSM path.',
+  );
+}
+const monthlyBudgetName = `${backendNamespace}-${backendName}-monthly-budget`;
 const workerDeadLetterQueue = new Queue(
   operationalStack,
   'OrientationGuideWorkerDeadLetterQueue',
@@ -92,6 +109,62 @@ const workerFailureTopic = new Topic(
   operationalStack,
   'OrientationGuideWorkerFailureTopic',
 );
+const budgetAlertTopic = new Topic(
+  operationalStack,
+  'MonthlyBudgetAlertTopic',
+);
+budgetAlertTopic.addToResourcePolicy(new PolicyStatement({
+  actions: ['sns:Publish'],
+  principals: [new ServicePrincipal('budgets.amazonaws.com')],
+  resources: [budgetAlertTopic.topicArn],
+  conditions: {
+    ArnEquals: {
+      'aws:SourceArn': `arn:aws:budgets::${operationalStack.account}:budget/${monthlyBudgetName}`,
+    },
+    StringEquals: {
+      'aws:SourceAccount': operationalStack.account,
+    },
+  },
+}));
+const budgetAlertDeliveryDeadLetterQueue = new Queue(
+  operationalStack,
+  'MonthlyBudgetAlertDeliveryDeadLetterQueue',
+  {
+    encryption: QueueEncryption.SQS_MANAGED,
+    retentionPeriod: Duration.days(14),
+  },
+);
+const budgetAlertCfnFunction = budgetAlertLambda.node.defaultChild as CfnFunction;
+budgetAlertCfnFunction.deadLetterConfig = {
+  targetArn: budgetAlertDeliveryDeadLetterQueue.queueArn,
+};
+budgetAlertDeliveryDeadLetterQueue.grantSendMessages(budgetAlertLambda);
+budgetAlertTopic.addSubscription(new LambdaSubscription(budgetAlertLambda, {
+  deadLetterQueue: budgetAlertDeliveryDeadLetterQueue,
+}));
+new CfnBudget(operationalStack, 'MonthlyBudget', {
+  budget: {
+    budgetName: monthlyBudgetName,
+    budgetType: 'COST',
+    timeUnit: 'MONTHLY',
+    budgetLimit: {
+      amount: MONTHLY_BUDGET_CEILING_USD,
+      unit: 'USD',
+    },
+  },
+  notificationsWithSubscribers: [{
+    notification: {
+      notificationType: 'ACTUAL',
+      comparisonOperator: 'GREATER_THAN',
+      threshold: MONTHLY_BUDGET_WARNING_THRESHOLD_PERCENT,
+      thresholdType: 'PERCENTAGE',
+    },
+    subscribers: [{
+      subscriptionType: 'SNS',
+      address: budgetAlertTopic.topicArn,
+    }],
+  }],
+});
 const alertDeliveryDeadLetterQueue = new Queue(
   operationalStack,
   'OrientationGuideAlertDeliveryDeadLetterQueue',
@@ -213,6 +286,27 @@ const alertLambdaErrorAlarm = new Alarm(
   },
 );
 alertLambdaErrorAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
+const budgetAlertLambdaErrorAlarm = new Alarm(
+  operationalStack,
+  'MonthlyBudgetAlertLambdaErrorAlarm',
+  {
+    metric: budgetAlertLambda.metricErrors({
+      period: Duration.minutes(5),
+      statistic: 'Sum',
+    }),
+    threshold: 1,
+    evaluationPeriods: 1,
+    comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+    treatMissingData: TreatMissingData.NOT_BREACHING,
+  },
+);
+budgetAlertLambdaErrorAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
+budgetAlertLambda.addToRolePolicy(new PolicyStatement({
+  actions: ['ses:SendEmail'],
+  resources: [
+    dataStack.formatArn({ service: 'ses', resource: 'identity', resourceName: '*' }),
+  ],
+}));
 orientationAlertLambda.addToRolePolicy(new PolicyStatement({
   actions: ['ses:SendEmail'],
   resources: [
@@ -356,15 +450,6 @@ orientationJudgeLambda.addToRolePolicy(new PolicyStatement({
 // compute as plain strings; the Lambda reads them once at cold start. No cross-stack
 // references, nothing to order at deploy time. Amplify's default table names already embed
 // the per-environment AppSync API id, so `staging`/`main`/sandboxes can't collide.
-const backendNamespace = accountTable.node.tryGetContext('amplify-backend-namespace');
-const backendName = accountTable.node.tryGetContext('amplify-backend-name');
-if (!backendNamespace || !backendName) {
-  // The SSM paths must be unique per environment. Silently falling back to a fixed string
-  // would let two environments read each other's table names — fail synth instead.
-  throw new Error(
-    'Missing amplify-backend-namespace/amplify-backend-name CDK context — refusing to fall back to a shared SSM path.',
-  );
-}
 const ssmPrefix = `/${backendNamespace}/${backendName}`;
 const accountTableParam = `${ssmPrefix}/account-table-name`;
 const configTableParam = `${ssmPrefix}/config-table-name`;

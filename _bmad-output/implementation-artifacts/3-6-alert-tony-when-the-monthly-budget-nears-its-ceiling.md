@@ -64,36 +64,36 @@ Do not interpolate the real SNS message content into this email (see Contract va
 
 ## Tasks / Subtasks
 
-- [ ] **Task 0: Environment pre-flight** (AC: none — gate)
-  - [ ] Confirm `git log -1` is `49682b3` and the tree is clean before any change. If pre-existing uncommitted work exists, follow the 3.4/3.5 precedent — isolate and commit it separately, never discard it.
-  - [ ] Gates green at baseline: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`. Use the project's Node 24 toolchain.
-  - [ ] AWS credentials valid; `npx ampx sandbox secret list` shows `ACCESS_FROM_EMAIL` and `CUTOUT_EMAIL` still present (pre-dev prerequisite 2) — if either is missing, HALT for Tony.
-- [ ] **Task 1: `budget-alert` Lambda** (AC: 1)
-  - [ ] `amplify/functions/budget-alert/resource.ts` per the contract table.
-  - [ ] `amplify/functions/budget-alert/handler.ts` — copy `orientation-alert/handler.ts`'s structure (DI shape, guards, `SendEmailCommand` call) with only the Subject/Body text changed per the contract table. Do not add message parsing/relay (see contract row).
-  - [ ] `amplify/functions/budget-alert/handler.test.ts` — mirror `orientation-alert/handler.test.ts`'s three cases: (a) valid SNS event → SES called once with the exact fixed Subject/Body from the Copy section; (b) SES rejection propagates (throws, for Lambda's built-in async retry + DLQ to catch); (c) missing config (`cutoutEmail` empty) throws before sending, and a non-`aws:sns` `EventSource` throws before sending.
-- [ ] **Task 2: `amplify/backend.ts` wiring** (AC: 1, 2)
-  - [ ] Add `budgetAlert` to imports and `defineBackend({...})`.
-  - [ ] Declare `const budgetAlertLambda = backend.budgetAlert.resources.lambda;` alongside the existing per-function `const xLambda = ...` declarations — every bullet below depends on this existing first.
-  - [ ] Add `ServicePrincipal` to the existing `aws-cdk-lib/aws-iam` import; add `import { CfnBudget } from 'aws-cdk-lib/aws-budgets';`.
-  - [ ] Compute `monthlyBudgetName` (contract table) from the `backendNamespace`/`backendName` CDK context — hoist that context read earlier in the file if it isn't already available at this point (it's currently read further down for the SSM prefix; `tryGetContext` is idempotent, so reading it twice or moving the read is both fine — just don't duplicate the "missing context → throw" guard's error message inconsistently). This must happen **before** the resource-policy bullet below, since the policy's `aws:SourceArn` condition needs it.
-  - [ ] Build the DLQ + `deadLetterConfig` + `grantSendMessages` block for `budgetAlertLambda`, exactly mirroring the existing `alertDeliveryDeadLetterQueue` block's shape (new names: `budgetAlertDeliveryDeadLetterQueue`, etc).
-  - [ ] Create `budgetAlertTopic` (`Topic`, `operationalStack`), subscribe `budgetAlertLambda` via `LambdaSubscription` with the new DLQ, per the contract table.
-  - [ ] Grant `budgets.amazonaws.com` publish on `budgetAlertTopic` per the contract table's hardened, exact-ARN-scoped policy (uses `monthlyBudgetName` from above — do not use the reference implementation's wildcard `:*` form).
-  - [ ] Add the `budgetAlertLambda` Errors alarm feeding `workerFailureTopic`, exactly mirroring `alertLambdaErrorAlarm`'s shape.
-  - [ ] Add the SES `sendEmail` policy statement for `budgetAlertLambda`, exactly mirroring the existing `orientationAlertLambda`/`requestAccessLambda` blocks.
-  - [ ] Define `MONTHLY_BUDGET_CEILING_USD` / `MONTHLY_BUDGET_WARNING_THRESHOLD_PERCENT` constants near the top of the file with the one-line comment from the contract table explaining the Config-drift accepted gap.
-  - [ ] Create the `CfnBudget` per the contract table, reusing the **same** `monthlyBudgetName` computed above (not a fresh template literal) — created after `budgetAlertTopic` since it references `budgetAlertTopic.topicArn`.
-- [ ] **Task 3: Deploy + live verification** (AC: 1, 2)
-  - [ ] `npx ampx sandbox --once`. A clean deploy is expected — two independent working CDK reference implementations (web-checked, Dev Notes) deploy `CfnBudget` + SNS with no region pinning, so this is not expected to be a blocker. If it does fail on a region-related CloudFormation error, HALT and report to Tony rather than guessing at a workaround.
-  - [ ] **Structural verification (AC 1, 2 — the wiring, not real billing):** `aws budgets describe-budgets --account-id <account-id>` shows the new budget with `BudgetLimit.Amount = "30.0"`, `BudgetType = COST`, `TimeUnit = MONTHLY`; `aws budgets describe-notifications-for-budget` shows one `ACTUAL`/`GREATER_THAN`/80%/`PERCENTAGE` notification; `aws budgets describe-subscribers-for-notification` shows one `SNS` subscriber pointing at the new topic ARN.
-  - [ ] **Delivery verification (AC 1 — the actually-testable part without waiting on real billing data, which AD-6 already documents as lagging):** `aws sns publish --topic-arn <budgetAlertTopic ARN> --message "story-3.6 manual verification"` and confirm the fixed-copy email arrives at the `CUTOUT_EMAIL` inbox within a couple minutes, with exactly the Subject/Body from the Copy section (not the raw test message — proving the Lambda ignores message content as designed). This is the accepted verification boundary: real threshold-crossing is not simulated (would require real spend or waiting on AWS's billing-data lag), only the delivery path is exercised end-to-end.
-  - [ ] **No-alert-fires sanity (AC 2):** confirm no email arrived from an untouched deploy before the manual publish above — i.e. don't publish the test message until after confirming this.
-  - [ ] Do not attempt to force a real budget breach. No new spend is required or appropriate for this story.
+- [x] **Task 0: Environment pre-flight** (AC: none — gate)
+  - [x] Confirm `git log -1` is `49682b3` and the tree is clean before any change. If pre-existing uncommitted work exists, follow the 3.4/3.5 precedent — isolate and commit it separately, never discard it.
+  - [x] Gates green at baseline: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`. Use the project's Node 24 toolchain.
+  - [x] AWS credentials valid; `npx ampx sandbox secret list` shows `ACCESS_FROM_EMAIL` and `CUTOUT_EMAIL` still present (pre-dev prerequisite 2) — if either is missing, HALT for Tony.
+- [x] **Task 1: `budget-alert` Lambda** (AC: 1)
+  - [x] `amplify/functions/budget-alert/resource.ts` per the contract table.
+  - [x] `amplify/functions/budget-alert/handler.ts` — copy `orientation-alert/handler.ts`'s structure (DI shape, guards, `SendEmailCommand` call) with only the Subject/Body text changed per the contract table. Do not add message parsing/relay (see contract row).
+  - [x] `amplify/functions/budget-alert/handler.test.ts` — mirror `orientation-alert/handler.test.ts`'s three cases: (a) valid SNS event → SES called once with the exact fixed Subject/Body from the Copy section; (b) SES rejection propagates (throws, for Lambda's built-in async retry + DLQ to catch); (c) missing config (`cutoutEmail` empty) throws before sending, and a non-`aws:sns` `EventSource` throws before sending.
+- [x] **Task 2: `amplify/backend.ts` wiring** (AC: 1, 2)
+  - [x] Add `budgetAlert` to imports and `defineBackend({...})`.
+  - [x] Declare `const budgetAlertLambda = backend.budgetAlert.resources.lambda;` alongside the existing per-function `const xLambda = ...` declarations — every bullet below depends on this existing first.
+  - [x] Add `ServicePrincipal` to the existing `aws-cdk-lib/aws-iam` import; add `import { CfnBudget } from 'aws-cdk-lib/aws-budgets';`.
+  - [x] Compute `monthlyBudgetName` (contract table) from the `backendNamespace`/`backendName` CDK context — hoist that context read earlier in the file if it isn't already available at this point (it's currently read further down for the SSM prefix; `tryGetContext` is idempotent, so reading it twice or moving the read is both fine — just don't duplicate the "missing context → throw" guard's error message inconsistently). This must happen **before** the resource-policy bullet below, since the policy's `aws:SourceArn` condition needs it.
+  - [x] Build the DLQ + `deadLetterConfig` + `grantSendMessages` block for `budgetAlertLambda`, exactly mirroring the existing `alertDeliveryDeadLetterQueue` block's shape (new names: `budgetAlertDeliveryDeadLetterQueue`, etc).
+  - [x] Create `budgetAlertTopic` (`Topic`, `operationalStack`), subscribe `budgetAlertLambda` via `LambdaSubscription` with the new DLQ, per the contract table.
+  - [x] Grant `budgets.amazonaws.com` publish on `budgetAlertTopic` per the contract table's hardened, exact-ARN-scoped policy (uses `monthlyBudgetName` from above — do not use the reference implementation's wildcard `:*` form).
+  - [x] Add the `budgetAlertLambda` Errors alarm feeding `workerFailureTopic`, exactly mirroring `alertLambdaErrorAlarm`'s shape.
+  - [x] Add the SES `sendEmail` policy statement for `budgetAlertLambda`, exactly mirroring the existing `orientationAlertLambda`/`requestAccessLambda` blocks.
+  - [x] Define `MONTHLY_BUDGET_CEILING_USD` / `MONTHLY_BUDGET_WARNING_THRESHOLD_PERCENT` constants near the top of the file with the one-line comment from the contract table explaining the Config-drift accepted gap.
+  - [x] Create the `CfnBudget` per the contract table, reusing the **same** `monthlyBudgetName` computed above (not a fresh template literal) — created after `budgetAlertTopic` since it references `budgetAlertTopic.topicArn`.
+- [x] **Task 3: Deploy + live verification** (AC: 1, 2)
+  - [x] `npx ampx sandbox --once`. A clean deploy is expected — two independent working CDK reference implementations (web-checked, Dev Notes) deploy `CfnBudget` + SNS with no region pinning, so this is not expected to be a blocker. If it does fail on a region-related CloudFormation error, HALT and report to Tony rather than guessing at a workaround.
+  - [x] **Structural verification (AC 1, 2 — the wiring, not real billing):** `aws budgets describe-budgets --account-id <account-id>` shows the new budget with `BudgetLimit.Amount = "30.0"`, `BudgetType = COST`, `TimeUnit = MONTHLY`; `aws budgets describe-notifications-for-budget` shows one `ACTUAL`/`GREATER_THAN`/80%/`PERCENTAGE` notification; `aws budgets describe-subscribers-for-notification` shows one `SNS` subscriber pointing at the new topic ARN.
+  - [x] **Delivery verification (AC 1 — the actually-testable part without waiting on real billing data, which AD-6 already documents as lagging):** `aws sns publish --topic-arn <budgetAlertTopic ARN> --message "story-3.6 manual verification"` and confirm the fixed-copy email arrives at the `CUTOUT_EMAIL` inbox within a couple minutes, with exactly the Subject/Body from the Copy section (not the raw test message — proving the Lambda ignores message content as designed). This is the accepted verification boundary: real threshold-crossing is not simulated (would require real spend or waiting on AWS's billing-data lag), only the delivery path is exercised end-to-end.
+  - [x] **No-alert-fires sanity (AC 2):** confirm no email arrived from an untouched deploy before the manual publish above — i.e. don't publish the test message until after confirming this.
+  - [x] Do not attempt to force a real budget breach. No new spend is required or appropriate for this story.
 - [ ] **Task 4: Close out (Definition of Done)**
-  - [ ] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`. (No `npm run test:e2e` impact expected — zero `src/` changes — but run it anyway per the standing closeout gate.)
-  - [ ] Sweep the diff and this story file for credentials/secrets; no dollar figures beyond the already-public `$30`/`80%` design constants; no AWS account ID committed anywhere in code (the live-verification AWS CLI commands used it locally only).
-  - [ ] `deferred-work.md`: record (a) the accepted Config-vs-CDK-constant budget-ceiling drift (Contract values table), flagged for revisit if/when Story 4.3 ships and Tony wants them kept in sync; (b) the accepted per-environment Budget duplication risk once `staging`/`main` branches are eventually stood up as persistent parallel environments (Dev Notes scope decision 3) — each would mint its own `AWS::Budgets::Budget` watching the same real account-level spend, producing duplicate (not incorrect) notifications; revisit only if that actually starts happening.
+  - [x] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`. (No `npm run test:e2e` impact expected — zero `src/` changes — but run it anyway per the standing closeout gate.)
+  - [x] Sweep the diff and this story file for credentials/secrets; no dollar figures beyond the already-public `$30`/`80%` design constants; no AWS account ID committed anywhere in code (the live-verification AWS CLI commands used it locally only).
+  - [x] `deferred-work.md`: record (a) the accepted Config-vs-CDK-constant budget-ceiling drift (Contract values table), flagged for revisit if/when Story 4.3 ships and Tony wants them kept in sync; (b) the accepted per-environment Budget duplication risk once `staging`/`main` branches are eventually stood up as persistent parallel environments (Dev Notes scope decision 3) — each would mint its own `AWS::Budgets::Budget` watching the same real account-level spend, producing duplicate (not incorrect) notifications; revisit only if that actually starts happening.
   - [ ] Update `sprint-status.yaml` (3-6 → review), commit with an isolated diff, push to `main`.
 
 ## Dev Notes
@@ -163,11 +163,38 @@ Recent history (`49682b3` back through `609ef44`) is Story 3.5's implementation 
 
 ### Agent Model Used
 
+GPT-5
+
+### Implementation Plan
+
+- Isolate the pre-existing Story 3.5 closeout and Story 3.6 creation artifacts before implementation.
+- Add the budget-alert Lambda test-first by mirroring the established orientation-alert dependency-injection and fixed-copy contract.
+- Wire the AWS Budget, hardened SNS policy, Lambda delivery/DLQ, SES permission, and alert-path alarm in the operational stack.
+- Deploy once, inspect the live budget resources, and manually publish only after an untouched-deploy no-alert sanity interval.
+
 ### Debug Log References
+
+- 2026-07-25 live verification: sandbox deployment completed in 143.898 seconds. AWS Budgets reported the `$30.0` monthly COST budget, one ACTUAL/GREATER_THAN/80 notification, and one SNS subscriber; the subscriber lookup using the PERCENTAGE notification key succeeded. The topic policy had one confirmed subscription and exact budget ARN plus source-account conditions.
+- 2026-07-25 no-alert sanity: the deployed budget-alert Lambda had zero invocations before the manual SNS publish.
+- 2026-07-25 delivery-path test: the single prescribed SNS publish invoked budget-alert once; CloudWatch showed a clean START/END/REPORT in 353.39 ms with no exception. Tony confirmed the cutout mailbox received the exact fixed body with no raw test-message interpolation.
 
 ### Completion Notes List
 
+- Task 0 complete: isolated the pre-existing artifacts in commit `b911829`; baseline 267/267 tests, lint, typecheck, and build passed on Node 24.9.0; AWS credentials were valid and Amplify listed both required email secrets.
+- Task 1 complete: added the budget-alert Lambda with the established fixed-copy SNS-to-SES contract; the new three-case suite passed test-first and the full regression suite passed at 270/270 tests.
+- Task 2 complete: wired the $30 monthly Budget and 80% ACTUAL threshold to an exact-budget-ARN/account-scoped SNS topic, budget-alert Lambda/DLQ, SES policy, and Lambda Errors alarm; 270/270 tests, lint, typecheck, build, and diff checks passed.
+- Task 3 complete: deployed the sandbox; verified the live Budget, notification, SNS subscriber, hardened topic policy, no-alert precondition, and clean Lambda execution; Tony confirmed the exact fixed-copy email arrived.
+- Task 4 closeout gates: 270/270 tests, lint, typecheck, build, and 4/4 Playwright tests passed; credential/account-id sweep was clean; accepted Config drift and parallel-environment duplication risks were recorded.
+
 ### File List
+
+- _bmad-output/implementation-artifacts/3-6-alert-tony-when-the-monthly-budget-nears-its-ceiling.md
+- _bmad-output/implementation-artifacts/deferred-work.md
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+- amplify/backend.ts
+- amplify/functions/budget-alert/handler.test.ts
+- amplify/functions/budget-alert/handler.ts
+- amplify/functions/budget-alert/resource.ts
 
 ## Change Log
 

@@ -32,3 +32,8 @@
 
 - **Groundedness-judge rollout:** before Story 3.5 first deploys to each staging/main account and region, enable Bedrock Claude Haiku model access and smoke-confirm the configured inference-profile ID there, following the same protocol as the Opus rollout check.
 - **Silent scored-rate watch:** the judge's clean-return leave-unset outcomes are alarm-invisible by design. When Story 4.1 adds the average `groundednessScore` metric, also watch scored Sessions versus total `SUCCEEDED` Sessions; a persistent slide toward zero signals a silently broken model-output contract or dispatch path.
+
+## Recorded for Story 3.6 (2026-07-25)
+
+- **Config-vs-CDK budget-ceiling drift:** the in-app MonthlySpend gate reads Config's live `monthlyBudget`, while the secondary AWS Budget uses the independently maintained synth-time `MONTHLY_BUDGET_CEILING_USD` constant. Both currently use $30. Revisit if Story 4.3 ships and Tony wants Admin Dashboard budget edits to keep the AWS Budget synchronized.
+- **Parallel-environment Budget duplication:** each future persistent `staging`/`main` environment in the same AWS account would create its own AWS Budget watching the same account-level spend, producing duplicate rather than incorrect notifications. Revisit only if persistent parallel environments are actually introduced and duplicate alerts begin occurring.
