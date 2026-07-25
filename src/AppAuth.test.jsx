@@ -82,6 +82,14 @@ describe('App unauthenticated screens', () => {
     expect(screen.getByRole('heading', { name: 'Log in' })).toBeVisible();
     expect(screen.getByLabelText('Email')).toHaveValue('tony@example.com');
   });
+
+  it('wipes a leftover redraw draft while remaining unauthenticated', async () => {
+    localStorage.setItem('tarotSpaOrientationRedrawContext', 'Leftover draft.');
+    render(<App />);
+
+    expect(await screen.findByRole('button', { name: 'I have an Invite Key' })).toBeVisible();
+    expect(localStorage.getItem('tarotSpaOrientationRedrawContext')).toBeNull();
+  });
 });
 
 describe('App authenticated sign-out round trip', () => {
@@ -711,6 +719,7 @@ describe('App authenticated sign-out round trip', () => {
       'tarotSpaActiveOrientationSession',
       '12345678-1234-4234-9234-123456789012',
     );
+    localStorage.setItem('tarotSpaOrientationRedrawContext', 'Stale tweak draft.');
     getSession.mockResolvedValue({
       id: '12345678-1234-4234-9234-123456789012',
       context: 'Context recovered after reload.',
@@ -726,6 +735,7 @@ describe('App authenticated sign-out round trip', () => {
     expect(screen.getByLabelText('Context')).toHaveValue('Context recovered after reload.');
     expect(screen.getByRole('button', { name: /Decision/ }))
       .toHaveAttribute('aria-pressed', 'true');
+    expect(localStorage.getItem('tarotSpaOrientationRedrawContext')).toBeNull();
   });
 
   it('restores safe Context and Spread from a malformed-session classification', async () => {
@@ -935,6 +945,7 @@ describe('App authenticated sign-out round trip', () => {
       'tarotSpaActiveOrientationSession',
       '12345678-1234-4234-9234-123456789012',
     );
+    localStorage.setItem('tarotSpaOrientationRedrawContext', 'Old divergent draft.');
     const originalSetItem = Storage.prototype.setItem;
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function setItem(key, value) {
       if (key === 'tarotSpaOrientationRedrawContext') {
@@ -950,6 +961,7 @@ describe('App authenticated sign-out round trip', () => {
     expect(screen.getByLabelText('Context')).toHaveValue('A decision.');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBeNull();
+    expect(localStorage.getItem('tarotSpaOrientationRedrawContext')).toBeNull();
 
     unmount();
     render(<App />);

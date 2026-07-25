@@ -119,12 +119,14 @@ describe('OrientationGuideResults', () => {
     const freshButton = screen.getByRole('button', { name: 'Provide another observation' });
     const tweakButton = screen.getByRole('button', { name: 'Tweak existing observation' });
     expect(divider).not.toBeNull();
-    expect(divider.compareDocumentPosition(freshButton) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
-    expect(divider.compareDocumentPosition(tweakButton) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
-    expect(freshButton.compareDocumentPosition(tweakButton) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
+    const followsOutside = (a, b) => {
+      const position = a.compareDocumentPosition(b);
+      return (position & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+        && (position & Node.DOCUMENT_POSITION_CONTAINED_BY) === 0;
+    };
+    expect(followsOutside(divider, freshButton)).toBe(true);
+    expect(followsOutside(divider, tweakButton)).toBe(true);
+    expect(followsOutside(freshButton, tweakButton)).toBe(true);
     expect(freshButton).toBeVisible();
     expect(tweakButton).toBeVisible();
   });

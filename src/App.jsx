@@ -77,7 +77,7 @@ function clearOrientationRedrawContext() {
     localStorage.removeItem(ORIENTATION_REDRAW_CONTEXT_KEY);
   } catch {
     // Best-effort removal: a surviving stale draft is cleared again at the
-    // next submit start or auth loss.
+    // next submit start, recovery restore, or auth loss.
   }
 }
 
@@ -583,7 +583,8 @@ export default function App() {
     if (preserveContext) {
       if (!storeOrientationRedrawContext(context)) {
         // Store failed with the key possibly still holding an older draft;
-        // clear so the persisted draft cannot diverge from the prefill.
+        // best-effort clear so the persisted draft does not diverge from the
+        // prefill (fully denied storage can still leave one behind).
         clearOrientationRedrawContext();
       }
     } else {

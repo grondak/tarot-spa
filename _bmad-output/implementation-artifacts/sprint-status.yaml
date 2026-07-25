@@ -66,8 +66,9 @@ development_status:
   3-3-view-the-orientation-guide-results-screen: done
 
   # Correct-course gate (was: execute immediately before Stories 3.4–3.7):
-  # satisfied — Story 3.8 and Story 3.3's retained UI passed their integrated
-  # review before Story 3.4 began; no further gate remains for 3.5–3.7.
+  # satisfied — per epics.md "Correct-course priority" (Epic 3), the gate is
+  # Story 3.8 done + the integrated review of 3.8 and Story 3.3's retained UI;
+  # both held before Story 3.4 began. No further gate remains for 3.5–3.7.
   3-8-make-orientation-guide-generation-durable-and-asynchronous: done
 
   3-4-redraw-from-the-results-screen: done
