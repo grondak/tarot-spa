@@ -37,3 +37,14 @@
 
 - **Config-vs-CDK budget-ceiling drift:** the in-app MonthlySpend gate reads Config's live `monthlyBudget`, while the secondary AWS Budget uses the independently maintained synth-time `MONTHLY_BUDGET_CEILING_USD` constant. Both currently use $30. Revisit if Story 4.3 ships and Tony wants Admin Dashboard budget edits to keep the AWS Budget synchronized.
 - **Parallel-environment Budget duplication:** each future persistent `staging`/`main` environment in the same AWS account would create its own AWS Budget watching the same account-level spend, producing duplicate rather than incorrect notifications. Revisit only if persistent parallel environments are actually introduced and duplicate alerts begin occurring.
+
+## Deferred from: code review of story-3.6 (2026-07-25)
+
+- **Fixed alert copy triplicated with no shared source of truth** — the exact Subject/Body strings are independently typed in `handler.ts`, `handler.test.ts`, and the story's Copy section; a wording change requires three synchronized edits. Inherited from `orientation-alert`'s established convention, not new to this story.
+- **`SnsEvent` type omits the real `Sns` field** — tests bypass the type with an `as object` cast to inject SNS payload content; copied verbatim from `orientation-alert/handler.test.ts` rather than fixed at the source.
+- **Test bundles three independent assertions in one `it` block** (`handler.test.ts` — missing config / wrong EventSource / empty Records) — if the first assertion fails for the wrong reason, the remaining two silently never execute. Extends a pattern `orientation-alert`'s own test already uses at smaller scale.
+- **Handler assumes a well-formed event/record shape** — a null/undefined `event` or a malformed `Records` entry throws a raw `TypeError` instead of the intended configuration/validation error. Unreachable via real SNS invocations; same gap exists in `orientation-alert`.
+- **No guard against `Records.length > 1`** — would send one email per record if SNS ever delivered a multi-record batch. SNS→Lambda subscriptions always deliver a single record per invoke in practice; `orientation-alert` has the identical gap.
+- **Email config guard doesn't catch whitespace-only strings** — `!deps.fromEmail || !deps.cutoutEmail` treats `"   "` as configured. Inherited unchanged from `orientation-alert`.
+- **`monthlyBudgetName` has no length/charset validation** against AWS Budget naming constraints, built from CDK context the same unguarded way the pre-existing `ssmPrefix` already is in the same file.
+- **AWS Budget tracks whole-account spend, not tarot-spa specifically** — no `costFilters` on the `CfnBudget`. Accepted by Tony (2026-07-25): tarot-spa will be the account's dominant workload for at least the next few months. Revisit cost-filter scoping if/when other workloads share the account.

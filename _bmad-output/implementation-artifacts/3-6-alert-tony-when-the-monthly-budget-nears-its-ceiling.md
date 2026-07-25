@@ -4,7 +4,7 @@ baseline_commit: 49682b3
 
 # Story 3.6: Alert Tony when the monthly budget nears its ceiling
 
-Status: review
+Status: done
 
 ## Story
 
@@ -95,6 +95,17 @@ Do not interpolate the real SNS message content into this email (see Contract va
   - [x] Sweep the diff and this story file for credentials/secrets; no dollar figures beyond the already-public `$30`/`80%` design constants; no AWS account ID committed anywhere in code (the live-verification AWS CLI commands used it locally only).
   - [x] `deferred-work.md`: record (a) the accepted Config-vs-CDK-constant budget-ceiling drift (Contract values table), flagged for revisit if/when Story 4.3 ships and Tony wants them kept in sync; (b) the accepted per-environment Budget duplication risk once `staging`/`main` branches are eventually stood up as persistent parallel environments (Dev Notes scope decision 3) — each would mint its own `AWS::Budgets::Budget` watching the same real account-level spend, producing duplicate (not incorrect) notifications; revisit only if that actually starts happening.
   - [x] Update `sprint-status.yaml` (3-6 → review), commit with an isolated diff, push to `main`.
+
+### Review Findings
+
+- [x] [Review][Defer] AWS Budget tracks whole-account spend, not tarot-spa specifically — the `CfnBudget` sets no `costFilters`, so `MONTHLY_BUDGET_CEILING_USD` fires on aggregate AWS-account cost. Tony (2026-07-25): acceptable — tarot-spa will be the account's dominant workload for at least the next few months; revisit cost-filter scoping if/when other workloads share the account. [amplify/backend.ts ~145-165] — deferred, accepted
+- [x] [Review][Defer] Fixed alert copy hand-duplicated in three places (`handler.ts`, `handler.test.ts`, story Copy section) with no shared source of truth — inherited from `orientation-alert`'s established convention, not introduced by this story. [amplify/functions/budget-alert/handler.ts:40-44] — deferred, pre-existing
+- [x] [Review][Defer] `SnsEvent` type never declares the `Sns` field every real SNS event carries; tests bypass this with an `as object` cast — copied verbatim from `orientation-alert/handler.test.ts`. [amplify/functions/budget-alert/handler.ts:7-11] — deferred, pre-existing
+- [x] [Review][Defer] Test bundles three independent assertions (missing config / wrong EventSource / empty Records) into one `it` block, weakening failure isolation — extends a pattern orientation-alert's own test already uses (2 bundled assertions). [amplify/functions/budget-alert/handler.test.ts:51-67] — deferred, pre-existing
+- [x] [Review][Defer] Handler assumes a well-formed event/record shape — a null/undefined `event` or a malformed `Records` entry throws a raw `TypeError` instead of the intended configuration/validation error. Unreachable via real SNS invocations; same gap exists in `orientation-alert`. [amplify/functions/budget-alert/handler.ts:30-33] — deferred, pre-existing
+- [x] [Review][Defer] No guard against `Records.length > 1` — multiple records would send one email per record; SNS→Lambda subscriptions always deliver a single record per invoke in practice, and `orientation-alert` has the same gap. [amplify/functions/budget-alert/handler.ts:35-48] — deferred, pre-existing
+- [x] [Review][Defer] Email config guard checks falsy but not whitespace-only strings — inherited unchanged from `orientation-alert`. [amplify/functions/budget-alert/handler.ts:27] — deferred, pre-existing
+- [x] [Review][Defer] `monthlyBudgetName` (like the existing `ssmPrefix`) is built from CDK context values with no length/charset validation against AWS Budget naming constraints — same unguarded pattern as the pre-existing `ssmPrefix` construction in the same file. [amplify/backend.ts:83-91] — deferred, pre-existing
 
 ## Dev Notes
 
@@ -204,3 +215,4 @@ GPT-5
 - 2026-07-25: Review pass (checklist-driven, web-verified) — fixed 3 critical issues (unscoped SNS resource-policy grant hardened with confused-deputy conditions per a verified working CDK reference; missing `budgetAlertLambda` local-const declaration made explicit; missing CDK construct ids added for the new DLQ/Budget/Alarm), corrected an overcautious region-restriction hedge after checking two working reference implementations, and restructured the fixed email copy into its own Copy section. Status remains ready-for-dev.
 - 2026-07-25: Second review pass — the `budgetAlertLambda` const-declaration fix from round 1 had only reached the contract table, not the actual Task 2 checklist (which still used the variable without ever declaring it); added an explicit Task 2 bullet. Also tightened the SNS resource policy's `aws:SourceArn` condition from the reference implementation's account-wide wildcard to the exact budget ARN, via a new shared `monthlyBudgetName` computed once and reused by both the policy and the `CfnBudget`. Status remains ready-for-dev.
 - 2026-07-25: Implemented, deployed, and live-verified AWS Budgets → SNS → budget-alert Lambda → SES monthly budget alerting; all local and browser gates passed and status moved to review.
+- 2026-07-25: Post-implementation code review (Blind Hunter, Edge Case Hunter, Acceptance Auditor) — no AC or contract violations found; 2 decision-needed items raised (whole-account Budget scope, DLQ-depth alarm parity) and resolved with Tony (both accepted as-is); 7 pre-existing/inherited findings deferred to `deferred-work.md`. Status moved to done.
