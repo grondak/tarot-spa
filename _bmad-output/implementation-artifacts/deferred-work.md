@@ -40,7 +40,7 @@
 
 ## Recorded for Story 3.7 (2026-07-25)
 
-- **Authenticated Quick Draw round-trip mode reset is accepted as-is (Tony, 2026-07-25):** deliberate Quick Draw mode is local `useState` in `ContextEntry`. Selecting a spread unmounts `ContextEntry` while `SpreadView` is shown, so clicking `SpreadView`'s `← Back` remounts a fresh `ContextEntry` in canonical `orient` mode rather than restoring `quickdraw`. This is not a bug to fix absent a new requirement: AC 2 is satisfied by the direct `Back to Help Me Orient` button, which does not unmount `ContextEntry` and preserves the entered Context and selected Spread. Do not lift `mode` into `App.jsx` or add sticky-mode state solely for this round trip.
+- **Authenticated Quick Draw round-trip state loss is accepted as-is (Tony, 2026-07-25):** `mode`, `context`, and `spreadKey` are all local `useState` in `ContextEntry`. Selecting a spread from Quick Draw calls `onQuickDrawSelect` → `App.handleSelect`, which unmounts `ContextEntry` in favor of `SpreadView`. Clicking `SpreadView`'s own `← Back` calls `App.handleBack`, which clears `spreadKey`/`cards` but never syncs `orientContext`/`orientSpreadKey` from what the user actually typed — so the remounted `ContextEntry` reseeds from stale `initialContext`/`initialSpreadKey` props. The user loses not just the `quickdraw` toggle position (resets to canonical `orient` mode) but also any Context text and Orient-mode spread pick entered before switching to Quick Draw. This is not a bug to fix absent a new requirement: AC 2 is satisfied by the direct `Back to Help Me Orient` button, which never unmounts `ContextEntry` and preserves Context/Spread state exactly. Do not lift `mode`/`context`/`spreadKey` into `App.jsx` or add sticky-mode state solely for this round trip.
 
 ## Deferred from: code review of story-3.6 (2026-07-25)
 
@@ -52,3 +52,9 @@
 - **Email config guard doesn't catch whitespace-only strings** — `!deps.fromEmail || !deps.cutoutEmail` treats `"   "` as configured. Inherited unchanged from `orientation-alert`.
 - **`monthlyBudgetName` has no length/charset validation** against AWS Budget naming constraints, built from CDK context the same unguarded way the pre-existing `ssmPrefix` already is in the same file.
 - **AWS Budget tracks whole-account spend, not tarot-spa specifically** — no `costFilters` on the `CfnBudget`. Accepted by Tony (2026-07-25): tarot-spa will be the account's dominant workload for at least the next few months. Revisit cost-filter scoping if/when other workloads share the account.
+
+## Deferred from: code review of story-3.7 (2026-07-25)
+
+- **No test covers deliberate Quick Draw entered via the "Load Draw" code field (`onLoadCode`)** — only the spread-button entry path is tested for AC 1's "no LLM call" guarantee. Pre-existing gap; Story 3.7's Task 1 explicitly scoped its one new test to the spread-button path.
+- **Partial e2e credentials (`TAROT_E2E_EMAIL`/`TAROT_E2E_PASSWORD` set individually rather than as a pair) are not guarded against** — the authenticated Playwright project could attempt a login with a missing credential and fail ambiguously. Pre-existing e2e harness behavior.
+- **`npm test` showed one flaky failure (`act()`/cleanup-related) on a single run during adversarial review** before passing clean on a rerun; a subsequent triage rerun was clean (271/271). Unconfirmed/non-reproducible so far; likely pre-existing suite flakiness unrelated to Story 3.7's diff.

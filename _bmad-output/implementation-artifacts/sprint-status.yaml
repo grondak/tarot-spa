@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-11
-last_updated: 2026-07-25 (story 3.7 implemented, review)
+last_updated: 2026-07-26 (story 4.1 created)
 project: tarot-spa
 project_key: NOKEY
 tracking_system: file-system
@@ -74,11 +74,11 @@ development_status:
   3-4-redraw-from-the-results-screen: done
   3-5-score-orientation-guide-groundedness-async: done
   3-6-alert-tony-when-the-monthly-budget-nears-its-ceiling: done
-  3-7-draw-for-fun-without-spending-your-daily-limit-authenticated-quick-draw: review
-  epic-3-retrospective: optional
+  3-7-draw-for-fun-without-spending-your-daily-limit-authenticated-quick-draw: done
+  epic-3-retrospective: done
 
-  epic-4: backlog
-  4-1-view-usage-spend-metrics: backlog
+  epic-4: in-progress
+  4-1-view-usage-spend-metrics: ready-for-dev
   4-2-mint-a-new-first-gen-invite-key-from-the-dashboard: backlog
   4-3-adjust-the-daily-limit-and-monthly-budget-without-a-deploy: backlog
   4-4-revoke-an-invite-key: backlog
@@ -124,16 +124,40 @@ action_items:
   - epic: 2
     action: "Standard 'Pre-dev prerequisites (Tony)' section in every story spec with human-only setup; human-only work never on the agent's checklist"
     owner: "Amelia (story-creation process)"
-    status: open
+    status: done
   - epic: 2
     action: "Environment pre-flight as Task 0 of any story with live verification: verify credentials/sandbox access at story start"
     owner: "Amelia (process)"
-    status: open
+    status: done
   - epic: 2
     action: "Test bar: live-verification tasks name the observable outcome (email arrives, guide renders grounded), never the API call result"
     owner: "Amelia + Murat"
-    status: open
+    status: done
   - epic: 2
     action: "Classify the 'Account couldn't load' transient from the 2026-07-17 session (CloudWatch/AppSync logs) before Epic 3 multiplies authenticated queries"
+    owner: "Amelia"
+    status: open
+  - epic: 3
+    action: "Story close-out must end with pasted git status --short (empty) and git log -1 output, not a prose 'committed and pushed' claim"
+    owner: "Amelia (story-template/process)"
+    status: open
+  - epic: 3
+    action: "Treat 'mutation-survivable test' as its own named review-finding category; a new test must be shown to fail against a deliberately wrong implementation before it counts as coverage"
+    owner: "Amelia + Murat (review process)"
+    status: open
+  - epic: 3
+    action: "Add finite/positive/range validation to dailyLimit/monthlyBudget before Story 4.3 exposes them in an editable UI"
+    owner: "Amelia"
+    status: open
+  - epic: 3
+    action: "Reconcile Config's live monthlyBudget with the CDK-synth-time AWS Budget ceiling constant so Story 4.3's editor cannot silently desync them"
+    owner: "Winston (design) + Amelia (implementation)"
+    status: open
+  - epic: 3
+    action: "Classify the 'Account couldn't load' transient against the 2026-07-17 CloudWatch/AppSync logs, in parallel with Story 4.1"
+    owner: "Murat + Amelia"
+    status: open
+  - epic: 3
+    action: "Build the API-key expiry reminder mechanism (email to cutout address ahead of ~2026-08-16 expiry) - urgent, ~3 weeks runway as of 2026-07-26"
     owner: "Amelia"
     status: open
