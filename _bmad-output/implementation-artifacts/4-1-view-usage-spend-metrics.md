@@ -200,6 +200,19 @@ OpenAI Codex (GPT-5)
 - Task 8 complete: wired fail-closed admin discovery, hidden navigation, first-priority dashboard rendering, Back, and auth-loss/sign-out resets into App-owned state. Two new App tests, the full 291-test suite, lint, and the authenticated non-admin Playwright flow passed.
 - Task 9 partial live evidence: sandbox deploy succeeded; the `Admin` group and Tony membership were confirmed; the aggregate-only Lambda returned plausible live metrics (2 FirstGen, 1 SecondGen, 16 SUCCEEDED Sessions, 1/6 hit-rate, $0.48 of $30, average floater score 0.25 across 2 scored Sessions); the shared test account had no Admin group/button and AppSync rejected its direct query as `Unauthorized`. Tony's fresh-sign-in dashboard/Back visual check remains open.
 - Task 9 complete: Tony confirmed the fresh-sign-in Admin Dashboard showed the live metrics and refresh timestamp with the required plain presentation and working Back navigation.
+- Task 10 complete (2026-07-28): closed the gap the Epic 3 retro action item exists to catch — the implementation had been coded, tested, and reviewed (293/293 tests, lint/typecheck/build clean) but never actually committed or pushed; only docs (`8b684f6`) had landed. Ran a credential sweep (no key/secret/private-key patterns in the diff or new files; `amplify_outputs.json` untracked), staged the full 20-file diff exactly matching the File List below, committed as `ad1fe77`, and pushed to `main`. Evidence:
+
+  ```
+  $ git status --short
+  (empty)
+
+  $ git log -1
+  commit ad1fe77bebc67b9f3341c8e211d090ffb6f1b2fc
+  Author: Tony Reynolds <grondak@gmail.com>
+  Date:   Tue Jul 28 20:44:10 2026 -0400
+
+      feat: add admin dashboard usage & spend metrics (story 4.1)
+  ```
 
 ### File List
 
