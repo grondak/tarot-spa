@@ -1,9 +1,15 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getCurrentUser, signIn, signOut } from 'aws-amplify/auth';
+import {
+  fetchAuthSession,
+  getCurrentUser,
+  signIn,
+  signOut,
+} from 'aws-amplify/auth';
 import { Hub } from 'aws-amplify/utils';
 import App from './App';
 import { getMyAccount } from './utils/account';
+import { getAdminMetrics } from './utils/adminMetrics';
 import {
   getSession,
   getOrientationStatus,
@@ -12,6 +18,7 @@ import {
 
 vi.mock('aws-amplify/auth', () => ({
   confirmSignUp: vi.fn(),
+  fetchAuthSession: vi.fn(),
   getCurrentUser: vi.fn(),
   signIn: vi.fn(),
   signOut: vi.fn(),
@@ -19,6 +26,7 @@ vi.mock('aws-amplify/auth', () => ({
 }));
 
 vi.mock('./utils/account', () => ({ getMyAccount: vi.fn() }));
+vi.mock('./utils/adminMetrics', () => ({ getAdminMetrics: vi.fn() }));
 vi.mock('./utils/orientation', async (importOriginal) => ({
   ...await importOriginal(),
   getSession: vi.fn(),
@@ -95,7 +103,9 @@ describe('App unauthenticated screens', () => {
 describe('App authenticated sign-out round trip', () => {
   beforeEach(() => {
     getCurrentUser.mockReset();
+    fetchAuthSession.mockReset();
     getMyAccount.mockReset();
+    getAdminMetrics.mockReset();
     getSession.mockReset();
     getOrientationStatus.mockReset();
     startOrientationGuide.mockReset();
@@ -107,7 +117,20 @@ describe('App authenticated sign-out round trip', () => {
       '12345678-1234-4234-9234-123456789012',
     );
     getCurrentUser.mockResolvedValue({ username: 'tony' });
+    fetchAuthSession.mockResolvedValue({
+      tokens: { idToken: { payload: { 'cognito:groups': [] } } },
+    });
     getMyAccount.mockResolvedValue({ generation: 'SecondGen', onwardKeyGenerated: false });
+    getAdminMetrics.mockResolvedValue({
+      generatedAt: '2026-07-26T18:04:00.000Z',
+      usersByGeneration: { FirstGen: 3, SecondGen: 2 },
+      succeededSessionCount: 42,
+      dailyLimitHitRate: 0.15,
+      dailyUsageRecordCount: 40,
+      monthlySpend: { spentToDate: 4.32, budget: 30 },
+      averageGroundednessScore: 0.28,
+      scoredSessionCount: 38,
+    });
     startOrientationGuide.mockResolvedValue({
       sessionId: '12345678-1234-4234-9234-123456789012',
       status: 'PENDING',
@@ -222,6 +245,69 @@ describe('App authenticated sign-out round trip', () => {
     fireEvent.click(screen.getByRole('button', { name: '← Back' }));
     expect(screen.getByRole('heading', { name: 'Help Me Orient' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Help Me Orient' })).toBeDisabled();
+  });
+
+  it('shows and opens the Admin Dashboard only for an Admin group member', async () => {
+    fetchAuthSession.mockResolvedValue({
+      tokens: {
+        idToken: {
+          payload: { 'cognito:groups': ['Admin'] },
+        },
+      },
+    });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin Dashboard' }));
+    expect(await screen.findByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
+    expect(screen.getByText('FirstGen: 3, SecondGen: 2')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('heading', { name: 'Help Me Orient' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Admin Dashboard' }));
+    expect(await screen.findByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Log Out' }));
+    expect(await screen.findByRole('button', { name: 'I have an Invite Key' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Admin Dashboard' })).not.toBeInTheDocument();
+  });
+
+  it('never renders the Admin Dashboard control for a non-admin account', async () => {
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Help Me Orient' })).toBeVisible();
+    await waitFor(() => expect(fetchAuthSession).toHaveBeenCalledOnce());
+    await act(async () => Promise.resolve());
+
+    expect(screen.queryByRole('button', { name: 'Admin Dashboard' })).toBeNull();
+  });
+
+  it('refreshes Admin navigation when token group membership changes', async () => {
+    let groups = ['Admin'];
+    fetchAuthSession.mockImplementation(async () => ({
+      tokens: { idToken: { payload: { 'cognito:groups': groups } } },
+    }));
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin Dashboard' }));
+    expect(await screen.findByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
+
+    groups = [];
+    await act(async () => {
+      await Hub.listen.mock.calls[0][1]();
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'Admin Dashboard' })).toBeNull();
+      expect(screen.queryByRole('heading', { name: 'Admin Dashboard' })).toBeNull();
+    });
+    expect(screen.getByRole('heading', { name: 'Help Me Orient' })).toBeVisible();
+
+    groups = ['Admin'];
+    await act(async () => {
+      await Hub.listen.mock.calls[0][1]();
+    });
+
+    expect(await screen.findByRole('button', { name: 'Admin Dashboard' })).toBeVisible();
   });
 
   it('renders Rate-Limited Intake when the daily status is exhausted', async () => {

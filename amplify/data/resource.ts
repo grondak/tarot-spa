@@ -1,4 +1,5 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
+import { adminMetrics } from '../functions/admin-metrics/resource';
 import { checkInviteKey } from '../functions/check-invite-key/resource';
 import { inviteKeyMint } from '../functions/invite-key-mint/resource';
 import { requestAccess } from '../functions/request-access/resource';
@@ -97,6 +98,11 @@ const schema = a.schema({
     .returns(a.json())
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(usageCounter)),
+  adminMetrics: a
+    .query()
+    .returns(a.json())
+    .authorization((allow) => [allow.group('Admin')])
+    .handler(a.handler.function(adminMetrics)),
 });
 
 export type Schema = ClientSchema<typeof schema>;

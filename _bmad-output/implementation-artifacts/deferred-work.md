@@ -33,6 +33,12 @@
 - **Groundedness-judge rollout:** before Story 3.5 first deploys to each staging/main account and region, enable Bedrock Claude Haiku model access and smoke-confirm the configured inference-profile ID there, following the same protocol as the Opus rollout check.
 - **Silent scored-rate watch:** the judge's clean-return leave-unset outcomes are alarm-invisible by design. When Story 4.1 adds the average `groundednessScore` metric, also watch scored Sessions versus total `SUCCEEDED` Sessions; a persistent slide toward zero signals a silently broken model-output contract or dispatch path.
 
+## Recorded for Story 4.1 (2026-07-27)
+
+- **Daily Orientation Limit hit-rate is intentionally all-time:** Story 4.1 presents DailyUsage records at the current Config limit with no time-window selector or trend view. Revisit this scope if Tony later wants weekly/monthly movement rather than one cumulative operational number.
+- **`admin-metrics` uses unbounded full-table scans at friend-circle scale:** Account, Session, and DailyUsage are fully paginated and read in parallel, which is acceptable at current volume. Revisit with maintained counters, indexes, or another bounded aggregation design if table sizes make dashboard latency or read cost material.
+- **Silent scored-rate watch — live baseline established, remains open:** the Story 4.1 sandbox check found 2 scored Sessions out of 16 total `SUCCEEDED` Sessions (12.5%), with average floater score `0.25`. The denominator includes legacy/pre-judge Sessions, so this one small snapshot cannot establish a broken judge path, but it is too low to close the watch. Compare the ratio again after more post-3.5 Sessions accumulate; a persistent slide toward zero remains the failure signal.
+
 ## Recorded for Story 3.6 (2026-07-25)
 
 - **Config-vs-CDK budget-ceiling drift:** the in-app MonthlySpend gate reads Config's live `monthlyBudget`, while the secondary AWS Budget uses the independently maintained synth-time `MONTHLY_BUDGET_CEILING_USD` constant. Both currently use $30. Revisit if Story 4.3 ships and Tony wants Admin Dashboard budget edits to keep the AWS Budget synchronized.

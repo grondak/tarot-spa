@@ -26,4 +26,7 @@ test('authenticated home is Context Entry with a working quick-draw bridge', asy
 
   await page.getByRole('button', { name: '← Back' }).click();
   await expect(page.getByRole('heading', { name: 'Help Me Orient', exact: true })).toBeVisible();
+
+  await page.waitForLoadState('networkidle');
+  await expect(page.getByRole('button', { name: 'Admin Dashboard' })).toHaveCount(0);
 });

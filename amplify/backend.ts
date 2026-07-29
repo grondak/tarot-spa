@@ -26,6 +26,7 @@ import { CfnWebACL, CfnWebACLAssociation } from 'aws-cdk-lib/aws-wafv2';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { postConfirmation } from './auth/post-confirmation/resource';
+import { adminMetrics } from './functions/admin-metrics/resource';
 import { budgetAlert } from './functions/budget-alert/resource';
 import { checkInviteKey } from './functions/check-invite-key/resource';
 import { inviteKeyMint } from './functions/invite-key-mint/resource';
@@ -45,6 +46,7 @@ const backend = defineBackend({
   auth,
   data,
   postConfirmation,
+  adminMetrics,
   budgetAlert,
   checkInviteKey,
   inviteKeyMint,
@@ -64,6 +66,7 @@ const inviteKeyTable = backend.data.resources.tables.InviteKey;
 const monthlySpendTable = backend.data.resources.tables.MonthlySpend;
 const sessionTable = backend.data.resources.tables.Session;
 const redemptionLambda = backend.postConfirmation.resources.lambda;
+const adminMetricsLambda = backend.adminMetrics.resources.lambda;
 const budgetAlertLambda = backend.budgetAlert.resources.lambda;
 const checkInviteKeyLambda = backend.checkInviteKey.resources.lambda;
 const inviteKeyMintLambda = backend.inviteKeyMint.resources.lambda;
@@ -402,6 +405,17 @@ dailyUsageTable.grantReadData(usageCounterLambda);
 configTable.grantReadData(usageCounterLambda);
 backend.usageCounter.addEnvironment('DAILY_USAGE_TABLE_NAME', dailyUsageTable.tableName);
 backend.usageCounter.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
+
+accountTable.grantReadData(adminMetricsLambda);
+sessionTable.grantReadData(adminMetricsLambda);
+dailyUsageTable.grantReadData(adminMetricsLambda);
+monthlySpendTable.grantReadData(adminMetricsLambda);
+configTable.grantReadData(adminMetricsLambda);
+backend.adminMetrics.addEnvironment('ACCOUNT_TABLE_NAME', accountTable.tableName);
+backend.adminMetrics.addEnvironment('SESSION_TABLE_NAME', sessionTable.tableName);
+backend.adminMetrics.addEnvironment('DAILY_USAGE_TABLE_NAME', dailyUsageTable.tableName);
+backend.adminMetrics.addEnvironment('MONTHLY_SPEND_TABLE_NAME', monthlySpendTable.tableName);
+backend.adminMetrics.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
 
 // Cross-region inference profiles fan out to account-less foundation models in
 // multiple US regions. Accepted residual risk: the foundation-model resource uses

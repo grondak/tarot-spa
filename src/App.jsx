@@ -3,6 +3,7 @@ import { getCurrentUser, signOut } from 'aws-amplify/auth';
 import { Hub } from 'aws-amplify/utils';
 import { SPREADS, shuffleAndDraw, encodeDraw, decodeDraw } from './utils/deck';
 import ContextEntry from './components/ContextEntry';
+import AdminDashboard from './components/AdminDashboard';
 import SpreadView from './components/SpreadView';
 import SignUp from './components/SignUp';
 import LogIn from './components/LogIn';
@@ -10,6 +11,7 @@ import GrantInviteKey from './components/GrantInviteKey';
 import PublicLanding from './components/PublicLanding';
 import OrientationGuideResults from './components/OrientationGuideResults';
 import { getMyAccount } from './utils/account';
+import { isAdmin } from './utils/adminAuth';
 import {
   getSession,
   getOrientationStatus,
@@ -87,6 +89,9 @@ export default function App() {
   const [spreadKey, setSpreadKey] = useState(null);
   const [cards, setCards] = useState([]);
   const [rateLimited, setRateLimited] = useState(false);
+  const [isAdminUser, setIsAdminUser] = useState(false);
+  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+  const [authRefreshRevision, setAuthRefreshRevision] = useState(0);
   const [guideResult, setGuideResult] = useState(null);
   const [orientBusy, setOrientBusy] = useState(false);
   const [orientError, setOrientError] = useState(null);
@@ -162,6 +167,7 @@ export default function App() {
         if (requestId === authRequestId.current) {
           authStateRef.current = 'authenticated';
           setAuthState('authenticated');
+          setAuthRefreshRevision((value) => value + 1);
         }
       } catch {
         if (requestId === authRequestId.current) {
@@ -182,6 +188,8 @@ export default function App() {
             setOrientError(null);
             setOrientSpreadKey(null);
             setGuideResult(null);
+            setIsAdminUser(false);
+            setShowAdminDashboard(false);
           }
         }
       }
@@ -219,6 +227,26 @@ export default function App() {
       active = false;
     };
   }, [authState]);
+
+  useEffect(() => {
+    let active = true;
+    if (authState !== 'authenticated') {
+      return () => {
+        active = false;
+      };
+    }
+
+    isAdmin().then((admin) => {
+      if (active) {
+        setIsAdminUser(admin);
+        if (!admin) setShowAdminDashboard(false);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [authState, authRefreshRevision]);
 
   function handleSelect(key) {
     const n = SPREADS[key].positions.length;
@@ -566,6 +594,8 @@ export default function App() {
     setOrientContext('');
     setOrientSpreadKey(null);
     setGuideResult(null);
+    setIsAdminUser(false);
+    setShowAdminDashboard(false);
   }
 
   function handleSignedIn() {
@@ -635,8 +665,14 @@ export default function App() {
 
   return (
     <>
-      <AccountBar onSignedOut={handleSignedOut} />
-      {guideResult ? (
+      <AccountBar
+        isAdmin={isAdminUser}
+        onShowAdminDashboard={() => setShowAdminDashboard(true)}
+        onSignedOut={handleSignedOut}
+      />
+      {showAdminDashboard ? (
+        <AdminDashboard onBack={() => setShowAdminDashboard(false)} />
+      ) : guideResult ? (
         <OrientationGuideResults
           result={guideResult}
           onRedrawFresh={handleRedrawFresh}
@@ -668,7 +704,12 @@ export default function App() {
   );
 }
 
-export function AccountBar({ signOutFn = signOut, onSignedOut = () => {} }) {
+export function AccountBar({
+  signOutFn = signOut,
+  onSignedOut = () => {},
+  isAdmin = false,
+  onShowAdminDashboard = () => {},
+}) {
   const [account, setAccount] = useState(null);
   const [loadStatus, setLoadStatus] = useState('loading');
   const [requestId, setRequestId] = useState(0);
@@ -744,6 +785,15 @@ export function AccountBar({ signOutFn = signOut, onSignedOut = () => {} }) {
               Retry account
             </button>
           </div>
+        )}
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={onShowAdminDashboard}
+            className="rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            Admin Dashboard
+          </button>
         )}
         <button
           type="button"

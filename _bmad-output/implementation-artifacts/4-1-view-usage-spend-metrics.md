@@ -4,7 +4,7 @@ baseline_commit: 6626f93
 
 # Story 4.1: View usage & spend metrics
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -63,40 +63,40 @@ So that I can tell what's actually happening without digging through raw data.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 0: Environment pre-flight** (AC: none — gate)
-  - [ ] Confirm `git log -1` is `6626f93`. The tree has pre-existing uncommitted files from the Epic 3 retrospective (`epic-3-retro-2026-07-26.md`, and edits to `deferred-work.md`/`sprint-status.yaml`/the 3.7 story file) — **do not discard them**; if they're still uncommitted when you start, isolate and commit them separately first, same precedent as every prior story's Task 0.
-  - [ ] Baseline gates green: `npm test` (271/271 expected — confirm the real number), `npm run lint`, `npm run typecheck`, `npm run build`.
-  - [ ] Confirm sandbox reachable: `npx ampx sandbox` status or a fresh `npm run dev` login with the existing test account.
-- [ ] **Task 1: Cognito `Admin` group** (AC: 1, 2)
-  - [ ] `amplify/auth/resource.ts`: add `groups: ['Admin']` per the contract table. No other change to this file.
-- [ ] **Task 2: `admin-metrics` Lambda** (AC: 1)
-  - [ ] `amplify/functions/admin-metrics/resource.ts` per the contract table.
-  - [ ] `amplify/functions/admin-metrics/handler.ts`: DI shape matching the established handler pattern used by `usage-counter`/`orientation-judge`/`orientation-reconciler`/`budget-alert` (`HandlerDependencies` object, `createHandler(deps)`, default deps built from env vars + real SDK clients, `export const handler = createHandler()`) — `check-invite-key/handler.ts` is the one existing handler that doesn't follow this shape; don't copy that one. Implements: parallel `Promise.all` of (a) `readConfig`, (b) MonthlySpend `GetCommand` for `utcMonth(now)`, (c) full Account scan, (d) full Session scan, (e) full DailyUsage scan. Then: group Account items by `generation` into `{ FirstGen, SecondGen }` (default both to 0, don't assume both generations exist yet); filter Session items to `effectiveStatus(item) === 'SUCCEEDED'` for `succeededSessionCount`, and within that set, average `groundednessScore` over items where `typeof groundednessScore === 'number'` for `averageGroundednessScore`/`scoredSessionCount` (null-safe per the contract table); compute `dailyLimitHitRate`/`dailyUsageRecordCount` per the frozen hit-rate definition. Return the exact response shape from the contract table, stringified or not — `a.json()` accepts either (this codebase's existing custom queries return a plain object from the handler; the frontend guard handles both).
-  - [ ] `amplify/functions/admin-metrics/handler.test.ts`: DI-mocked `dynamo.send` covering at minimum — empty tables (all metrics come back 0/null, no throw); mixed FirstGen/SecondGen counts; `SUCCEEDED` vs `PENDING`/`FAILED`/legacy-no-status Sessions (only `SUCCEEDED`+legacy count toward `succeededSessionCount`, matching `effectiveStatus`); groundedness average excludes Sessions with no `groundednessScore` field even if `SUCCEEDED` (unscored, not zero); hit-rate math with a mix of `count < dailyLimit` and `count >= dailyLimit` DailyUsage records, pinned to an exact fraction; multi-page `Scan` (assert the `ExclusiveStartKey`/`LastEvaluatedKey` loop actually re-queries, not just single-page happy path); MonthlySpend record absent for the current month → `spentToDate: 0`; Config missing → propagates the `readConfig` throw (Lambda fails loudly, same as every other Config-reading Lambda). Assert the exact returned object shape, not just individual field spot-checks.
-- [ ] **Task 3: `adminMetrics` AppSync query** (AC: 1, 2)
-  - [ ] `amplify/data/resource.ts`: import `adminMetrics`, add the `adminMetrics` query per the contract table. No other schema/model change.
-- [ ] **Task 4: `amplify/backend.ts` wiring** (AC: 1)
-  - [ ] Add `adminMetrics` import + `defineBackend({...})` entry, `const adminMetricsLambda = ...` declaration, the five `grantReadData` calls, and the five environment variables — all per the contract table. No WAF change (contract table explains why).
-- [ ] **Task 5: One-time admin-grant script** (AC: 1)
-  - [ ] `scripts/grant-admin.mjs` per the contract table.
-  - [ ] `package.json`: add `"grant-admin": "node scripts/grant-admin.mjs"` alongside the existing `seed-*` scripts.
-- [ ] **Task 6: Frontend utils** (AC: 1, 2, 3)
-  - [ ] `src/utils/adminAuth.js` — `isAdmin()` per the contract table.
-  - [ ] `src/utils/adminMetrics.js` — `getAdminMetrics()` per the contract table.
-- [ ] **Task 7: `AdminDashboard` component** (AC: 1, 3, 4)
-  - [ ] `src/components/AdminDashboard.jsx` per the contract table.
-  - [ ] `src/components/AdminDashboard.test.jsx` — loading state renders `role="status"`; error state renders `role="alert"` + a working `Retry` button that re-fetches; ready state renders all 6 metrics from a fixture response including the "lower is better" groundedness clarifier text and the `generatedAt` timestamp text; `null` `dailyLimitHitRate`/`averageGroundednessScore` render a clear "no data yet" state, not `0%`/`0` (a null-vs-zero regression here would be a silent lie to Tony); `Back` button calls `onBack` exactly once.
-- [ ] **Task 8: Wire into `App.jsx`/`AccountBar`** (AC: 1, 2, 3, 4)
-  - [ ] `src/App.jsx` changes per the contract table: `isAdminUser`/`showAdminDashboard` state, the admin-check effect, `handleSignedOut` reset additions, the `showAdminDashboard` render branch (first, above `guideResult`), `AccountBar`'s two new props + conditional `Admin Dashboard` button.
-  - [ ] Tests (`src/AppAuth.test.jsx` or a new `src/AppAdmin.test.jsx` if that keeps files focused — match whichever grouping convention feels closest to the existing split): mock `fetchAuthSession` (extend the existing `vi.mock('aws-amplify/auth', ...)` block) — admin account (groups include `Admin`) sees the `Admin Dashboard` button and clicking it renders `AdminDashboard`; non-admin account (no groups, or groups without `Admin`) never renders the button, confirmed by `queryByRole('button', { name: 'Admin Dashboard' })` returning `null` — this is AC 2's actual test, not a visible-but-disabled button; sign-out clears `showAdminDashboard` back to the normal flow.
-  - [ ] `e2e/authenticated.spec.js`: add one assertion to the existing test (do not add a new `test(...)` block or new file) — confirm `page.getByRole('button', { name: 'Admin Dashboard' })` is not present for the shared `TAROT_E2E_*` account. **Race warning:** `isAdminUser` is set by an async `fetchAuthSession()` effect that starts `false` — placing this assertion too early would pass trivially (button absent because the check hasn't resolved yet, not because it correctly resolved to non-admin) and wouldn't actually catch a regression where the button later appears. Playwright's `expect(locator).not.toBeVisible()` does not wait out the async effect on its own (a not-yet-rendered element already satisfies "not visible," so the matcher returns immediately without retrying). Explicitly wait for the admin-check to have had a chance to settle first — e.g. `await page.waitForLoadState('networkidle')`, or wait on some other already-loaded, account-dependent UI signal — before asserting absence. Place the assertion after the existing test's full interaction sequence (not immediately after login) for the same reason.
-- [ ] **Task 9: Deploy + live verification** (AC: 1, 2, 3, 4)
-  - [ ] `npx ampx sandbox --once`. Confirm the `Admin` User Pool group exists (`aws cognito-idp list-groups --user-pool-id <id>` or the console) and the new Lambda/AppSync operation deployed cleanly.
-  - [ ] Run `npm run grant-admin -- <Tony's email>` (pre-dev prerequisite 1). Confirm membership: `aws cognito-idp admin-list-groups-for-user --user-pool-id <id> --username <email>` shows `Admin`.
-  - [ ] **Log out and back in as Tony's account** before checking the dashboard — Cognito bakes `cognito:groups` into the ID token at issuance; a token issued *before* the group grant will not show the claim until a fresh sign-in (or the next automatic refresh). This is a real gotcha, not paranoia — don't skip it and then wrongly conclude the gating code is broken.
-  - [ ] As Tony (now admin-flagged), `npm run dev`: confirm the `Admin Dashboard` button appears, clicking it shows all 6 metrics with plausible real numbers, a "last refreshed" timestamp, no charts, and a working `Back` button (AC 1, 3, 4).
-  - [ ] As the shared `TAROT_E2E_*` test account (non-admin): confirm the `Admin Dashboard` button is entirely absent from the account bar (AC 2).
-  - [ ] Defense-in-depth check: while signed in as the non-admin test account, attempt `client.queries.adminMetrics()` directly (browser console, or a throwaway script) and confirm AppSync rejects it as unauthorized — proves the group gate is real server-side enforcement, not merely a hidden button (AD-9).
+- [x] **Task 0: Environment pre-flight** (AC: none — gate)
+  - [x] Confirm `git log -1` is `6626f93`. The tree has pre-existing uncommitted files from the Epic 3 retrospective (`epic-3-retro-2026-07-26.md`, and edits to `deferred-work.md`/`sprint-status.yaml`/the 3.7 story file) — **do not discard them**; if they're still uncommitted when you start, isolate and commit them separately first, same precedent as every prior story's Task 0.
+  - [x] Baseline gates green: `npm test` (271/271 expected — confirm the real number), `npm run lint`, `npm run typecheck`, `npm run build`.
+  - [x] Confirm sandbox reachable: `npx ampx sandbox` status or a fresh `npm run dev` login with the existing test account.
+- [x] **Task 1: Cognito `Admin` group** (AC: 1, 2)
+  - [x] `amplify/auth/resource.ts`: add `groups: ['Admin']` per the contract table. No other change to this file.
+- [x] **Task 2: `admin-metrics` Lambda** (AC: 1)
+  - [x] `amplify/functions/admin-metrics/resource.ts` per the contract table.
+  - [x] `amplify/functions/admin-metrics/handler.ts`: DI shape matching the established handler pattern used by `usage-counter`/`orientation-judge`/`orientation-reconciler`/`budget-alert` (`HandlerDependencies` object, `createHandler(deps)`, default deps built from env vars + real SDK clients, `export const handler = createHandler()`) — `check-invite-key/handler.ts` is the one existing handler that doesn't follow this shape; don't copy that one. Implements: parallel `Promise.all` of (a) `readConfig`, (b) MonthlySpend `GetCommand` for `utcMonth(now)`, (c) full Account scan, (d) full Session scan, (e) full DailyUsage scan. Then: group Account items by `generation` into `{ FirstGen, SecondGen }` (default both to 0, don't assume both generations exist yet); filter Session items to `effectiveStatus(item) === 'SUCCEEDED'` for `succeededSessionCount`, and within that set, average `groundednessScore` over items where `typeof groundednessScore === 'number'` for `averageGroundednessScore`/`scoredSessionCount` (null-safe per the contract table); compute `dailyLimitHitRate`/`dailyUsageRecordCount` per the frozen hit-rate definition. Return the exact response shape from the contract table, stringified or not — `a.json()` accepts either (this codebase's existing custom queries return a plain object from the handler; the frontend guard handles both).
+  - [x] `amplify/functions/admin-metrics/handler.test.ts`: DI-mocked `dynamo.send` covering at minimum — empty tables (all metrics come back 0/null, no throw); mixed FirstGen/SecondGen counts; `SUCCEEDED` vs `PENDING`/`FAILED`/legacy-no-status Sessions (only `SUCCEEDED`+legacy count toward `succeededSessionCount`, matching `effectiveStatus`); groundedness average excludes Sessions with no `groundednessScore` field even if `SUCCEEDED` (unscored, not zero); hit-rate math with a mix of `count < dailyLimit` and `count >= dailyLimit` DailyUsage records, pinned to an exact fraction; multi-page `Scan` (assert the `ExclusiveStartKey`/`LastEvaluatedKey` loop actually re-queries, not just single-page happy path); MonthlySpend record absent for the current month → `spentToDate: 0`; Config missing → propagates the `readConfig` throw (Lambda fails loudly, same as every other Config-reading Lambda). Assert the exact returned object shape, not just individual field spot-checks.
+- [x] **Task 3: `adminMetrics` AppSync query** (AC: 1, 2)
+  - [x] `amplify/data/resource.ts`: import `adminMetrics`, add the `adminMetrics` query per the contract table. No other schema/model change.
+- [x] **Task 4: `amplify/backend.ts` wiring** (AC: 1)
+  - [x] Add `adminMetrics` import + `defineBackend({...})` entry, `const adminMetricsLambda = ...` declaration, the five `grantReadData` calls, and the five environment variables — all per the contract table. No WAF change (contract table explains why).
+- [x] **Task 5: One-time admin-grant script** (AC: 1)
+  - [x] `scripts/grant-admin.mjs` per the contract table.
+  - [x] `package.json`: add `"grant-admin": "node scripts/grant-admin.mjs"` alongside the existing `seed-*` scripts.
+- [x] **Task 6: Frontend utils** (AC: 1, 2, 3)
+  - [x] `src/utils/adminAuth.js` — `isAdmin()` per the contract table.
+  - [x] `src/utils/adminMetrics.js` — `getAdminMetrics()` per the contract table.
+- [x] **Task 7: `AdminDashboard` component** (AC: 1, 3, 4)
+  - [x] `src/components/AdminDashboard.jsx` per the contract table.
+  - [x] `src/components/AdminDashboard.test.jsx` — loading state renders `role="status"`; error state renders `role="alert"` + a working `Retry` button that re-fetches; ready state renders all 6 metrics from a fixture response including the "lower is better" groundedness clarifier text and the `generatedAt` timestamp text; `null` `dailyLimitHitRate`/`averageGroundednessScore` render a clear "no data yet" state, not `0%`/`0` (a null-vs-zero regression here would be a silent lie to Tony); `Back` button calls `onBack` exactly once.
+- [x] **Task 8: Wire into `App.jsx`/`AccountBar`** (AC: 1, 2, 3, 4)
+  - [x] `src/App.jsx` changes per the contract table: `isAdminUser`/`showAdminDashboard` state, the admin-check effect, `handleSignedOut` reset additions, the `showAdminDashboard` render branch (first, above `guideResult`), `AccountBar`'s two new props + conditional `Admin Dashboard` button.
+  - [x] Tests (`src/AppAuth.test.jsx` or a new `src/AppAdmin.test.jsx` if that keeps files focused — match whichever grouping convention feels closest to the existing split): mock `fetchAuthSession` (extend the existing `vi.mock('aws-amplify/auth', ...)` block) — admin account (groups include `Admin`) sees the `Admin Dashboard` button and clicking it renders `AdminDashboard`; non-admin account (no groups, or groups without `Admin`) never renders the button, confirmed by `queryByRole('button', { name: 'Admin Dashboard' })` returning `null` — this is AC 2's actual test, not a visible-but-disabled button; sign-out clears `showAdminDashboard` back to the normal flow.
+  - [x] `e2e/authenticated.spec.js`: add one assertion to the existing test (do not add a new `test(...)` block or new file) — confirm `page.getByRole('button', { name: 'Admin Dashboard' })` is not present for the shared `TAROT_E2E_*` account. **Race warning:** `isAdminUser` is set by an async `fetchAuthSession()` effect that starts `false` — placing this assertion too early would pass trivially (button absent because the check hasn't resolved yet, not because it correctly resolved to non-admin) and wouldn't actually catch a regression where the button later appears. Playwright's `expect(locator).not.toBeVisible()` does not wait out the async effect on its own (a not-yet-rendered element already satisfies "not visible," so the matcher returns immediately without retrying). Explicitly wait for the admin-check to have had a chance to settle first — e.g. `await page.waitForLoadState('networkidle')`, or wait on some other already-loaded, account-dependent UI signal — before asserting absence. Place the assertion after the existing test's full interaction sequence (not immediately after login) for the same reason.
+- [x] **Task 9: Deploy + live verification** (AC: 1, 2, 3, 4)
+  - [x] `npx ampx sandbox --once`. Confirm the `Admin` User Pool group exists (`aws cognito-idp list-groups --user-pool-id <id>` or the console) and the new Lambda/AppSync operation deployed cleanly.
+  - [x] Run `npm run grant-admin -- <Tony's email>` (pre-dev prerequisite 1). Confirm membership: `aws cognito-idp admin-list-groups-for-user --user-pool-id <id> --username <email>` shows `Admin`.
+  - [x] **Log out and back in as Tony's account** before checking the dashboard — Cognito bakes `cognito:groups` into the ID token at issuance; a token issued *before* the group grant will not show the claim until a fresh sign-in (or the next automatic refresh). This is a real gotcha, not paranoia — don't skip it and then wrongly conclude the gating code is broken.
+  - [x] As Tony (now admin-flagged), `npm run dev`: confirm the `Admin Dashboard` button appears, clicking it shows all 6 metrics with plausible real numbers, a "last refreshed" timestamp, no charts, and a working `Back` button (AC 1, 3, 4).
+  - [x] As the shared `TAROT_E2E_*` test account (non-admin): confirm the `Admin Dashboard` button is entirely absent from the account bar (AC 2).
+  - [x] Defense-in-depth check: while signed in as the non-admin test account, attempt `client.queries.adminMetrics()` directly (browser console, or a throwaway script) and confirm AppSync rejects it as unauthorized — proves the group gate is real server-side enforcement, not merely a hidden button (AD-9).
 - [ ] **Task 10: Close out (Definition of Done)**
   - [ ] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e` (one new assertion added to the existing `e2e/authenticated.spec.js` per Task 8 — no new spec file; confirm nothing else regressed).
   - [ ] Sweep the diff and this story file for credentials — the live-verification AWS CLI/Cognito commands use Tony's real email locally only, never committed.
@@ -106,7 +106,9 @@ So that I can tell what's actually happening without digging through raw data.
 
 ### Review Findings
 
-*(populated during code review)*
+- [x] [Review][Patch] Re-evaluate Admin membership when auth tokens refresh so revoked users do not retain stale dashboard navigation and newly promoted users can gain it without an auth-state transition [src/App.jsx:229]
+- [x] [Review][Patch] Keep Back navigation available while metrics are loading so a delayed request cannot trap the admin on the loading surface [src/components/AdminDashboard.jsx:32]
+- [x] [Review][Patch] Correct lifecycle metadata: Epic 4 is marked done while Story 4.1 is still in progress and Stories 4.2–4.4 remain backlog [\_bmad-output/implementation-artifacts/sprint-status.yaml:80]
 
 ## Dev Notes
 
@@ -172,23 +174,54 @@ Recent history (`6626f93` back through `4fcd79c`) is Story 3.7 (test-only) and S
 
 ### Agent Model Used
 
-*(fill in at implementation time)*
+OpenAI Codex (GPT-5)
 
 ### Implementation Plan
 
-*(fill in at implementation time)*
+- Execute each task in story order using targeted failing tests before implementation, then run the full repository gates at task and story closeout.
+- Establish the admin boundary first (Cognito group, group-authorized AppSync query, least-privilege Lambda wiring), then add the one-time grant command and defensive frontend utilities/UI.
+- Preserve aggregate-only data handling, exact response contracts, hidden non-admin navigation, and the existing App-owned state pattern.
 
 ### Debug Log References
 
-*(fill in at implementation time)*
+- 2026-07-27: Baseline `npm test` failed twice under shell-default Node v25.9.0 because its invalid global `--localstorage-file` shim replaced jsdom localStorage. Re-running unchanged under the repository's established Node v24.9.0 runtime passed 271/271.
+- 2026-07-27: The connected in-app browser execution bridge rejected initialization before browser access, so the shared-account live checks used the established local Playwright auth state. Tony's fresh-sign-in UI check remains the only open live gate.
 
 ### Completion Notes List
 
-*(fill in at implementation time)*
+- Task 0 complete: preserved and separately committed pre-existing Epic 3/story-creation artifacts as `8b684f6`; baseline tests (271/271), lint, typecheck, build, and Amplify sandbox reachability passed.
+- Task 1 complete: declared the single `Admin` Cognito group; the source invariant, typecheck, and full 271-test regression suite passed.
+- Task 2 complete: added the 15-second `admin-metrics` Lambda, five parallel paginated reads, exact aggregate response semantics, and five DI tests covering empty/mixed/legacy/null/pagination/missing-record/error cases. Targeted tests, typecheck, and the full 276-test suite passed.
+- Task 3 complete: exposed only the `adminMetrics` JSON query behind AppSync's `allow.group('Admin')` gate; typecheck and the full 276-test suite passed with no model-schema changes.
+- Task 4 complete: registered `adminMetrics`, granted read-only access to exactly five tables, and supplied exactly five table-name environment variables with no WAF change. Typecheck and all 276 tests passed.
+- Task 5 complete: added `npm run grant-admin -- <email>`, reading the deployed User Pool and region from `amplify_outputs.json` and issuing one `AdminAddUserToGroup` call. Syntax, usage failure, lint, and all 276 tests passed.
+- Task 6 complete: added fail-closed Cognito-group detection and defensive `a.json()` metrics parsing, with eight focused tests covering admin/non-admin/missing/error and string/object/AppSync-error boundaries. Lint and all 284 tests passed.
+- Task 7 complete: added the plain metrics-only dashboard with announced loading, retryable error, honest null states, readable refresh time, score-direction clarification, and Back navigation. Five component tests, lint, and all 289 tests passed.
+- Task 8 complete: wired fail-closed admin discovery, hidden navigation, first-priority dashboard rendering, Back, and auth-loss/sign-out resets into App-owned state. Two new App tests, the full 291-test suite, lint, and the authenticated non-admin Playwright flow passed.
+- Task 9 partial live evidence: sandbox deploy succeeded; the `Admin` group and Tony membership were confirmed; the aggregate-only Lambda returned plausible live metrics (2 FirstGen, 1 SecondGen, 16 SUCCEEDED Sessions, 1/6 hit-rate, $0.48 of $30, average floater score 0.25 across 2 scored Sessions); the shared test account had no Admin group/button and AppSync rejected its direct query as `Unauthorized`. Tony's fresh-sign-in dashboard/Back visual check remains open.
+- Task 9 complete: Tony confirmed the fresh-sign-in Admin Dashboard showed the live metrics and refresh timestamp with the required plain presentation and working Back navigation.
 
 ### File List
 
-*(fill in at implementation time)*
+- _bmad-output/implementation-artifacts/4-1-view-usage-spend-metrics.md
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+- amplify/auth/resource.ts
+- amplify/backend.ts
+- amplify/data/resource.ts
+- amplify/functions/admin-metrics/handler.test.ts
+- amplify/functions/admin-metrics/handler.ts
+- amplify/functions/admin-metrics/resource.ts
+- package.json
+- scripts/grant-admin.mjs
+- e2e/authenticated.spec.js
+- src/App.jsx
+- src/AppAuth.test.jsx
+- src/components/AdminDashboard.jsx
+- src/components/AdminDashboard.test.jsx
+- src/utils/adminAuth.js
+- src/utils/adminAuth.test.js
+- src/utils/adminMetrics.js
+- src/utils/adminMetrics.test.js
 
 ## Change Log
 

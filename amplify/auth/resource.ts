@@ -3,5 +3,6 @@ import { postConfirmation } from './post-confirmation/resource';
 
 export const auth = defineAuth({
   loginWith: { email: true },
+  groups: ['Admin'],
   triggers: { postConfirmation },
 });

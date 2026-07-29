@@ -12,6 +12,7 @@
     "test:e2e": "playwright test",
     "preview": "vite preview",
     "backfill-sessions": "node scripts/backfill-session-status.mjs",
+    "grant-admin": "node scripts/grant-admin.mjs",
     "seed-invite-key": "node scripts/seed-invite-key.mjs",
     "seed-config": "node scripts/seed-config.mjs"
   },
