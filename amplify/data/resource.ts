@@ -77,6 +77,11 @@ const schema = a.schema({
     .returns(a.string())
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(inviteKeyMint)),
+  adminMintInviteKey: a
+    .mutation()
+    .returns(a.string())
+    .authorization((allow) => [allow.group('Admin')])
+    .handler(a.handler.function(inviteKeyMint)),
   requestAccess: a
     .mutation()
     .arguments({ name: a.string().required(), email: a.string().required() })

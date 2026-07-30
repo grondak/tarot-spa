@@ -49,6 +49,7 @@ describe('AdminDashboard', () => {
   it('renders every metric, the score clarifier, and the refresh timestamp', async () => {
     render(<AdminDashboard getAdminMetricsFn={() => Promise.resolve(metrics)} />);
 
+    expect(await screen.findByRole('button', { name: 'Mint Key' })).toBeVisible();
     expect(await screen.findByText('FirstGen: 3, SecondGen: 2')).toBeVisible();
     expect(screen.getByText('42')).toBeVisible();
     expect(screen.getByText('15.0% (40 daily usage records)')).toBeVisible();

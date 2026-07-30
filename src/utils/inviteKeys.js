@@ -14,3 +14,11 @@ export async function mintOnwardKey() {
   if (!data) throw new Error('Invite Key was not returned');
   return data;
 }
+
+export async function adminMintInviteKey() {
+  const client = generateClient();
+  const { data, errors } = await client.mutations.adminMintInviteKey();
+  if (errors?.length) throw new Error(errors[0].message);
+  if (!data) throw new Error('Invite Key was not returned');
+  return data;
+}

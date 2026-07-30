@@ -1,8 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { DynamoDBClient, TransactionCanceledException } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 
-type MintOnwardKeyEvent = { identity?: { sub?: string } | null };
+type MintInviteKeyEvent = {
+  fieldName?: string;
+  identity?: { sub?: string } | null;
+  info?: { fieldName?: string };
+};
 type CommandClient = { send(command: unknown): Promise<unknown> };
 
 type HandlerDependencies = {
@@ -32,8 +36,35 @@ function isAccountConditionalFailure(error: unknown) {
     && error.CancellationReasons?.[0]?.Code === 'ConditionalCheckFailed';
 }
 
+async function mintAdminKey(deps: HandlerDependencies) {
+  if (!deps.inviteKeyTableName) {
+    throw new Error('invite-key-mint table configuration is missing');
+  }
+
+  const code = deps.generateCode();
+  const timestamp = new Date().toISOString();
+  await deps.dynamo.send(new PutCommand({
+    TableName: deps.inviteKeyTableName,
+    Item: {
+      id: code,
+      status: 'unredeemed',
+      generation: 'FirstGen',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    },
+    ConditionExpression: 'attribute_not_exists(id)',
+  }));
+
+  return code;
+}
+
 export function createHandler(deps: HandlerDependencies = defaultDependencies) {
-  return async (event: MintOnwardKeyEvent) => {
+  return async (event: MintInviteKeyEvent) => {
+    const fieldName = event.fieldName ?? event.info?.fieldName;
+    if (fieldName === 'adminMintInviteKey') {
+      return mintAdminKey(deps);
+    }
+
     const accountId = event.identity?.sub;
     if (!accountId) throw new Error('authenticated identity required');
     if (!deps.accountTableName || !deps.inviteKeyTableName) {

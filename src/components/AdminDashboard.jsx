@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getAdminMetrics } from '../utils/adminMetrics';
+import MintInviteKey from './MintInviteKey';
 
 const buttonClass = 'rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500';
 
@@ -78,6 +79,7 @@ export default function AdminDashboard({
     <main className="min-h-screen bg-gray-950 px-4 py-12 text-white">
       <div className="mx-auto w-full max-w-4xl">
         <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+        <MintInviteKey />
         <dl className="mt-8 divide-y divide-gray-800 border-y border-gray-800">
           <div className="py-4">
             <dt className="text-sm font-semibold text-gray-300">Users by generation</dt>

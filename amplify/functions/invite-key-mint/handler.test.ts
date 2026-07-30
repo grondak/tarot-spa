@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TransactionCanceledException } from '@aws-sdk/client-dynamodb';
+import {
+  ConditionalCheckFailedException,
+  TransactionCanceledException,
+} from '@aws-sdk/client-dynamodb';
 import { createHandler } from './handler';
 
 const event = { identity: { sub: 'account-123' } };
@@ -76,5 +79,70 @@ describe('invite-key-mint handler', () => {
 
     await expect(createHandler(deps)(event)).rejects.toThrow('table configuration is missing');
     expect(deps.dynamo.send).not.toHaveBeenCalled();
+  });
+
+  it('mints a FirstGen key on the admin field without a caller identity', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-28T21:10:00.000Z'));
+    const deps = dependencies();
+    deps.dynamo.send.mockResolvedValueOnce({});
+
+    try {
+      const code = await createHandler(deps)({
+        fieldName: 'adminMintInviteKey',
+      });
+
+      expect(code).toBe('ABCD-EFGH-JKMP');
+      expect(deps.dynamo.send).toHaveBeenCalledOnce();
+      expect(deps.dynamo.send.mock.calls[0][0].input).toEqual({
+        TableName: 'InviteKeyTable',
+        Item: {
+          id: 'ABCD-EFGH-JKMP',
+          status: 'unredeemed',
+          generation: 'FirstGen',
+          createdAt: '2026-07-28T21:10:00.000Z',
+          updatedAt: '2026-07-28T21:10:00.000Z',
+        },
+        ConditionExpression: 'attribute_not_exists(id)',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('propagates an admin-key collision', async () => {
+    const deps = dependencies();
+    const collision = new ConditionalCheckFailedException({
+      $metadata: {},
+      message: 'condition failed',
+    });
+    deps.dynamo.send.mockRejectedValueOnce(collision);
+
+    await expect(createHandler(deps)({
+      info: { fieldName: 'adminMintInviteKey' },
+    })).rejects.toBe(collision);
+  });
+
+  it('keeps the explicit mintOnwardKey field on the unchanged onward path', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-28T21:10:00.000Z'));
+    const omittedInfoDeps = dependencies();
+    const explicitInfoDeps = dependencies();
+    omittedInfoDeps.dynamo.send.mockResolvedValueOnce({});
+    explicitInfoDeps.dynamo.send.mockResolvedValueOnce({});
+
+    try {
+      await createHandler(omittedInfoDeps)(event);
+      await createHandler(explicitInfoDeps)({
+        ...event,
+        fieldName: 'mintOnwardKey',
+      });
+
+      expect(explicitInfoDeps.dynamo.send.mock.calls[0][0].input).toEqual(
+        omittedInfoDeps.dynamo.send.mock.calls[0][0].input,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
