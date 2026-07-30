@@ -4,7 +4,7 @@ baseline_commit: fc27a30
 
 # Story 4.2: Mint a new First-Gen Invite Key from the dashboard
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -76,11 +76,11 @@ So that I can invite a friend directly or grant an approved access request.
   - [x] As Tony (admin): `npm run dev`, open the Admin Dashboard, click "Mint Key" — confirm a new code appears, Copy works, and clicking "Mint Key" again produces a *different* new code without needing to leave the dashboard (AC 1, proving the no-eligibility-ceiling behavior for real). Confirm the new InviteKey items are `status: unredeemed`, `generation: FirstGen` (AWS console or a throwaway read).
   - [x] Defense-in-depth (AC 2): while signed in as the shared non-admin `TAROT_E2E_*` test account, attempt `client.mutations.adminMintInviteKey()` directly (browser console or a throwaway script) and confirm AppSync rejects it as unauthorized — mirrors 4.1's identical `adminMetrics` verification.
   - [x] Spot-check AC 3: temporarily break connectivity or otherwise force one failure (e.g. throttle/offline the tab briefly) and confirm the inline error appears with the button still clickable, then let a normal mint succeed on retry.
-- [ ] **Task 7: Close out (Definition of Done)**
+- [x] **Task 7: Close out (Definition of Done)**
   - [x] All gates green: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e` (existing specs only — no new e2e spec; confirm nothing regressed, including the admin/non-admin authenticated flows Story 4.1 added).
   - [x] Sweep the diff and this story file for credentials — no new secrets are introduced by this story.
   - [x] Update `sprint-status.yaml` (`4-2-mint-a-new-first-gen-invite-key-from-the-dashboard` → `review`).
-  - [ ] Commit and push to `main`. Paste `git status --short` (expect empty) and `git log -1` output directly in this story's Dev Agent Record — a prose "committed and pushed" claim alone is not sufficient evidence (standing Epic 3 retro action item; Story 4.1's own close-out required a correction pass to satisfy this exact gate — get it right the first time here).
+  - [x] Commit and push to `main`. Paste `git status --short` (expect empty) and `git log -1` output directly in this story's Dev Agent Record — a prose "committed and pushed" claim alone is not sufficient evidence (standing Epic 3 retro action item; Story 4.1's own close-out required a correction pass to satisfy this exact gate — get it right the first time here).
 
 ### Review Findings
 
@@ -168,6 +168,18 @@ OpenAI Codex (GPT-5)
 - Task 5: Wired `MintInviteKey` into the existing Admin Dashboard ready state directly below the heading. The dashboard integration assertion failed before wiring and all 305 tests passed afterward.
 - Task 6: Deployed the schema and corrected shared Lambda to the Amplify sandbox. Live verification proved non-admin rejection; Admin dashboard visibility; two different consecutive keys persisted as `unredeemed`/`FirstGen`; clipboard equality; exact inline offline error with enabled retry; and successful retry. The shared account's temporary Admin membership was removed, and the pre-fix misrouted SecondGen key/eligibility mutation was cleaned up.
 - Task 7 validation: Final closeout passed 305/305 Vitest tests, ESLint, TypeScript typecheck, production build, and all 4 existing Playwright tests. Diff/credential sweeps were clean; only synthetic test key fixtures matched the invite-code pattern.
+- Task 7 Git evidence after pushing implementation commit `7766851` to `origin/main`:
+
+  `git status --short` (empty output):
+
+  ```text
+  ```
+
+  `git log -1 --oneline --decorate`:
+
+  ```text
+  7766851 (HEAD -> main, origin/main, origin/HEAD) feat: add admin invite key minting
+  ```
 
 ### File List
 
@@ -187,3 +199,4 @@ OpenAI Codex (GPT-5)
 
 - 2026-07-28: Story created via create-story workflow. Second story of Epic 4 — extends Story 4.1's Admin Dashboard and reuses Story 1.2's `invite-key-mint` Lambda per AD-17's explicit "same Lambda, separate mutation" instruction rather than building a new admin-mint Lambda. Verified the same-Lambda/two-differently-authorized-mutations pattern is valid against the installed `@aws-amplify/data-schema` types, and confirmed `amplify/backend.ts` needs zero changes (existing grants already suffice). Flagged a deliberate UX divergence from `GrantInviteKey.jsx`: `MintInviteKey` must stay a repeatable action (no ceiling on minting), not a one-shot. Status: ready-for-dev.
 - 2026-07-28: Independent fresh-context review pass, re-deriving the story from epics.md/prd.md/ARCHITECTURE-SPINE.md/EXPERIENCE.md and verifying every falsifiable technical claim against the live repo (`handler.ts`'s exact current shape, `backend.ts`'s existing grants, `data/resource.ts`'s current schema, the `AppSyncResolverEvent.info.fieldName` type, and — traced further than the first pass — `@aws-amplify/backend-function`'s `FunctionFactory` memoization proving the shared-Lambda claim by construction, not just by absence of a restriction). Found one process defect: `sprint-status.yaml` was never actually flipped to `ready-for-dev` despite the story header claiming it — fixed. Also: softened an overstated causal claim in Dev Notes (4.1's uncommitted-work gap was closed by 4.1's own Task 10 close-out, not discovered by this story's creation); added an explicit branch-skeleton warning to the handler-branching contract row, since a reversed if/else would produce a severe bug invisible to AppSync's per-field authorization (which gates *who* can call each mutation, not *which code path* the shared handler takes); pinned the clipboard-failure copy verbatim instead of only-by-reference; cited the exact memoization source file for the shared-Lambda claim. Everything else — all AC/AD/PRD/UX quotes, every current-repo file-shape claim, the 293/293 baseline test count — checked out true. Status remains ready-for-dev.
+- 2026-07-29: Implemented Story 4.2 end to end: added the independently Admin-authorized mutation on the shared Lambda, corrected routing for Amplify's generated top-level `fieldName` payload, added the repeatable dashboard mint/copy/retry UI and focused tests, deployed and live-verified all three ACs, passed all closeout gates, and moved the story to review.
