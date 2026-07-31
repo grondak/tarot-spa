@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-11
-last_updated: 2026-07-29 (story 4.2 ready for review)
+last_updated: 2026-07-29 (story 4.2 code review complete, done)
 project: tarot-spa
 project_key: NOKEY
 tracking_system: file-system
@@ -79,7 +79,7 @@ development_status:
 
   epic-4: in-progress
   4-1-view-usage-spend-metrics: done
-  4-2-mint-a-new-first-gen-invite-key-from-the-dashboard: review
+  4-2-mint-a-new-first-gen-invite-key-from-the-dashboard: done
   4-3-adjust-the-daily-limit-and-monthly-budget-without-a-deploy: backlog
   4-4-revoke-an-invite-key: backlog
   epic-4-retrospective: optional

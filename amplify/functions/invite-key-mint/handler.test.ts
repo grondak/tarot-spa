@@ -145,4 +145,61 @@ describe('invite-key-mint handler', () => {
       vi.useRealTimers();
     }
   });
+
+  it('keeps the nested info.fieldName mintOnwardKey field on the unchanged onward path', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-28T21:10:00.000Z'));
+    const omittedInfoDeps = dependencies();
+    const nestedInfoDeps = dependencies();
+    omittedInfoDeps.dynamo.send.mockResolvedValueOnce({});
+    nestedInfoDeps.dynamo.send.mockResolvedValueOnce({});
+
+    try {
+      await createHandler(omittedInfoDeps)(event);
+      await createHandler(nestedInfoDeps)({
+        ...event,
+        info: { fieldName: 'mintOnwardKey' },
+      });
+
+      expect(nestedInfoDeps.dynamo.send.mock.calls[0][0].input).toEqual(
+        omittedInfoDeps.dynamo.send.mock.calls[0][0].input,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects an unrecognized fieldName instead of silently falling through to the onward path', async () => {
+    const deps = dependencies();
+
+    await expect(createHandler(deps)({
+      ...event,
+      fieldName: 'someOtherMutation',
+    })).rejects.toThrow('unrecognized fieldName');
+    expect(deps.dynamo.send).not.toHaveBeenCalled();
+  });
+
+  it('treats an explicit null fieldName the same as an absent one, not as unrecognized', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-28T21:10:00.000Z'));
+    const omittedInfoDeps = dependencies();
+    const nullFieldNameDeps = dependencies();
+    omittedInfoDeps.dynamo.send.mockResolvedValueOnce({});
+    nullFieldNameDeps.dynamo.send.mockResolvedValueOnce({});
+
+    try {
+      await createHandler(omittedInfoDeps)(event);
+      await createHandler(nullFieldNameDeps)({
+        ...event,
+        fieldName: null,
+        info: { fieldName: null },
+      });
+
+      expect(nullFieldNameDeps.dynamo.send.mock.calls[0][0].input).toEqual(
+        omittedInfoDeps.dynamo.send.mock.calls[0][0].input,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

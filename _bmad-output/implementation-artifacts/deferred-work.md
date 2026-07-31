@@ -59,6 +59,16 @@
 - **`monthlyBudgetName` has no length/charset validation** against AWS Budget naming constraints, built from CDK context the same unguarded way the pre-existing `ssmPrefix` already is in the same file.
 - **AWS Budget tracks whole-account spend, not tarot-spa specifically** — no `costFilters` on the `CfnBudget`. Accepted by Tony (2026-07-25): tarot-spa will be the account's dominant workload for at least the next few months. Revisit cost-filter scoping if/when other workloads share the account.
 
+## Deferred from: re-review of the code-review patch pass, story-4.2 (2026-07-29)
+
+- **Dual field-name source precedence is asserted in a comment but not exercised by any test** — `amplify/functions/invite-key-mint/handler.ts`'s `event.fieldName ?? event.info?.fieldName` documents that top-level wins when both are present and disagree, but no test constructs a genuinely conflicting event. Low probability (would require AppSync's own resolver mapping to populate both sources inconsistently, a platform-level anomaly rather than an application bug); revisit if the resolver mapping shape ever changes again.
+
+## Deferred from: code review of story-4.2 (2026-07-29)
+
+- **`errors[0].message` assumed to exist with no fallback** — `src/utils/inviteKeys.js`'s `checkInviteKey`/`mintOnwardKey`/`adminMintInviteKey` all do `new Error(errors[0].message)` with no guard if AppSync ever returns an error object without a `.message`. Pre-existing pattern predating this diff; `adminMintInviteKey` copies it verbatim per the story's frozen "byte-identical shape" contract.
+- **No unmount guard around `setState` after `await`** — `src/components/MintInviteKey.jsx`'s `handleMint`/`handleCopy` can call `setState` after the component unmounts mid-request. Identical pre-existing pattern in `src/components/GrantInviteKey.jsx`, not introduced by this diff.
+- **Keyboard-focusable `<code>` has no `onKeyDown` handler** — `src/components/MintInviteKey.jsx`'s minted-code `<code tabIndex="0">` has no activation behavior for keyboard/screen-reader users. Identical pre-existing pattern in `GrantInviteKey.jsx`.
+
 ## Deferred from: code review of story-3.7 (2026-07-25)
 
 - **No test covers deliberate Quick Draw entered via the "Load Draw" code field (`onLoadCode`)** — only the spread-button entry path is tested for AC 1's "no LLM call" guarantee. Pre-existing gap; Story 3.7's Task 1 explicitly scoped its one new test to the spread-button path.

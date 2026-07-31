@@ -3,9 +3,9 @@ import { DynamoDBClient, TransactionCanceledException } from '@aws-sdk/client-dy
 import { DynamoDBDocumentClient, PutCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 
 type MintInviteKeyEvent = {
-  fieldName?: string;
+  fieldName?: string | null;
   identity?: { sub?: string } | null;
-  info?: { fieldName?: string };
+  info?: { fieldName?: string | null };
 };
 type CommandClient = { send(command: unknown): Promise<unknown> };
 
@@ -17,6 +17,7 @@ type HandlerDependencies = {
 };
 
 const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+const KNOWN_FIELD_NAMES = new Set(['adminMintInviteKey', 'mintOnwardKey']);
 
 function generateInviteCode() {
   const bytes = randomBytes(12);
@@ -60,9 +61,18 @@ async function mintAdminKey(deps: HandlerDependencies) {
 
 export function createHandler(deps: HandlerDependencies = defaultDependencies) {
   return async (event: MintInviteKeyEvent) => {
+    // AppSync's Amplify Gen 2 Lambda-resolver mapping places the operation name at
+    // top-level `event.fieldName`; `event.info.fieldName` is the standard
+    // `AppSyncResolverEvent` shape and is kept for compatibility, but top-level
+    // wins if both are ever present (confirmed against live production payloads).
     const fieldName = event.fieldName ?? event.info?.fieldName;
     if (fieldName === 'adminMintInviteKey') {
       return mintAdminKey(deps);
+    }
+    // `!= null` (not `!== undefined`) so an explicit `null` from either source is
+    // treated the same as an absent field name, not rejected as "unrecognized".
+    if (fieldName != null && !KNOWN_FIELD_NAMES.has(fieldName)) {
+      throw new Error(`invite-key-mint: unrecognized fieldName "${fieldName}"`);
     }
 
     const accountId = event.identity?.sub;

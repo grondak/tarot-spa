@@ -4,7 +4,7 @@ baseline_commit: fc27a30
 
 # Story 4.2: Mint a new First-Gen Invite Key from the dashboard
 
-Status: review
+Status: done
 
 ## Story
 
@@ -84,7 +84,24 @@ So that I can invite a friend directly or grant an approved access request.
 
 ### Review Findings
 
-*(populated during code review)*
+- [x] [Review][Patch] (resolved from decision: harden) Fail-open field-name routing risks silent cross-mutation [amplify/functions/invite-key-mint/handler.ts:63-66] — Fixed: added an explicit `KNOWN_FIELD_NAMES` guard that throws `invite-key-mint: unrecognized fieldName "..."` for any defined `fieldName` other than `'adminMintInviteKey'`/`'mintOnwardKey'`, instead of silently falling through to the onward path. Covered by a new test.
+- [x] [Review][Patch] (resolved from decision: verify now) Live-test cleanup evidence for shared test account [Task 6 / Debug Log References] — Verified via live DynamoDB scan: shared test account's `onwardKeyGenerated` is `false` (correctly reset), no orphaned `SecondGen`/`unredeemed` InviteKey exists. Evidence pasted into Task 6's Completion Notes.
+- [x] [Review][Patch] Missing Task 2's specified nested `info.fieldName` regression test [amplify/functions/invite-key-mint/handler.test.ts:126] — Fixed: added `'keeps the nested info.fieldName mintOnwardKey field on the unchanged onward path'`.
+- [x] [Review][Patch] Undocumented dual field-name source and precedence [amplify/functions/invite-key-mint/handler.ts:63] — Fixed: added an inline comment explaining the top-level-vs-nested source and precedence.
+- [x] [Review][Patch] Dev Agent Record test counts are self-contradictory [story Dev Agent Record: Task 2 and Task 3 Completion Notes] — Fixed: corrected Task 3's count to 308 with an explanatory note; final suite count after this review's patches verified at 307/307.
+- [x] [Review][Defer] `errors[0].message` assumed to exist with no fallback [src/utils/inviteKeys.js:6,13,21] — deferred, pre-existing pattern predating this diff (`checkInviteKey`/`mintOnwardKey`); `adminMintInviteKey` copies it verbatim per the frozen contract's "byte-identical shape" instruction.
+- [x] [Review][Defer] No unmount guard around `setState` after `await` [src/components/MintInviteKey.jsx:18,31] — deferred, identical pre-existing pattern in `src/components/GrantInviteKey.jsx`'s `handleMint`/`handleCopy`, not introduced by this diff.
+- [x] [Review][Defer] Keyboard-focusable `<code>` has no `onKeyDown` handler [src/components/MintInviteKey.jsx:53-54] — deferred, identical pre-existing pattern in `src/components/GrantInviteKey.jsx:66-67`.
+
+#### Re-review of the patch pass (2026-07-29)
+
+The five patches above were re-reviewed by the same three-layer process before commit. Two of the "fixes" had real problems, corrected below; the rest of the round's findings were noise or already-decided scope (see `deferred-work.md` for the one genuinely-deferred item).
+
+- [x] [Review][Patch] `null` fieldName rejected inconsistently with `undefined` fieldName [amplify/functions/invite-key-mint/handler.ts:72] — Fixed: guard condition changed from `fieldName !== undefined` to `fieldName != null`, so an explicit `null` from either `event.fieldName` or `event.info.fieldName` is treated the same as an absent field name (falls through to the onward path) instead of being rejected as "unrecognized". Covered by a new test. Type updated to `string | null | undefined` to match.
+- [x] [Review][Patch] Dual field-name comment not co-located with the code it documents [amplify/functions/invite-key-mint/handler.ts:68] — Fixed: moved from the top of the file (next to `KNOWN_FIELD_NAMES`) to directly above `const fieldName = event.fieldName ?? event.info?.fieldName;`.
+- [x] [Review][Patch] Test-count "fix" corrected the wrong task [story Dev Agent Record: Task 2/Task 3] — The first patch pass misdiagnosed which number was wrong. Re-verified by running the actual Vitest suite against isolated git worktrees of `fc27a30` (293/293) and `7766851` (305/305): Task 2's original "305" was the actual error (should be 296 — 293 + 3 new `handler.test.ts` tests); Task 3's original "299" was correct all along (296 + 3 new `inviteKeys.test.js` tests). Task 2 corrected to 296; Task 3 reverted to its original, correct 299.
+- [x] [Review][Patch] DynamoDB cleanup evidence was still prose, not pasted query output [Task 6] — Fixed: replaced the prose summary with the actual `aws dynamodb scan` commands and their real JSON output for both the `Account` and `InviteKey` tables, matching Task 7's git-evidence standard.
+- [x] [Review][Defer] Dual field-name source precedence (`event.fieldName` wins over `event.info.fieldName` when both are present and disagree) is asserted in a comment but not exercised by any test [amplify/functions/invite-key-mint/handler.ts:68] — deferred, pre-existing gap from the original patch, low probability (would require AppSync's own resolver mapping to populate both sources with conflicting values, a platform-level anomaly rather than an application bug).
 
 ## Dev Notes
 
@@ -162,12 +179,70 @@ OpenAI Codex (GPT-5)
 
 - Task 0: Verified baseline commit `fc27a30`; 293/293 tests, lint, typecheck, and build passed on Node 24.9.0. Confirmed an active AWS session and Tony's `Admin` Cognito group membership.
 - Task 1: Added the `adminMintInviteKey` mutation with its independent `Admin` group authorization and the existing `inviteKeyMint` handler. The schema contract check failed before the change and passed afterward; typecheck and the 293-test regression suite passed.
-- Task 2: Added the `adminMintInviteKey` event branch and FirstGen `PutCommand` path without identity or Account access. The handler accepts Amplify's generated top-level `fieldName` payload and the standard `info.fieldName` shape, always defaulting non-admin field names to the unchanged onward path. Added mutation-survivable tests for the exact item, no-identity behavior, collision propagation, and explicit/default onward routing; 305/305 tests and typecheck passed after the live-found payload correction.
-- Task 3: Added the thin `adminMintInviteKey` client utility and focused success, GraphQL-error, and missing-data tests. The new tests failed before implementation and the full 299-test suite passed afterward.
+- Task 2: Added the `adminMintInviteKey` event branch and FirstGen `PutCommand` path without identity or Account access. The handler accepts Amplify's generated top-level `fieldName` payload and the standard `info.fieldName` shape, always defaulting non-admin field names to the unchanged onward path. Added mutation-survivable tests for the exact item, no-identity behavior, collision propagation, and explicit/default onward routing; 296/296 tests and typecheck passed after the live-found payload correction. *(Corrected during code review 2026-07-29: originally recorded as "305," which was the actual error in this record — an initial code-review patch pass mistakenly "corrected" Task 3's number instead. Verified by running the real Vitest suite against baseline commit `fc27a30` [293/293] and against the finished implementation commit `7766851` [305/305] in isolated git worktrees: 293 (baseline) + 3 (Task 2's new `handler.test.ts` tests) = 296.)*
+- Task 3: Added the thin `adminMintInviteKey` client utility and focused success, GraphQL-error, and missing-data tests. The new tests failed before implementation and the full 299-test suite passed afterward. *(299 was correct all along — confirmed by the same worktree reconstruction: 296 + 3 new `inviteKeys.test.js` tests = 299.)*
 - Task 4: Added a repeatable `MintInviteKey` component with synchronous double-submit protection, latest-code replacement, copy feedback, and exact retryable mint/clipboard errors. Six component tests failed before implementation and all 305 tests plus lint passed afterward.
 - Task 5: Wired `MintInviteKey` into the existing Admin Dashboard ready state directly below the heading. The dashboard integration assertion failed before wiring and all 305 tests passed afterward.
 - Task 6: Deployed the schema and corrected shared Lambda to the Amplify sandbox. Live verification proved non-admin rejection; Admin dashboard visibility; two different consecutive keys persisted as `unredeemed`/`FirstGen`; clipboard equality; exact inline offline error with enabled retry; and successful retry. The shared account's temporary Admin membership was removed, and the pre-fix misrouted SecondGen key/eligibility mutation was cleaned up.
+  - **Code review verification (2026-07-29):** re-ran with pasted command output per the standing git/live-evidence requirement (Task 7's own precedent), since the first review pass's prose summary didn't meet that bar.
+
+    `aws dynamodb scan --table-name Account-v6iwp4o6sfeorhhihwx5uhjkn4-NONE`:
+
+    ```json
+    {
+        "Items": [
+            {
+                "onwardKeyGenerated": {"BOOL": false},
+                "owner": {"S": "story-1-2-secondgen-test"},
+                "generation": {"S": "SecondGen"},
+                "id": {"S": "story-1-2-secondgen-test"}
+            },
+            {
+                "onwardKeyGenerated": {"BOOL": true},
+                "createdAt": {"S": "2026-07-12T17:35:00.000Z"},
+                "owner": {"S": "54a854f8-c041-705f-463e-2b626edc9f90"},
+                "generation": {"S": "FirstGen"},
+                "id": {"S": "54a854f8-c041-705f-463e-2b626edc9f90"},
+                "updatedAt": {"S": "2026-07-12T17:48:31.739Z"}
+            },
+            {
+                "onwardKeyGenerated": {"BOOL": false},
+                "createdAt": {"S": "2026-07-18T18:10:12.739Z"},
+                "owner": {"S": "94487468-a0d1-7068-58ef-86b3c08f8018"},
+                "generation": {"S": "FirstGen"},
+                "id": {"S": "94487468-a0d1-7068-58ef-86b3c08f8018"},
+                "updatedAt": {"S": "2026-07-30T00:25:51.419Z"}
+            }
+        ],
+        "Count": 3,
+        "ScannedCount": 3
+    }
+    ```
+
+    The shared `TAROT_E2E_*` test account (`id: 94487468-a0d1-7068-58ef-86b3c08f8018`) shows `onwardKeyGenerated: false` — correctly reset, not left "spent" by the pre-fix misrouted mutation.
+
+    `aws dynamodb scan --table-name InviteKey-v6iwp4o6sfeorhhihwx5uhjkn4-NONE`:
+
+    ```json
+    {
+        "Items": [
+            {"createdAt": {"S": "2026-07-12T17:48:31.739Z"}, "generation": {"S": "SecondGen"}, "id": {"S": "W32D-UVPH-2QBY"}, "updatedAt": {"S": "2026-07-16T00:00:00.000Z"}, "status": {"S": "revoked"}},
+            {"generation": {"S": "FirstGen"}, "id": {"S": "AGENT-E2E-1"}, "status": {"S": "redeemed"}, "redeemedBy": {"S": "94487468-a0d1-7068-58ef-86b3c08f8018"}},
+            {"createdAt": {"S": "2026-07-30T00:26:32.831Z"}, "generation": {"S": "FirstGen"}, "id": {"S": "TY7E-36ME-V8U3"}, "updatedAt": {"S": "2026-07-30T00:26:32.831Z"}, "status": {"S": "unredeemed"}},
+            {"createdAt": {"S": "2026-07-30T00:26:34.149Z"}, "generation": {"S": "FirstGen"}, "id": {"S": "SHMX-Y2P3-DVW9"}, "updatedAt": {"S": "2026-07-30T00:26:34.149Z"}, "status": {"S": "unredeemed"}},
+            {"generation": {"S": "FirstGen"}, "id": {"S": "SECOND-KEY-TEST"}, "status": {"S": "unredeemed"}},
+            {"id": {"S": "FIRST-GEN-TEST"}, "generation": {"S": "FirstGen"}, "redeemedBy": {"S": "54a854f8-c041-705f-463e-2b626edc9f90"}, "status": {"S": "redeemed"}},
+            {"createdAt": {"S": "2026-07-30T00:26:31.570Z"}, "id": {"S": "2N66-3AA9-E76F"}, "generation": {"S": "FirstGen"}, "updatedAt": {"S": "2026-07-30T00:26:31.570Z"}, "status": {"S": "unredeemed"}}
+        ],
+        "Count": 7,
+        "ScannedCount": 7
+    }
+    ```
+
+    The only `SecondGen` item present (`W32D-UVPH-2QBY`) has `status: revoked` — that's the pre-existing, previously-documented cleanup from Story 1.2/1.4 (see `deferred-work.md`), unrelated to this story. No orphaned `SecondGen`/`unredeemed` item exists from this story's pre-fix incident. The three `unredeemed`/`FirstGen` items (`TY7E-36ME-V8U3`, `SHMX-Y2P3-DVW9`, `2N66-3AA9-E76F`) are the live admin-mint verification keys from this task, as expected.
 - Task 7 validation: Final closeout passed 305/305 Vitest tests, ESLint, TypeScript typecheck, production build, and all 4 existing Playwright tests. Diff/credential sweeps were clean; only synthetic test key fixtures matched the invite-code pattern.
+- Code review patch pass (2026-07-29): hardened `handler.ts`'s field-name routing to throw on an unrecognized `fieldName` instead of silently falling through to the onward path (previously a fail-open gap that had already caused one live misrouting incident during this story's own Task 6 verification); added the Task 2-specified nested `info: { fieldName: 'mintOnwardKey' }` regression test plus a test for the new unrecognized-`fieldName` guard; documented the dual field-name source's precedence with an inline comment. Full suite verified at 307/307 passing (one unrelated flaky `act()`/cleanup failure on a single run, clean on immediate rerun — consistent with prior noted suite flakiness, not caused by this change).
+- Code review re-review of the patch pass (2026-07-29): a second three-layer review of the patch itself (not just the original story diff) caught that the guard treated an explicit `null` fieldName inconsistently with an absent one, and that the first pass's test-count "fix" had corrected the wrong task (see Review Findings for the worktree-verified numbers). Both fixed; DynamoDB cleanup evidence upgraded from prose to actual pasted `aws dynamodb scan` output. Full suite verified at 308/308 passing, lint and typecheck clean.
 - Task 7 Git evidence after pushing implementation commit `7766851` to `origin/main`:
 
   `git status --short` (empty output):
