@@ -73,6 +73,9 @@ function dependencies(overrides: Record<string, unknown> = {}) {
     sessionMissing: false,
     operations: [] as string[],
     transactionInputs: [] as Record<string, unknown>[],
+    config: { dailyLimit: 5, monthlyBudget: 30 } as Record<string, unknown>,
+    configReadCount: 0,
+    mutateConfigAfterRead: null as (() => Record<string, unknown>) | null,
   };
   const dynamo = {
     send: vi.fn(async (command: unknown) => {
@@ -90,7 +93,10 @@ function dependencies(overrides: Record<string, unknown> = {}) {
         }
         if (input.TableName === 'ConfigTable') {
           if (state.configError) throw state.configError;
-          return { Item: { dailyLimit: 5, monthlyBudget: 30 } };
+          state.configReadCount += 1;
+          const snapshot = { ...state.config };
+          if (state.mutateConfigAfterRead) state.config = state.mutateConfigAfterRead();
+          return { Item: snapshot };
         }
       }
 
@@ -602,6 +608,29 @@ describe('durable orientation-guide lifecycle', () => {
   });
 });
 
+describe('Config snapshot immutability', () => {
+  it('checkpoints read-config once and reserves using that captured pair even after Config changes', async () => {
+    const deps = dependencies();
+    deps.state.config = { dailyLimit: 5, monthlyBudget: 30 };
+    // Simulate an admin edit landing the instant after this worker's read-config
+    // checkpoint completes: a re-read here would exhaust both counters and fail
+    // the run, so a SUCCEEDED execution proves the original pair was retained.
+    deps.state.mutateConfigAfterRead = () => ({ dailyLimit: 0, monthlyBudget: 0 });
+
+    const { execution } = await run(deps);
+
+    expect(execution.getStatus()).toBe('SUCCEEDED');
+    expect(deps.state.configReadCount).toBe(1);
+    expect(deps.state.config).toEqual({ dailyLimit: 0, monthlyBudget: 0 });
+
+    const reservation = deps.state.transactionInputs.find(
+      (input) => (input.ClientRequestToken as string).endsWith('RES'),
+    ) as { TransactItems: Array<{ Update: { ExpressionAttributeValues: Record<string, unknown> } }> };
+    expect(reservation.TransactItems[0].Update.ExpressionAttributeValues[':budgetMinusEstimate']).toBeCloseTo(29.97);
+    expect(reservation.TransactItems[1].Update.ExpressionAttributeValues[':limit']).toBe(5);
+  });
+});
+
 describe('orientation-guide step bodies', () => {
   it('dispatches the ordinary judge Lambda asynchronously with only the Session id', async () => {
     const deps = dependencies();
@@ -954,5 +983,15 @@ describe('orientation-guide step bodies', () => {
     expect(reserveFailure.fetchFn).not.toHaveBeenCalled();
     expect(reserveFailure.bedrock.send).not.toHaveBeenCalled();
     expect(reserveFailure.lambda.send).not.toHaveBeenCalled();
+  });
+});
+
+describe('shared cost-estimate invariant', () => {
+  it('keeps the worker reservation estimate and the monthly minimum single-sourced', async () => {
+    const { COST_ESTIMATE_USD } = await import('./handler');
+    const { COST_ESTIMATE_USD: sharedEstimate, MIN_MONTHLY_BUDGET_USD } = await import('../../config');
+
+    expect(COST_ESTIMATE_USD).toBe(sharedEstimate);
+    expect(MIN_MONTHLY_BUDGET_USD).toBe(sharedEstimate);
   });
 });

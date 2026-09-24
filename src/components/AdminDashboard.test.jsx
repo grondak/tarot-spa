@@ -1,6 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { generateClient } from 'aws-amplify/data';
 import AdminDashboard from './AdminDashboard';
+
+vi.mock('aws-amplify/data', () => ({
+  generateClient: vi.fn(),
+}));
 
 const metrics = {
   generatedAt: '2026-07-26T18:04:00.000Z',
@@ -11,6 +16,7 @@ const metrics = {
   monthlySpend: { spentToDate: 4.32, budget: 30 },
   averageGroundednessScore: 0.28,
   scoredSessionCount: 38,
+  config: { dailyLimit: 5, monthlyBudget: 30 },
 };
 
 describe('AdminDashboard', () => {
@@ -77,6 +83,32 @@ describe('AdminDashboard', () => {
     expect(screen.getAllByText('No data yet')).toHaveLength(2);
     expect(screen.queryByText('0%')).not.toBeInTheDocument();
     expect(screen.queryByText(/^0$/)).not.toBeInTheDocument();
+  });
+
+  it('wires the Config editor to metrics.config and updates the displayed budget on save', async () => {
+    const update = vi.fn().mockResolvedValue({ data: { dailyLimit: 9, monthlyBudget: 12.34 } });
+    generateClient.mockReturnValue({ models: { Config: { update } } });
+
+    render(<AdminDashboard getAdminMetricsFn={() => Promise.resolve(metrics)} />);
+
+    expect(await screen.findByLabelText('Daily request limit')).toHaveValue(5);
+    expect(screen.getByLabelText('Monthly budget (USD)')).toHaveValue(30);
+    expect(screen.getByText('$4.32 of $30.00 budget')).toBeVisible();
+
+    fireEvent.change(screen.getByLabelText('Daily request limit'), { target: { value: '9' } });
+    fireEvent.change(screen.getByLabelText('Monthly budget (USD)'), { target: { value: '12.34' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save cost controls' }));
+
+    await waitFor(() => expect(update).toHaveBeenCalledWith({
+      id: 'global',
+      dailyLimit: 9,
+      monthlyBudget: 12.34,
+    }));
+    expect(await screen.findByText('$4.32 of $12.34 budget')).toBeVisible();
+
+    expect(screen.getByRole('button', { name: 'Mint Key' })).toBeVisible();
+    expect(screen.getByText('FirstGen: 3, SecondGen: 2')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Back' })).toBeVisible();
   });
 
   it('calls onBack exactly once', async () => {

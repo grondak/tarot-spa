@@ -12,6 +12,7 @@ import {
   withDurableExecution,
 } from '@aws/durable-execution-sdk-js';
 import { SPREADS, shuffleAndDraw } from '../../../src/utils/deck';
+import { COST_ESTIMATE_USD } from '../../config';
 import {
   effectiveStatus,
   isErrorNamed,
@@ -89,7 +90,7 @@ type HandlerDependencies = {
   now: () => Date;
 };
 
-export const COST_ESTIMATE_USD = 0.03;
+export { COST_ESTIMATE_USD };
 const MODEL_ID = 'us.anthropic.claude-opus-4-6-v1';
 const TAVILY_URL = 'https://api.tavily.com/search';
 const TAVILY_TIMEOUT_MS = 20_000;

@@ -47,6 +47,18 @@ describe('usage-counter handler', () => {
     });
   });
 
+  it('reports exhausted once a lowered limit is at or below an already-used count, without rewriting the counter', async () => {
+    const deps = dependencies(
+      { Item: { dailyLimit: 2, monthlyBudget: 30 } },
+      { Item: { count: 4 } },
+    );
+    await expect(createHandler(deps)({ identity: { sub: 'account-1' } })).resolves.toEqual({
+      dailyUsed: 4,
+      dailyLimit: 2,
+      limitExhausted: true,
+    });
+  });
+
   it('fails loudly when Config is missing', async () => {
     const deps = dependencies({});
     await expect(createHandler(deps)({ identity: { sub: 'account-1' } })).rejects.toThrow(

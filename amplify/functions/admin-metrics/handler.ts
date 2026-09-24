@@ -147,6 +147,10 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
         spentToDate: monthlySpendResult.Item?.spent ?? 0,
         budget: config.monthlyBudget,
       },
+      config: {
+        dailyLimit: config.dailyLimit,
+        monthlyBudget: config.monthlyBudget,
+      },
       averageGroundednessScore: scoredSessions.length > 0
         ? scoreTotal / scoredSessions.length
         : null,

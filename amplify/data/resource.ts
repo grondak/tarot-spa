@@ -1,4 +1,12 @@
 import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
+import {
+  DAILY_LIMIT_MAX,
+  DAILY_LIMIT_MIN,
+  DAILY_LIMIT_VALIDATION_MESSAGE,
+  MAX_MONTHLY_BUDGET_USD,
+  MIN_MONTHLY_BUDGET_USD,
+  MONTHLY_BUDGET_VALIDATION_MESSAGE,
+} from '../config';
 import { adminMetrics } from '../functions/admin-metrics/resource';
 import { checkInviteKey } from '../functions/check-invite-key/resource';
 import { inviteKeyMint } from '../functions/invite-key-mint/resource';
@@ -62,10 +70,17 @@ const schema = a.schema({
     .authorization((allow) => [allow.authenticated().to([])]),
   Config: a
     .model({
-      dailyLimit: a.integer(),
-      monthlyBudget: a.float(),
+      dailyLimit: a.integer().required().validate(
+        (v) => v.gte(DAILY_LIMIT_MIN, DAILY_LIMIT_VALIDATION_MESSAGE).lte(DAILY_LIMIT_MAX, DAILY_LIMIT_VALIDATION_MESSAGE),
+      ),
+      monthlyBudget: a.float().required().validate(
+        (v) => v.gte(MIN_MONTHLY_BUDGET_USD, MONTHLY_BUDGET_VALIDATION_MESSAGE).lte(MAX_MONTHLY_BUDGET_USD, MONTHLY_BUDGET_VALIDATION_MESSAGE),
+      ),
     })
-    .authorization((allow) => [allow.authenticated().to([])]),
+    // Browser access is update-only: no create/read/delete/list/subscription. The
+    // generated update resolver's `attributeExists` key condition means a missing/
+    // wrong id fails instead of creating a second row. Seeding stays trusted/operator-only.
+    .authorization((allow) => [allow.group('Admin').to(['update'])]),
   checkInviteKey: a
     .query()
     .arguments({ code: a.string().required() })

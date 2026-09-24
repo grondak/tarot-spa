@@ -1,4 +1,5 @@
 import { GetCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
+import { type Config, isValidConfig } from '../../config';
 
 export type CommandClient = { send(command: unknown): Promise<unknown> };
 
@@ -16,11 +17,6 @@ export function effectiveStatus(session: { status?: string }) {
   return session.status ?? 'SUCCEEDED';
 }
 
-type Config = {
-  dailyLimit: number;
-  monthlyBudget: number;
-};
-
 export function utcDate(now: Date) {
   return now.toISOString().slice(0, 10);
 }
@@ -36,8 +32,7 @@ export async function readConfig(dynamo: CommandClient, configTable: string): Pr
     ConsistentRead: true,
   })) as { Item?: Partial<Config> };
 
-  if (typeof result.Item?.dailyLimit !== 'number'
-    || typeof result.Item?.monthlyBudget !== 'number') {
+  if (!isValidConfig(result.Item)) {
     throw new Error('orientation config missing — run scripts/seed-config.mjs');
   }
 

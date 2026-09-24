@@ -130,6 +130,7 @@ describe('App authenticated sign-out round trip', () => {
       monthlySpend: { spentToDate: 4.32, budget: 30 },
       averageGroundednessScore: 0.28,
       scoredSessionCount: 38,
+      config: { dailyLimit: 5, monthlyBudget: 30 },
     });
     startOrientationGuide.mockResolvedValue({
       sessionId: '12345678-1234-4234-9234-123456789012',

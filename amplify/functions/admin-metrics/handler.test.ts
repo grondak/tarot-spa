@@ -67,6 +67,7 @@ describe('admin-metrics handler', () => {
       monthlySpend: { spentToDate: 0, budget: 30 },
       averageGroundednessScore: null,
       scoredSessionCount: 0,
+      config: { dailyLimit: 3, monthlyBudget: 30 },
     });
 
     const dailyScan = deps.dynamo.send.mock.calls
@@ -116,6 +117,7 @@ describe('admin-metrics handler', () => {
       monthlySpend: { spentToDate: 4.32, budget: 30 },
       averageGroundednessScore: 0.30000000000000004,
       scoredSessionCount: 2,
+      config: { dailyLimit: 3, monthlyBudget: 30 },
     });
   });
 
@@ -181,6 +183,21 @@ describe('admin-metrics handler', () => {
     expect(commandInput(monthlyGet)).toMatchObject({
       Key: { id: '2026-07' },
       ConsistentRead: true,
+    });
+  });
+
+  it('returns the current editable Config pair and uses it for hit-rate, not a stale copy', async () => {
+    const deps = dependencies({
+      config: { dailyLimit: 2, monthlyBudget: 15.5 },
+      pages: {
+        DailyUsageTable: [{ Items: [{ count: 1 }, { count: 2 }, { count: 3 }] }],
+      },
+    });
+
+    await expect(createHandler(deps)()).resolves.toMatchObject({
+      config: { dailyLimit: 2, monthlyBudget: 15.5 },
+      monthlySpend: { budget: 15.5 },
+      dailyLimitHitRate: 2 / 3,
     });
   });
 

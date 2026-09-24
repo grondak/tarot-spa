@@ -38,8 +38,13 @@ import { requestAccess } from './functions/request-access/resource';
 import { startOrientationGuide } from './functions/start-orientation-guide/resource';
 import { usageCounter } from './functions/usage-counter/resource';
 
-// This synth-time ceiling mirrors Config's seed default but does not follow live Config edits.
-const MONTHLY_BUDGET_CEILING_USD = 30;
+// Fixed outer AWS safety ceiling (PRD FR-10/§6): a CloudFormation-managed,
+// delayed actual-cost tripwire. It does not follow live Config edits — Story
+// 4.3's editable Config.monthlyBudget (amplify/config.ts, $0.03-$30) is the
+// immediate estimate-based admission control and may only be lower than this,
+// never higher. See Story 4.3 Dev Notes "Architecture decision for the two
+// budget controls" for the full ordered relationship between the two layers.
+const AWS_SAFETY_CEILING_USD = 30;
 const MONTHLY_BUDGET_WARNING_THRESHOLD_PERCENT = 80;
 
 const backend = defineBackend({
@@ -151,7 +156,7 @@ new CfnBudget(operationalStack, 'MonthlyBudget', {
     budgetType: 'COST',
     timeUnit: 'MONTHLY',
     budgetLimit: {
-      amount: MONTHLY_BUDGET_CEILING_USD,
+      amount: AWS_SAFETY_CEILING_USD,
       unit: 'USD',
     },
   },

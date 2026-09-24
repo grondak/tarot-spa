@@ -76,6 +76,29 @@ describe('usage reservations', () => {
     )).rejects.toThrow('orientation config missing — run scripts/seed-config.mjs');
   });
 
+  it('fails closed on invalid stored Config values', async () => {
+    await expect(readConfig(
+      client({ Item: { dailyLimit: NaN, monthlyBudget: 30 } }),
+      'ConfigTable',
+    )).rejects.toThrow('orientation config missing — run scripts/seed-config.mjs');
+    await expect(readConfig(
+      client({ Item: { dailyLimit: 5.5, monthlyBudget: 30 } }),
+      'ConfigTable',
+    )).rejects.toThrow('orientation config missing — run scripts/seed-config.mjs');
+    await expect(readConfig(
+      client({ Item: { dailyLimit: 101, monthlyBudget: 30 } }),
+      'ConfigTable',
+    )).rejects.toThrow('orientation config missing — run scripts/seed-config.mjs');
+    await expect(readConfig(
+      client({ Item: { dailyLimit: 5, monthlyBudget: 0.02 } }),
+      'ConfigTable',
+    )).rejects.toThrow('orientation config missing — run scripts/seed-config.mjs');
+    await expect(readConfig(
+      client({ Item: { dailyLimit: 5, monthlyBudget: 30.01 } }),
+      'ConfigTable',
+    )).rejects.toThrow('orientation config missing — run scripts/seed-config.mjs');
+  });
+
   it('reserves monthly and daily counters in one idempotent transaction', async () => {
     const dynamo = client({});
     await reserveUsage(dynamo, { ...usage, dailyLimit: 5, monthlyBudget: 30 });
