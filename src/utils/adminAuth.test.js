@@ -32,8 +32,8 @@ describe('isAdmin', () => {
     await expect(isAdmin()).resolves.toBe(false);
   });
 
-  it('fails closed when fetching the session throws', async () => {
+  it('resolves unknown (not false) when fetching the session throws', async () => {
     fetchAuthSession.mockRejectedValue(new Error('session unavailable'));
-    await expect(isAdmin()).resolves.toBe(false);
+    await expect(isAdmin()).resolves.toBeNull();
   });
 });

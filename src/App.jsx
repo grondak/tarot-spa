@@ -237,10 +237,12 @@ export default function App() {
     }
 
     isAdmin().then((admin) => {
-      if (active) {
-        setIsAdminUser(admin);
-        if (!admin) setShowAdminDashboard(false);
-      }
+      // admin === null means the recheck itself failed transiently (e.g. a
+      // concurrent token refresh) — leave admin status/dashboard state as-is
+      // rather than treating "couldn't tell" as a confirmed demotion.
+      if (!active || admin === null) return;
+      setIsAdminUser(admin);
+      if (!admin) setShowAdminDashboard(false);
     });
 
     return () => {

@@ -10,6 +10,7 @@ import { Hub } from 'aws-amplify/utils';
 import App from './App';
 import { getMyAccount } from './utils/account';
 import { getAdminMetrics } from './utils/adminMetrics';
+import { updateAdminConfig } from './utils/adminConfig';
 import {
   getSession,
   getOrientationStatus,
@@ -27,6 +28,7 @@ vi.mock('aws-amplify/auth', () => ({
 
 vi.mock('./utils/account', () => ({ getMyAccount: vi.fn() }));
 vi.mock('./utils/adminMetrics', () => ({ getAdminMetrics: vi.fn() }));
+vi.mock('./utils/adminConfig', () => ({ updateAdminConfig: vi.fn() }));
 vi.mock('./utils/orientation', async (importOriginal) => ({
   ...await importOriginal(),
   getSession: vi.fn(),
@@ -106,6 +108,7 @@ describe('App authenticated sign-out round trip', () => {
     fetchAuthSession.mockReset();
     getMyAccount.mockReset();
     getAdminMetrics.mockReset();
+    updateAdminConfig.mockReset();
     getSession.mockReset();
     getOrientationStatus.mockReset();
     startOrientationGuide.mockReset();
@@ -309,6 +312,51 @@ describe('App authenticated sign-out round trip', () => {
     });
 
     expect(await screen.findByRole('button', { name: 'Admin Dashboard' })).toBeVisible();
+  });
+
+  it('does not close the Admin Dashboard on a transient session-read failure for a genuine admin', async () => {
+    fetchAuthSession.mockResolvedValue({
+      tokens: { idToken: { payload: { 'cognito:groups': ['Admin'] } } },
+    });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin Dashboard' }));
+    expect(await screen.findByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
+
+    fetchAuthSession.mockRejectedValueOnce(new Error('transient session read failure'));
+    await act(async () => {
+      await Hub.listen.mock.calls[0][1]();
+    });
+
+    expect(screen.getByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Back' })).toBeVisible();
+  });
+
+  it('still renders a Save Cost Controls result after a transient session-read failure mid-save', async () => {
+    fetchAuthSession.mockResolvedValue({
+      tokens: { idToken: { payload: { 'cognito:groups': ['Admin'] } } },
+    });
+    let resolveSave;
+    updateAdminConfig.mockImplementation(() => new Promise((resolve) => {
+      resolveSave = resolve;
+    }));
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Admin Dashboard' }));
+    expect(await screen.findByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Save cost controls' }));
+    expect(screen.getByRole('button', { name: 'Saving…' })).toBeVisible();
+
+    fetchAuthSession.mockRejectedValueOnce(new Error('transient session read failure'));
+    await act(async () => {
+      await Hub.listen.mock.calls[0][1]();
+    });
+    expect(screen.getByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
+
+    await act(async () => resolveSave({ dailyLimit: 7, monthlyBudget: 30 }));
+
+    expect(await screen.findByText('Cost controls saved.')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
   });
 
   it('renders Rate-Limited Intake when the daily status is exhausted', async () => {

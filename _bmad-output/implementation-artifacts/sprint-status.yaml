@@ -1,5 +1,5 @@
 # generated: 2026-07-11
-# last_updated: 2026-09-25
+# last_updated: 2026-09-25 (story 4.5 promoted to ready-for-dev)
 # project: tarot-spa
 # project_key: NOKEY
 # tracking_system: file-system
@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-11
-last_updated: 2026-09-25 (story 4.3 done after code review; story 4.5 remains backlog)
+last_updated: 2026-09-25 (story 4.3 done after code review; story 4.5 implemented, moved to review)
 project: tarot-spa
 project_key: NOKEY
 tracking_system: file-system
@@ -83,7 +83,7 @@ development_status:
   4-3-adjust-the-daily-limit-and-monthly-budget-without-a-deploy: done
 
   4-4-revoke-an-invite-key: backlog
-  4-5-fix-intermittent-admin-status-false-negative-on-auth-hub-events: backlog
+  4-5-fix-intermittent-admin-status-false-negative-on-auth-hub-events: review
   epic-4-retrospective: optional
 
 action_items:
