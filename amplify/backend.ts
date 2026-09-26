@@ -37,6 +37,7 @@ import { orientationReconciler } from './functions/orientation-reconciler/resour
 import { requestAccess } from './functions/request-access/resource';
 import { startOrientationGuide } from './functions/start-orientation-guide/resource';
 import { usageCounter } from './functions/usage-counter/resource';
+import { assertMonthlyBudgetCeilingHolds } from './config';
 
 // Fixed outer AWS safety ceiling (PRD FR-10/§6): a CloudFormation-managed,
 // delayed actual-cost tripwire. It does not follow live Config edits — Story
@@ -46,6 +47,12 @@ import { usageCounter } from './functions/usage-counter/resource';
 // budget controls" for the full ordered relationship between the two layers.
 const AWS_SAFETY_CEILING_USD = 30;
 const MONTHLY_BUDGET_WARNING_THRESHOLD_PERCENT = 80;
+
+// Fails synth (not just at runtime) if this outer ceiling is ever set below
+// Config's editable maximum, which would let an admin's operating cap exceed
+// the fixed AWS safety tripwire it's meant to sit under. The comparison
+// itself lives in amplify/config.ts, where it's unit-tested in isolation.
+assertMonthlyBudgetCeilingHolds(AWS_SAFETY_CEILING_USD);
 
 const backend = defineBackend({
   auth,

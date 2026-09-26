@@ -69,34 +69,44 @@ describe('usage reservations', () => {
     await expect(readConfig(
       client({ Item: { dailyLimit: 5 } }),
       'ConfigTable',
-    )).rejects.toThrow('orientation config missing — run scripts/seed-config.mjs');
+    )).rejects.toThrow('orientation config invalid');
     await expect(readConfig(
       client({ Item: { monthlyBudget: 30 } }),
       'ConfigTable',
-    )).rejects.toThrow('orientation config missing — run scripts/seed-config.mjs');
+    )).rejects.toThrow('orientation config invalid');
+  });
+
+  it('distinguishes a missing Config item from a present-but-invalid one', async () => {
+    await expect(readConfig(client({}), 'ConfigTable')).rejects.toThrow(
+      'orientation config missing — run scripts/seed-config.mjs',
+    );
+    await expect(readConfig(
+      client({ Item: { dailyLimit: 5, monthlyBudget: 30.01 } }),
+      'ConfigTable',
+    )).rejects.toThrow('orientation config invalid');
   });
 
   it('fails closed on invalid stored Config values', async () => {
     await expect(readConfig(
       client({ Item: { dailyLimit: NaN, monthlyBudget: 30 } }),
       'ConfigTable',
-    )).rejects.toThrow('orientation config missing — run scripts/seed-config.mjs');
+    )).rejects.toThrow('orientation config invalid');
     await expect(readConfig(
       client({ Item: { dailyLimit: 5.5, monthlyBudget: 30 } }),
       'ConfigTable',
-    )).rejects.toThrow('orientation config missing — run scripts/seed-config.mjs');
+    )).rejects.toThrow('orientation config invalid');
     await expect(readConfig(
       client({ Item: { dailyLimit: 101, monthlyBudget: 30 } }),
       'ConfigTable',
-    )).rejects.toThrow('orientation config missing — run scripts/seed-config.mjs');
+    )).rejects.toThrow('orientation config invalid');
     await expect(readConfig(
       client({ Item: { dailyLimit: 5, monthlyBudget: 0.02 } }),
       'ConfigTable',
-    )).rejects.toThrow('orientation config missing — run scripts/seed-config.mjs');
+    )).rejects.toThrow('orientation config invalid');
     await expect(readConfig(
       client({ Item: { dailyLimit: 5, monthlyBudget: 30.01 } }),
       'ConfigTable',
-    )).rejects.toThrow('orientation config missing — run scripts/seed-config.mjs');
+    )).rejects.toThrow('orientation config invalid');
   });
 
   it('reserves monthly and daily counters in one idempotent transaction', async () => {

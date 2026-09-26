@@ -33,7 +33,12 @@ export async function readConfig(dynamo: CommandClient, configTable: string): Pr
   })) as { Item?: Partial<Config> };
 
   if (!isValidConfig(result.Item)) {
-    throw new Error('orientation config missing — run scripts/seed-config.mjs');
+    // Distinguish "missing" (seed-config.mjs is the fix) from "present but
+    // invalid" (re-seeding won't help — it's conditional on absence and
+    // won't overwrite an existing row; the stored item itself needs fixing).
+    throw new Error(result.Item
+      ? 'orientation config invalid'
+      : 'orientation config missing — run scripts/seed-config.mjs');
   }
 
   return {

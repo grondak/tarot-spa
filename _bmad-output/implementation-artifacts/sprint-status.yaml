@@ -1,5 +1,5 @@
 # generated: 2026-07-11
-# last_updated: 2026-09-23
+# last_updated: 2026-09-25
 # project: tarot-spa
 # project_key: NOKEY
 # tracking_system: file-system
@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-11
-last_updated: 2026-09-23 (story 4.3 ready for review; story 4.5 filed as a new bug)
+last_updated: 2026-09-25 (story 4.3 done after code review; story 4.5 remains backlog)
 project: tarot-spa
 project_key: NOKEY
 tracking_system: file-system
@@ -80,7 +80,8 @@ development_status:
   epic-4: in-progress
   4-1-view-usage-spend-metrics: done
   4-2-mint-a-new-first-gen-invite-key-from-the-dashboard: done
-  4-3-adjust-the-daily-limit-and-monthly-budget-without-a-deploy: review
+  4-3-adjust-the-daily-limit-and-monthly-budget-without-a-deploy: done
+
   4-4-revoke-an-invite-key: backlog
   4-5-fix-intermittent-admin-status-false-negative-on-auth-hub-events: backlog
   epic-4-retrospective: optional
@@ -149,11 +150,11 @@ action_items:
   - epic: 3
     action: "Add finite/positive/range validation to dailyLimit/monthlyBudget before Story 4.3 exposes them in an editable UI"
     owner: "Amelia"
-    status: open
+    status: done
   - epic: 3
     action: "Reconcile Config's live monthlyBudget with the CDK-synth-time AWS Budget ceiling constant so Story 4.3's editor cannot silently desync them"
     owner: "Winston (design) + Amelia (implementation)"
-    status: open
+    status: done
   - epic: 3
     action: "Classify the 'Account couldn't load' transient against the 2026-07-17 CloudWatch/AppSync logs, in parallel with Story 4.1"
     owner: "Murat + Amelia"
@@ -166,3 +167,4 @@ action_items:
     action: "Reproduced the open 'Account couldn't load' transient live during Story 4.3 verification with a specific trigger (token refresh mid authenticated-mutation on the Admin Dashboard) — filed as Story 4-5, supersedes the epic-3 version of this item with a concrete repro"
     owner: "Amelia"
     status: open
+    priority: "high — directly violates Story 4.3's own AC10 (save must announce a plain success or a clear error) in production today; not a cosmetic issue"

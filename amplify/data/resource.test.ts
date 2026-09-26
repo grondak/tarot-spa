@@ -19,18 +19,50 @@ import {
 // drifts from the shared amplify/config.ts constants).
 const source = readFileSync(resolve(import.meta.dirname, './resource.ts'), 'utf8');
 
-function extractModelBlock(modelName: string) {
-  const header = `\n  ${modelName}: a\n`;
-  const start = source.indexOf(header);
-  if (start === -1) throw new Error(`${modelName} model not found in amplify/data/resource.ts`);
-  const nextHeader = /\n {2}[A-Za-z]+: a\n/g;
-  nextHeader.lastIndex = start + header.length;
-  const next = nextHeader.exec(source);
-  return next ? source.slice(start, next.index) : source.slice(start);
+// Exported via module scope (not just used inline) so the fallback-bound
+// branch below — unreachable against the real resource.ts, where
+// `checkInviteKey` always immediately follows `Config` and satisfies
+// `nextHeader` — can still be exercised directly with synthetic input.
+function extractModelBlock(text: string, modelName: string) {
+  const header = new RegExp(`\\n\\s*${modelName}:\\s*a\\n`);
+  const headerMatch = header.exec(text);
+  if (!headerMatch) throw new Error(`${modelName} model not found`);
+  const start = headerMatch.index;
+  const nextHeader = /\n\s*[A-Za-z]+:\s*a\n/g;
+  nextHeader.lastIndex = start + headerMatch[0].length;
+  const next = nextHeader.exec(text);
+  if (next) return text.slice(start, next.index);
+  // Fallback for when the target is the last model/operation declared in
+  // the schema (not currently true for Config, but kept for whichever
+  // model/operation ends up last after a future reorg): bound at the
+  // schema object's own closing `});` instead of slicing to end-of-file,
+  // so unrelated trailing source text can't leak into the block.
+  const schemaClose = text.indexOf('\n});', start);
+  return schemaClose === -1 ? text.slice(start) : text.slice(start, schemaClose);
 }
 
+describe('extractModelBlock fallback bound (synthetic)', () => {
+  it('stops at the schema-closing marker when there is no next model header', () => {
+    const synthetic = [
+      'const schema = a.schema({',
+      '  OnlyModel: a',
+      '    .model({',
+      '      field: a.string(),',
+      '    }),',
+      '});',
+      '',
+      '// unrelated trailing content that must not leak into the block',
+    ].join('\n');
+
+    const block = extractModelBlock(synthetic, 'OnlyModel');
+
+    expect(block).toContain('field: a.string()');
+    expect(block).not.toContain('unrelated trailing content');
+  });
+});
+
 describe('Config schema contract (amplify/data/resource.ts)', () => {
-  const configBlock = extractModelBlock('Config');
+  const configBlock = extractModelBlock(source, 'Config');
 
   it('authorizes only the Admin group to update, with no other Config operation grant', () => {
     expect(configBlock).toContain(
@@ -62,8 +94,10 @@ describe('Config schema contract (amplify/data/resource.ts)', () => {
     expect(MONTHLY_BUDGET_VALIDATION_MESSAGE).toBe('Monthly budget must be between $0.03 and $30.00.');
   });
 
-  it('declares exactly the two Config fields, so no third field silently escapes this contract', () => {
-    const fieldNames = [...configBlock.matchAll(/^ {6}(\w+): a\.(?:integer|float)\(\)/gm)]
+  it('declares exactly the two Config fields, so no third field of any type silently escapes this contract', () => {
+    // Matches any field type (not just integer/float) at any indentation depth,
+    // so a future non-numeric field addition can't slip past this assertion.
+    const fieldNames = [...configBlock.matchAll(/^\s+(\w+): a\.\w+\(/gm)]
       .map((match) => match[1]);
     expect(fieldNames.sort()).toEqual(['dailyLimit', 'monthlyBudget']);
   });

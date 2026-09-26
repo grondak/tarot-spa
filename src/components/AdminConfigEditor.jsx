@@ -1,22 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
+import {
+  DAILY_LIMIT_MAX,
+  DAILY_LIMIT_MIN,
+  DAILY_LIMIT_VALIDATION_MESSAGE as DAILY_LIMIT_MESSAGE,
+  MAX_MONTHLY_BUDGET_USD as MONTHLY_BUDGET_MAX,
+  MIN_MONTHLY_BUDGET_USD as MONTHLY_BUDGET_MIN,
+  MONTHLY_BUDGET_VALIDATION_MESSAGE as MONTHLY_BUDGET_MESSAGE,
+} from '../../amplify/config';
 import { updateAdminConfig } from '../utils/adminConfig';
 
-// Mirrors the frozen bounds in amplify/config.ts — see
-// amplify/data/resource.test.ts's cross-check for drift protection.
-const DAILY_LIMIT_MIN = 1;
-const DAILY_LIMIT_MAX = 100;
-const MONTHLY_BUDGET_MIN = 0.03;
-const MONTHLY_BUDGET_MAX = 30;
-const DAILY_LIMIT_MESSAGE = 'Daily limit must be a whole number from 1 to 100.';
-const MONTHLY_BUDGET_MESSAGE = 'Monthly budget must be between $0.03 and $30.00.';
 const SAVE_SUCCESS_MESSAGE = 'Cost controls saved.';
 const SAVE_ERROR_MESSAGE = 'Cost controls couldn’t be saved. Please try again.';
 
 const inputClass = 'mt-1 w-32 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/50 disabled:cursor-not-allowed disabled:opacity-60';
 
 function parseDailyLimit(value) {
-  const parsed = Number(value.trim());
-  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)
+  const trimmed = value.trim();
+  const parsed = Number(trimmed);
+  if (trimmed === '' || !Number.isFinite(parsed) || !Number.isInteger(parsed)
     || parsed < DAILY_LIMIT_MIN || parsed > DAILY_LIMIT_MAX) {
     return { error: DAILY_LIMIT_MESSAGE };
   }
@@ -24,8 +25,9 @@ function parseDailyLimit(value) {
 }
 
 function parseMonthlyBudget(value) {
-  const parsed = Number(value.trim());
-  if (!Number.isFinite(parsed) || parsed < MONTHLY_BUDGET_MIN || parsed > MONTHLY_BUDGET_MAX) {
+  const trimmed = value.trim();
+  const parsed = Number(trimmed);
+  if (trimmed === '' || !Number.isFinite(parsed) || parsed < MONTHLY_BUDGET_MIN || parsed > MONTHLY_BUDGET_MAX) {
     return { error: MONTHLY_BUDGET_MESSAGE };
   }
   return { value: parsed };
@@ -54,7 +56,9 @@ export default function AdminConfigEditor({
 
     const dailyLimitResult = parseDailyLimit(dailyLimit);
     const monthlyBudgetResult = parseMonthlyBudget(monthlyBudget);
-    const validationError = dailyLimitResult.error ?? monthlyBudgetResult.error;
+    const validationError = [dailyLimitResult.error, monthlyBudgetResult.error]
+      .filter(Boolean)
+      .join(' ');
     if (validationError) {
       setStatus('');
       setError(validationError);
@@ -87,7 +91,14 @@ export default function AdminConfigEditor({
 
   return (
     <section aria-label="Cost controls" className="mt-6">
-      <div className="flex flex-wrap items-end gap-4">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          handleSave();
+        }}
+        noValidate
+        className="flex flex-wrap items-end gap-4"
+      >
         <div>
           <label htmlFor="admin-daily-limit" className="block text-sm text-gray-300">
             Daily request limit
@@ -101,6 +112,8 @@ export default function AdminConfigEditor({
             value={dailyLimit}
             disabled={busy}
             onChange={(event) => setDailyLimit(event.target.value)}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? 'admin-config-error' : undefined}
             className={inputClass}
           />
         </div>
@@ -117,20 +130,21 @@ export default function AdminConfigEditor({
             value={monthlyBudget}
             disabled={busy}
             onChange={(event) => setMonthlyBudget(event.target.value)}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? 'admin-config-error' : undefined}
             className={inputClass}
           />
         </div>
         <button
-          type="button"
+          type="submit"
           disabled={busy}
-          onClick={handleSave}
           className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-semibold text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-wait disabled:opacity-60"
         >
           {busy ? 'Saving…' : 'Save cost controls'}
         </button>
-      </div>
+      </form>
       {status && <p role="status" className="mt-2 text-sm text-gray-400">{status}</p>}
-      {error && <p role="alert" className="mt-2 text-sm text-red-400">{error}</p>}
+      {error && <p id="admin-config-error" role="alert" className="mt-2 text-sm text-red-400">{error}</p>}
     </section>
   );
 }

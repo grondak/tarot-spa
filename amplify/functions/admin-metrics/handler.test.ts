@@ -15,7 +15,7 @@ function commandInput(command: unknown) {
 }
 
 function dependencies(options: {
-  config?: Record<string, unknown>;
+  config?: Record<string, unknown> | null;
   monthlySpend?: Record<string, unknown>;
   pages?: Record<string, Page[]>;
 } = {}) {
@@ -29,9 +29,9 @@ function dependencies(options: {
     send: vi.fn(async (command: unknown) => {
       const input = commandInput(command);
       if (commandName(command) === 'GetCommand' && input.TableName === 'ConfigTable') {
-        return options.config === undefined
-          ? { Item: { dailyLimit: 3, monthlyBudget: 30 } }
-          : { Item: options.config };
+        if (options.config === undefined) return { Item: { dailyLimit: 3, monthlyBudget: 30 } };
+        if (options.config === null) return {};
+        return { Item: options.config };
       }
       if (commandName(command) === 'GetCommand' && input.TableName === 'MonthlySpendTable') {
         return options.monthlySpend ? { Item: options.monthlySpend } : {};
@@ -202,10 +202,16 @@ describe('admin-metrics handler', () => {
   });
 
   it('propagates the shared readConfig failure when Config is missing', async () => {
-    const deps = dependencies({ config: {} });
+    const deps = dependencies({ config: null });
 
     await expect(createHandler(deps)()).rejects.toThrow(
       'orientation config missing — run scripts/seed-config.mjs',
     );
+  });
+
+  it('propagates the shared readConfig failure when Config is present but invalid', async () => {
+    const deps = dependencies({ config: {} });
+
+    await expect(createHandler(deps)()).rejects.toThrow('orientation config invalid');
   });
 });

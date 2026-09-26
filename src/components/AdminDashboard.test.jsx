@@ -111,6 +111,26 @@ describe('AdminDashboard', () => {
     expect(screen.getByRole('button', { name: 'Back' })).toBeVisible();
   });
 
+  it('surfaces an AppSync rejection through the real Config update path without changing the displayed budget', async () => {
+    const update = vi.fn().mockResolvedValue({ data: null, errors: [{ message: 'Not Authorized to access updateConfig on type Mutation' }] });
+    generateClient.mockReturnValue({ models: { Config: { update } } });
+
+    render(<AdminDashboard getAdminMetricsFn={() => Promise.resolve(metrics)} />);
+
+    expect(await screen.findByLabelText('Daily request limit')).toHaveValue(5);
+    expect(screen.getByLabelText('Monthly budget (USD)')).toHaveValue(30);
+    fireEvent.change(screen.getByLabelText('Daily request limit'), { target: { value: '9' } });
+    fireEvent.change(screen.getByLabelText('Monthly budget (USD)'), { target: { value: '12.34' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save cost controls' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Cost controls couldn’t be saved. Please try again.',
+    );
+    expect(screen.getByText('$4.32 of $30.00 budget')).toBeVisible();
+    expect(screen.getByLabelText('Daily request limit')).toHaveValue(9);
+    expect(screen.getByLabelText('Monthly budget (USD)')).toHaveValue(12.34);
+  });
+
   it('calls onBack exactly once', async () => {
     const onBack = vi.fn();
     render(

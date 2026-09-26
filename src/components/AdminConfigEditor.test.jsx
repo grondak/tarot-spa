@@ -98,7 +98,7 @@ describe('AdminConfigEditor', () => {
     expect(updateAdminConfigFn).not.toHaveBeenCalled();
   });
 
-  it('accepts the exact inclusive boundary values', async () => {
+  it('accepts the exact inclusive minimum boundary values', async () => {
     const { updateAdminConfigFn } = renderEditor();
 
     fireEvent.change(screen.getByLabelText('Daily request limit'), { target: { value: '1' } });
@@ -106,6 +106,16 @@ describe('AdminConfigEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save cost controls' }));
 
     await waitFor(() => expect(updateAdminConfigFn).toHaveBeenCalledWith({ dailyLimit: 1, monthlyBudget: 0.03 }));
+  });
+
+  it('accepts the exact inclusive maximum boundary values', async () => {
+    const { updateAdminConfigFn } = renderEditor();
+
+    fireEvent.change(screen.getByLabelText('Daily request limit'), { target: { value: '100' } });
+    fireEvent.change(screen.getByLabelText('Monthly budget (USD)'), { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save cost controls' }));
+
+    await waitFor(() => expect(updateAdminConfigFn).toHaveBeenCalledWith({ dailyLimit: 100, monthlyBudget: 30 }));
   });
 
   it('makes exactly one call on rapid double submit', async () => {
@@ -189,5 +199,38 @@ describe('AdminConfigEditor', () => {
 
     expect(errorSpy).not.toHaveBeenCalled();
     errorSpy.mockRestore();
+  });
+
+  it('shows both messages when both fields are invalid at once', async () => {
+    const { updateAdminConfigFn } = renderEditor();
+
+    fireEvent.change(screen.getByLabelText('Daily request limit'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('Monthly budget (USD)'), { target: { value: '0.02' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save cost controls' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(DAILY_LIMIT_VALIDATION_MESSAGE);
+    expect(alert).toHaveTextContent(MONTHLY_BUDGET_VALIDATION_MESSAGE);
+    expect(updateAdminConfigFn).not.toHaveBeenCalled();
+  });
+
+  it('submits on Enter (native form submission), not just a direct Save click', async () => {
+    const { updateAdminConfigFn } = renderEditor({ dailyLimit: 5, monthlyBudget: 30 });
+
+    fireEvent.change(screen.getByLabelText('Daily request limit'), { target: { value: '9' } });
+    fireEvent.submit(screen.getByLabelText('Daily request limit').closest('form'));
+
+    await waitFor(() => expect(updateAdminConfigFn).toHaveBeenCalledWith({ dailyLimit: 9, monthlyBudget: 30 }));
+  });
+
+  it('marks invalid inputs with aria-invalid and links them to the rendered error', async () => {
+    renderEditor();
+
+    fireEvent.change(screen.getByLabelText('Daily request limit'), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save cost controls' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(screen.getByLabelText('Daily request limit')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Daily request limit')).toHaveAttribute('aria-describedby', alert.id);
   });
 });

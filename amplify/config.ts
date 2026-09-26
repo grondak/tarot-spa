@@ -32,3 +32,15 @@ export function isValidConfig(value: unknown): value is Config {
     && monthlyBudget <= MAX_MONTHLY_BUDGET_USD
   );
 }
+
+// Pure guard for amplify/backend.ts's synth-time check that the fixed outer
+// AWS Budget ceiling never sits below Config's editable maximum — kept here
+// (testable in isolation) instead of inline in backend.ts, which has no
+// existing test pattern to extend.
+export function assertMonthlyBudgetCeilingHolds(awsSafetyCeilingUsd: number): void {
+  if (awsSafetyCeilingUsd < MAX_MONTHLY_BUDGET_USD) {
+    throw new Error(
+      `awsSafetyCeilingUsd (${awsSafetyCeilingUsd}) must be >= MAX_MONTHLY_BUDGET_USD (${MAX_MONTHLY_BUDGET_USD})`,
+    );
+  }
+}
