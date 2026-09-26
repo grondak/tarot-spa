@@ -224,7 +224,7 @@ Claude Sonnet 5 (claude-sonnet-5)
 - Task 4: confirmed via the new "still renders a Save Cost Controls result after a transient session-read failure mid-save" test that Tasks 2–3 alone satisfy AC4 for the observed case. Verified both new tests are mutation-survivable by running `git stash push -- src/App.jsx src/utils/adminAuth.js`, re-running the two tests (both failed, one on the dashboard staying open, one — same assertion — on the dashboard closing before the save could resolve), then `git stash pop` to restore the fix.
 - Full suite after all changes: `npm test -- --run` 364/364 (32 files, up from 362 — the two new tests); `npm run lint`, `npm run typecheck`, `npm run build` clean; `npm run test:e2e` 2/2 (unauthenticated `public-landing` project only — no `TAROT_E2E_EMAIL`/`TAROT_E2E_PASSWORD` in this environment, same limitation recorded in Story 4.3).
 - Credential/personal-content sweep: `git diff` across all changed files shows no secrets, tokens, or personal Context/Guide content — confirmed by grep and manual read of every changed hunk.
-- Committed and pushed. `git status --short` (post-commit): empty. `git log -1 --oneline --decorate`: see below.
+- Committed and pushed. `git status --short` (post-commit): empty. `git log -1 --oneline --decorate`: `1b1e749 (HEAD -> main) fix: stop demoting a real admin on a transient auth-session read (story 4.5)`. Pushed to `origin/main`: `0d9b324..1b1e749  main -> main`.
 
 ### Completion Notes List
 
