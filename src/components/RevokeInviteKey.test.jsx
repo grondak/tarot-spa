@@ -175,6 +175,37 @@ describe('RevokeInviteKey', () => {
     consoleError.mockRestore();
   });
 
+  it('invalidates a prior lookup and hides the Revoke button when the code input is edited afterward', async () => {
+    const checkInviteKeyFn = vi.fn().mockResolvedValue('unredeemed');
+    const revokeInviteKeyFn = vi.fn().mockResolvedValue(true);
+    render(<RevokeInviteKey checkInviteKeyFn={checkInviteKeyFn} revokeInviteKeyFn={revokeInviteKeyFn} />);
+
+    typeCode('KEY-A');
+    clickCheck();
+    await screen.findByRole('button', { name: 'Revoke key' });
+
+    typeCode('KEY-B');
+
+    expect(screen.queryByRole('button', { name: 'Revoke key' })).not.toBeInTheDocument();
+    expect(screen.queryByText('This key is unredeemed — ready to revoke.')).not.toBeInTheDocument();
+  });
+
+  it('clears a stale lookup status and success/error banners when the input is cleared and re-checked blank', async () => {
+    const checkInviteKeyFn = vi.fn().mockResolvedValue('unredeemed');
+    render(<RevokeInviteKey checkInviteKeyFn={checkInviteKeyFn} />);
+
+    typeCode('KEY-A');
+    clickCheck();
+    await screen.findByRole('button', { name: 'Revoke key' });
+
+    typeCode('');
+    clickCheck();
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter an Invite Key code first.');
+    expect(screen.queryByRole('button', { name: 'Revoke key' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
   it('causes no stale update after unmount during a pending Revoke key', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     const checkInviteKeyFn = vi.fn().mockResolvedValue('unredeemed');

@@ -123,4 +123,22 @@ describe('invite-key-revoke handler', () => {
     await expect(createHandler(deps)(event('ABCD-EFGH-JKMP'))).rejects.toBe(unrelated);
     expect(deps.dynamo.send).toHaveBeenCalledOnce();
   });
+
+  it('throws a stable code if the follow-up classification read itself fails', async () => {
+    const deps = dependencies();
+    deps.dynamo.send
+      .mockRejectedValueOnce(new ConditionalCheckFailedException({ $metadata: {}, message: 'condition failed' }))
+      .mockRejectedValueOnce(new Error('ProvisionedThroughputExceededException'));
+
+    await expect(createHandler(deps)(event('ABCD-EFGH-JKMP'))).rejects.toThrow('INVITE_KEY_REVOKE_FAILED');
+  });
+
+  it('throws INVITE_KEY_NOT_FOUND for a non-string code without any DynamoDB call', async () => {
+    const deps = dependencies();
+
+    await expect(createHandler(deps)({ arguments: {} } as unknown as { arguments: { code: string } })).rejects.toThrow(
+      'INVITE_KEY_NOT_FOUND',
+    );
+    expect(deps.dynamo.send).not.toHaveBeenCalled();
+  });
 });

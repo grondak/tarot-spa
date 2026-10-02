@@ -15,13 +15,18 @@ const defaultDependencies: HandlerDependencies = {
 };
 
 async function classifyConditionalFailure(deps: HandlerDependencies, code: string) {
-  const result = await deps.dynamo.send(new GetCommand({
-    TableName: deps.inviteKeyTableName,
-    Key: { id: code },
-    ProjectionExpression: '#status',
-    ExpressionAttributeNames: { '#status': 'status' },
-    ConsistentRead: true,
-  })) as { Item?: { status?: string } };
+  let result: { Item?: { status?: string } };
+  try {
+    result = await deps.dynamo.send(new GetCommand({
+      TableName: deps.inviteKeyTableName,
+      Key: { id: code },
+      ProjectionExpression: '#status',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ConsistentRead: true,
+    })) as { Item?: { status?: string } };
+  } catch {
+    throw new Error('INVITE_KEY_REVOKE_FAILED');
+  }
 
   const status = result.Item?.status;
   if (!result.Item) throw new Error('INVITE_KEY_NOT_FOUND');
@@ -32,6 +37,7 @@ async function classifyConditionalFailure(deps: HandlerDependencies, code: strin
 
 export function createHandler(deps: HandlerDependencies = defaultDependencies) {
   return async (event: RevokeInviteKeyEvent) => {
+    if (typeof event.arguments?.code !== 'string') throw new Error('INVITE_KEY_NOT_FOUND');
     const code = event.arguments.code.trim();
     if (!code) throw new Error('INVITE_KEY_NOT_FOUND');
 
