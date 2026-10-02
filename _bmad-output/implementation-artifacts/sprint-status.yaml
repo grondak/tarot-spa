@@ -41,7 +41,7 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: 2026-07-11
-last_updated: 2026-10-02 (story 4.4 code-reviewed, patches applied, done)
+last_updated: 2026-10-02 (epic-3 and epic-4 flags synced to done; all stories in both epics are done)
 project: tarot-spa
 project_key: NOKEY
 tracking_system: file-system
@@ -60,7 +60,7 @@ development_status:
   2-2-request-access-via-the-form: done
   epic-2-retrospective: done
 
-  epic-3: in-progress
+  epic-3: done
   3-1-enter-context-and-pick-a-spread: done
   3-2-generate-an-orientation-guide-bounded-by-the-daily-and-monthly-limits: done
   3-3-view-the-orientation-guide-results-screen: done
@@ -77,7 +77,7 @@ development_status:
   3-7-draw-for-fun-without-spending-your-daily-limit-authenticated-quick-draw: done
   epic-3-retrospective: done
 
-  epic-4: in-progress
+  epic-4: done
   4-1-view-usage-spend-metrics: done
   4-2-mint-a-new-first-gen-invite-key-from-the-dashboard: done
   4-3-adjust-the-daily-limit-and-monthly-budget-without-a-deploy: done
@@ -138,7 +138,8 @@ action_items:
   - epic: 2
     action: "Classify the 'Account couldn't load' transient from the 2026-07-17 session (CloudWatch/AppSync logs) before Epic 3 multiplies authenticated queries"
     owner: "Amelia"
-    status: open
+    status: done
+    priority: "superseded — Story 4.3 verification reproduced this transient with a concrete trigger, filed as Story 4-5, which fixed and closed it (status done)"
   - epic: 3
     action: "Story close-out must end with pasted git status --short (empty) and git log -1 output, not a prose 'committed and pushed' claim"
     owner: "Amelia (story-template/process)"
@@ -158,7 +159,8 @@ action_items:
   - epic: 3
     action: "Classify the 'Account couldn't load' transient against the 2026-07-17 CloudWatch/AppSync logs, in parallel with Story 4.1"
     owner: "Murat + Amelia"
-    status: open
+    status: done
+    priority: "superseded — see the epic-4 action item: Story 4.3 verification reproduced this transient with a concrete trigger, filed as Story 4-5, which fixed and closed it (status done)"
   - epic: 3
     action: "Build the API-key expiry reminder mechanism (email to cutout address ahead of ~2026-08-16 expiry) - urgent, ~3 weeks runway as of 2026-07-26"
     owner: "Amelia"
@@ -166,8 +168,8 @@ action_items:
   - epic: 4
     action: "Reproduced the open 'Account couldn't load' transient live during Story 4.3 verification with a specific trigger (token refresh mid authenticated-mutation on the Admin Dashboard) — filed as Story 4-5, supersedes the epic-3 version of this item with a concrete repro"
     owner: "Amelia"
-    status: open
-    priority: "high — directly violates Story 4.3's own AC10 (save must announce a plain success or a clear error) in production today; not a cosmetic issue"
+    status: done
+    priority: "high — directly violated Story 4.3's own AC10 (save must announce a plain success or a clear error) in production; fixed and closed via Story 4-5 (committed 0cea435/7fac4d7/98dc7d5, Tony-accepted residual risk documented, status done)"
   - epic: 4
     action: "AdminConfigEditor.jsx's mounted-ref pattern (useRef(true) + cleanup-only reset) likely hangs the Save busy state forever under npm run dev's React 18 StrictMode double-invoke — found and fixed in Story 4.4's new RevokeInviteKey.jsx (same pattern, same root cause), but AdminConfigEditor.jsx itself was explicitly out of scope for that story and was left untouched"
     owner: "Amelia"
