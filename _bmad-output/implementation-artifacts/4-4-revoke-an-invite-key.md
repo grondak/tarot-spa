@@ -241,6 +241,15 @@ Claude Sonnet 5 (claude-sonnet-5), via the bmad-dev-story workflow.
 
 - Baseline gate (before any change): `npm test` 365/365 passed (32 files), `npm run lint` clean, `npm run typecheck` clean, `npm run build` succeeded.
 - Final gate (after implementation): `npm test` 396/396 passed (34 files), `npm run lint` clean, `npm run typecheck` clean, `npm run build` succeeded, `npm run test:e2e` 2/2 passed (unauthenticated project only — no `TAROT_E2E_*` credentials were present in this session's environment, so the authenticated Playwright project did not run, matching the documented conditional-project behavior in `playwright.config.js`).
+- Git evidence (committed and pushed):
+
+  ```
+  $ git status --short
+  (empty)
+
+  $ git log -1 --oneline --decorate
+  a369332 (HEAD -> main, origin/main, origin/HEAD) feat: let admin revoke an unredeemed invite key (story 4.4)
+  ```
 - Sandbox deploy: `npx ampx sandbox --once` completed in ~253s; created `invite-key-revoke` Lambda, its IAM role/policy (`GetItem`/`UpdateItem` only), the AppSync Lambda data source, and the `revokeInviteKey` resolver.
 - Live verification evidence (disposable/pre-existing sandbox test keys only, not real codes — redacted here per the Epic 1 close-out credential-redaction precedent):
   - Direct `aws lambda invoke` against the real deployed `invite-key-revoke` function, against a real `unredeemed` sandbox test key → returned `true`; confirmed via `aws dynamodb get-item` that the *same* item (`createdAt` unchanged) flipped to `status: "revoked"` with a refreshed `updatedAt`, and no second row was created.
