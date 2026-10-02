@@ -102,3 +102,23 @@ describe('Config schema contract (amplify/data/resource.ts)', () => {
     expect(fieldNames.sort()).toEqual(['dailyLimit', 'monthlyBudget']);
   });
 });
+
+describe('revokeInviteKey schema contract (amplify/data/resource.ts)', () => {
+  const revokeBlock = extractModelBlock(source, 'revokeInviteKey');
+
+  it('authorizes only the Admin group, with no other authorization rule', () => {
+    expect(revokeBlock).toContain(".authorization((allow) => [allow.group('Admin')])");
+    expect(revokeBlock).not.toMatch(/allow\.authenticated\(/);
+    expect(revokeBlock).not.toMatch(/allow\.publicApiKey\(/);
+    expect(revokeBlock).not.toMatch(/allow\.owner\(/);
+  });
+
+  it('requires a code argument and returns a boolean', () => {
+    expect(revokeBlock).toContain('.arguments({ code: a.string().required() })');
+    expect(revokeBlock).toContain('.returns(a.boolean())');
+  });
+
+  it('wires the invite-key-revoke function handler', () => {
+    expect(revokeBlock).toContain('.handler(a.handler.function(inviteKeyRevoke))');
+  });
+});

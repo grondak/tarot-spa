@@ -10,6 +10,7 @@ import {
 import { adminMetrics } from '../functions/admin-metrics/resource';
 import { checkInviteKey } from '../functions/check-invite-key/resource';
 import { inviteKeyMint } from '../functions/invite-key-mint/resource';
+import { inviteKeyRevoke } from '../functions/invite-key-revoke/resource';
 import { requestAccess } from '../functions/request-access/resource';
 import { startOrientationGuide } from '../functions/start-orientation-guide/resource';
 import { usageCounter } from '../functions/usage-counter/resource';
@@ -97,6 +98,12 @@ const schema = a.schema({
     .returns(a.string())
     .authorization((allow) => [allow.group('Admin')])
     .handler(a.handler.function(inviteKeyMint)),
+  revokeInviteKey: a
+    .mutation()
+    .arguments({ code: a.string().required() })
+    .returns(a.boolean())
+    .authorization((allow) => [allow.group('Admin')])
+    .handler(a.handler.function(inviteKeyRevoke)),
   requestAccess: a
     .mutation()
     .arguments({ name: a.string().required(), email: a.string().required() })

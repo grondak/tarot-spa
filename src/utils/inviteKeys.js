@@ -22,3 +22,11 @@ export async function adminMintInviteKey() {
   if (!data) throw new Error('Invite Key was not returned');
   return data;
 }
+
+export async function revokeInviteKey(code) {
+  const client = generateClient();
+  const { data, errors } = await client.mutations.revokeInviteKey({ code });
+  if (errors?.length) throw new Error(errors[0].message);
+  if (!data) throw new Error('Invite Key was not revoked');
+  return data;
+}

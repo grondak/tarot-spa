@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getAdminMetrics } from '../utils/adminMetrics';
 import AdminConfigEditor from './AdminConfigEditor';
 import MintInviteKey from './MintInviteKey';
+import RevokeInviteKey from './RevokeInviteKey';
 
 const buttonClass = 'rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500';
 
@@ -81,6 +82,7 @@ export default function AdminDashboard({
       <div className="mx-auto w-full max-w-4xl">
         <h1 className="text-2xl font-bold">Admin Dashboard</h1>
         <MintInviteKey />
+        <RevokeInviteKey />
         <AdminConfigEditor
           dailyLimit={metrics.config.dailyLimit}
           monthlyBudget={metrics.config.monthlyBudget}

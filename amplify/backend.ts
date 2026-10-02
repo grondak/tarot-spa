@@ -30,6 +30,7 @@ import { adminMetrics } from './functions/admin-metrics/resource';
 import { budgetAlert } from './functions/budget-alert/resource';
 import { checkInviteKey } from './functions/check-invite-key/resource';
 import { inviteKeyMint } from './functions/invite-key-mint/resource';
+import { inviteKeyRevoke } from './functions/invite-key-revoke/resource';
 import { orientationGuide } from './functions/orientation-guide/resource';
 import { orientationJudge } from './functions/orientation-judge/resource';
 import { orientationAlert } from './functions/orientation-alert/resource';
@@ -62,6 +63,7 @@ const backend = defineBackend({
   budgetAlert,
   checkInviteKey,
   inviteKeyMint,
+  inviteKeyRevoke,
   orientationAlert,
   orientationGuide,
   orientationJudge,
@@ -82,6 +84,7 @@ const adminMetricsLambda = backend.adminMetrics.resources.lambda;
 const budgetAlertLambda = backend.budgetAlert.resources.lambda;
 const checkInviteKeyLambda = backend.checkInviteKey.resources.lambda;
 const inviteKeyMintLambda = backend.inviteKeyMint.resources.lambda;
+const inviteKeyRevokeLambda = backend.inviteKeyRevoke.resources.lambda;
 const orientationGuideLambda = backend.orientationGuide.resources.lambda;
 const orientationJudgeLambda = backend.orientationJudge.resources.lambda;
 const orientationAlertLambda = backend.orientationAlert.resources.lambda;
@@ -344,6 +347,9 @@ accountTable.grantWriteData(inviteKeyMintLambda);
 inviteKeyTable.grantWriteData(inviteKeyMintLambda);
 backend.inviteKeyMint.addEnvironment('ACCOUNT_TABLE_NAME', accountTable.tableName);
 backend.inviteKeyMint.addEnvironment('INVITE_KEY_TABLE_NAME', inviteKeyTable.tableName);
+
+inviteKeyTable.grant(inviteKeyRevokeLambda, 'dynamodb:GetItem', 'dynamodb:UpdateItem');
+backend.inviteKeyRevoke.addEnvironment('INVITE_KEY_TABLE_NAME', inviteKeyTable.tableName);
 
 sessionTable.grant(
   orientationGuideLambda,
