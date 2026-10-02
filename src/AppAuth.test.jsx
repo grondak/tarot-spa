@@ -53,6 +53,10 @@ function resultCards(spreadKey) {
   }));
 }
 
+function authError(name) {
+  return Object.assign(new Error(name), { name });
+}
+
 describe('App unauthenticated screens', () => {
   beforeEach(() => {
     getCurrentUser.mockReset();
@@ -214,7 +218,7 @@ describe('App authenticated sign-out round trip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Draw for fun instead' }));
     fireEvent.click(screen.getByRole('button', { name: /Single Card/ }));
     expect(screen.getByRole('button', { name: 'Draw Again' })).toBeVisible();
-    getCurrentUser.mockRejectedValueOnce(new Error('session expired'));
+    getCurrentUser.mockRejectedValueOnce(authError('UserUnAuthenticatedException'));
     Hub.listen.mock.calls[0][1]();
 
     expect(await screen.findByRole('button', { name: 'I have an Invite Key' })).toBeVisible();
@@ -1041,7 +1045,7 @@ describe('App authenticated sign-out round trip', () => {
 
     expect(await screen.findByLabelText('Context')).toBeVisible();
     localStorage.setItem('tarotSpaOrientationRedrawContext', 'A decision.');
-    getCurrentUser.mockRejectedValue(new Error('token expired'));
+    getCurrentUser.mockRejectedValue(authError('UserUnAuthenticatedException'));
 
     await act(async () => {
       await Hub.listen.mock.calls[0][1]();
@@ -1049,6 +1053,25 @@ describe('App authenticated sign-out round trip', () => {
 
     expect(await screen.findByRole('button', { name: 'I have an Invite Key' })).toBeVisible();
     expect(localStorage.getItem('tarotSpaOrientationRedrawContext')).toBeNull();
+  });
+
+  it('does not sign out an authenticated session on an inconclusive auth refresh error', async () => {
+    render(<App />);
+
+    expect(await screen.findByLabelText('Context')).toBeVisible();
+    localStorage.setItem('tarotSpaOrientationRedrawContext', 'A decision.');
+    // Same unsynchronized concurrent-token-refresh race isAdmin() guards against
+    // (story 4.5), but hitting getCurrentUser() instead: a rejection with no
+    // "definitely not authenticated" name must not force a sign-out.
+    getCurrentUser.mockRejectedValueOnce(new Error('network blip'));
+
+    await act(async () => {
+      await Hub.listen.mock.calls[0][1]();
+    });
+
+    expect(screen.getByLabelText('Context')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'I have an Invite Key' })).not.toBeInTheDocument();
+    expect(localStorage.getItem('tarotSpaOrientationRedrawContext')).toBe('A decision.');
   });
 
   it('restores the exact prior Context with no Spread after a tweak redraw reload', async () => {

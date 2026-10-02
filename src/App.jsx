@@ -169,9 +169,19 @@ export default function App() {
           setAuthState('authenticated');
           setAuthRefreshRevision((value) => value + 1);
         }
-      } catch {
+      } catch (error) {
         if (requestId === authRequestId.current) {
           const sessionWasAuthenticated = authStateRef.current === 'authenticated';
+          // Same unsynchronized concurrent-token-refresh race isAdmin() guards against
+          // (story 4.5): getCurrentUser() shares fetchAuthSession()'s TokenOrchestrator
+          // path and can reject for a still-authenticated user purely from timing. Only
+          // a confirmed "not authenticated" result demotes a session already in
+          // progress; any other rejection is inconclusive, so leave state as-is for a
+          // later Hub event to resolve. An initial, never-authenticated load still
+          // settles to 'unauthenticated' on any error rather than hanging on 'loading'.
+          if (sessionWasAuthenticated && error?.name !== 'UserUnAuthenticatedException') {
+            return;
+          }
           authStateRef.current = 'unauthenticated';
           setAuthState('unauthenticated');
           clearOrientationRedrawContext();
