@@ -109,8 +109,11 @@ export default function RevokeInviteKey({
   const busy = checkBusy || revokeBusy;
 
   return (
-    <section aria-label="Revoke Invite Key" className="mt-6">
-      <div className="flex flex-wrap items-end gap-4">
+    <section aria-labelledby="revoke-invite-key-heading" className="mt-6">
+      <h2 id="revoke-invite-key-heading" className="text-sm font-semibold text-gray-300">
+        Revoke Invite Key
+      </h2>
+      <div className="mt-2 flex flex-wrap items-end gap-4">
         <div>
           <label htmlFor="revoke-invite-key-code" className="block text-sm text-gray-300">
             Invite Key code

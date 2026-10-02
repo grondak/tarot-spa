@@ -15,6 +15,12 @@ function clickRevoke() {
 }
 
 describe('RevokeInviteKey', () => {
+  it('renders a visible heading naming the section', () => {
+    render(<RevokeInviteKey checkInviteKeyFn={vi.fn()} />);
+
+    expect(screen.getByRole('heading', { name: 'Revoke Invite Key' })).toBeVisible();
+  });
+
   it('shows an inline error and makes zero calls for a blank-code Check key attempt', () => {
     const checkInviteKeyFn = vi.fn();
     render(<RevokeInviteKey checkInviteKeyFn={checkInviteKeyFn} />);
