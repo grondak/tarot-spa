@@ -3,6 +3,7 @@ import { decodeDraw, encodeDraw, shuffleAndDraw, SPREADS } from '../utils/deck';
 import SpreadSelector from './SpreadSelector';
 import SpreadView from './SpreadView';
 import RequestAccess from './RequestAccess';
+import HowItWorks from './HowItWorks';
 
 const JOBS = [
   ['Functional', "See it from a different angle — not another pro/con list you could've made yourself."],
@@ -13,6 +14,7 @@ const JOBS = [
 export default function PublicLanding({ onShowSignUp = () => {}, onShowLogIn = () => {} }) {
   const [spreadKey, setSpreadKey] = useState(null);
   const [cards, setCards] = useState([]);
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
 
   function handleSelect(key) {
     const n = SPREADS[key].positions.length;
@@ -38,6 +40,10 @@ export default function PublicLanding({ onShowSignUp = () => {}, onShowLogIn = (
     return true;
   }
 
+  if (showHowItWorks) {
+    return <HowItWorks onBack={() => setShowHowItWorks(false)} />;
+  }
+
   if (spreadKey) {
     return (
       <SpreadView
@@ -53,6 +59,13 @@ export default function PublicLanding({ onShowSignUp = () => {}, onShowLogIn = (
   return (
     <main className="min-h-screen bg-gray-950 px-4 py-6 text-white">
       <header className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-end gap-3">
+        <button
+          type="button"
+          onClick={() => setShowHowItWorks(true)}
+          className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        >
+          How it works
+        </button>
         <button
           type="button"
           onClick={onShowSignUp}
