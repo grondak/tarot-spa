@@ -5,16 +5,27 @@ import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 // <env-name> is the Amplify backend name: your sandbox identifier (e.g. `tonyreynolds`,
 // shown in the `npx ampx sandbox` banner) or a branch environment name (`staging`, `main`).
 // The real table name is resolved from the SSM parameter backend.ts publishes at
-// /tarot-spa/<env-name>/invite-key-table-name.
-const [envName, code = 'FIRST-GEN-TEST'] = process.argv.slice(2);
+// /<namespace>/<env-name>/invite-key-table-name.
+//
+// <namespace> defaults to 'tarot-spa' (the project name), which is correct for a personal
+// sandbox — Amplify's sandbox CLI namespaces by project name. It is NOT correct for a Git-
+// connected branch deployment (staging/main): there, Amplify's pipeline-deploy namespaces by
+// the Amplify App ID instead (confirmed in @aws-amplify/backend-cli's pipeline_deploy_command.js:
+// `{ namespace: args.appId, name: args.branch }`). For a branch environment, pass the App ID
+// explicitly with --app-id=<id> (Console → App settings, or the console URL's /apps/<id>/ segment).
+const rawArgs = process.argv.slice(2);
+const appIdArg = rawArgs.find((arg) => arg.startsWith('--app-id='));
+const namespace = appIdArg ? appIdArg.slice('--app-id='.length) : 'tarot-spa';
+const [envName, code = 'FIRST-GEN-TEST'] = rawArgs.filter((arg) => !arg.startsWith('--'));
 
 if (!envName) {
-  console.error('Usage: npm run seed-invite-key -- <env-name> [code]');
+  console.error('Usage: npm run seed-invite-key -- <env-name> [code] [--app-id=<id>]');
+  console.error('  --app-id is required for a branch environment (staging/main); omit it for your personal sandbox.');
   process.exit(1);
 }
 
 const ssm = new SSMClient({});
-const paramName = `/tarot-spa/${envName}/invite-key-table-name`;
+const paramName = `/${namespace}/${envName}/invite-key-table-name`;
 
 let tableName;
 try {
