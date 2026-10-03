@@ -9,16 +9,24 @@ import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 // <env-name> is the Amplify backend name: your sandbox identifier (e.g. `tonyreynolds`,
 // shown in the `npx ampx sandbox` banner) or a branch environment name (`staging`, `main`).
 // The real table name is resolved from the SSM parameter backend.ts publishes at
-// /tarot-spa/<env-name>/session-table-name.
-const [envName] = process.argv.slice(2);
+// /<namespace>/<env-name>/session-table-name.
+//
+// <namespace> defaults to 'tarot-spa' (correct for a personal sandbox). A Git-connected branch
+// deployment (staging/main) namespaces by Amplify App ID instead — pass --app-id=<id> for those
+// (Console → App settings, or the console URL's /apps/<id>/ segment).
+const rawArgs = process.argv.slice(2);
+const appIdArg = rawArgs.find((arg) => arg.startsWith('--app-id='));
+const namespace = appIdArg ? appIdArg.slice('--app-id='.length) : 'tarot-spa';
+const envName = rawArgs.find((arg) => !arg.startsWith('--'));
 
 if (!envName) {
-  console.error('Usage: npm run backfill-sessions -- <env-name>');
+  console.error('Usage: npm run backfill-sessions -- <env-name> [--app-id=<id>]');
+  console.error('  --app-id is required for a branch environment (staging/main); omit it for your personal sandbox.');
   process.exit(1);
 }
 
 const ssm = new SSMClient({});
-const paramName = `/tarot-spa/${envName}/session-table-name`;
+const paramName = `/${namespace}/${envName}/session-table-name`;
 
 let tableName;
 try {
