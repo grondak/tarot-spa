@@ -27,6 +27,7 @@ import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { postConfirmation } from './auth/post-confirmation/resource';
 import { adminMetrics } from './functions/admin-metrics/resource';
+import { apiKeyAlert } from './functions/api-key-alert/resource';
 import { budgetAlert } from './functions/budget-alert/resource';
 import { checkInviteKey } from './functions/check-invite-key/resource';
 import { inviteKeyMint } from './functions/invite-key-mint/resource';
@@ -49,6 +50,12 @@ import { assertMonthlyBudgetCeilingHolds } from './config';
 const AWS_SAFETY_CEILING_USD = 30;
 const MONTHLY_BUDGET_WARNING_THRESHOLD_PERCENT = 80;
 
+// api-key-alert (checkInviteKey's apiKeyAuthorizationMode expiresInDays: 30, in
+// amplify/data/resource.ts): daily EventBridge check, 7-day warning window before the key
+// silently expires. See spec-api-key-expiry-reminder.md.
+const API_KEY_ALERT_SCHEDULE = Duration.days(1);
+const API_KEY_ALERT_WARNING_WINDOW_DAYS = 7;
+
 // Fails synth (not just at runtime) if this outer ceiling is ever set below
 // Config's editable maximum, which would let an admin's operating cap exceed
 // the fixed AWS safety tripwire it's meant to sit under. The comparison
@@ -60,6 +67,7 @@ const backend = defineBackend({
   data,
   postConfirmation,
   adminMetrics,
+  apiKeyAlert,
   budgetAlert,
   checkInviteKey,
   inviteKeyMint,
@@ -81,6 +89,7 @@ const monthlySpendTable = backend.data.resources.tables.MonthlySpend;
 const sessionTable = backend.data.resources.tables.Session;
 const redemptionLambda = backend.postConfirmation.resources.lambda;
 const adminMetricsLambda = backend.adminMetrics.resources.lambda;
+const apiKeyAlertLambda = backend.apiKeyAlert.resources.lambda;
 const budgetAlertLambda = backend.budgetAlert.resources.lambda;
 const checkInviteKeyLambda = backend.checkInviteKey.resources.lambda;
 const inviteKeyMintLambda = backend.inviteKeyMint.resources.lambda;
@@ -319,12 +328,72 @@ const budgetAlertLambdaErrorAlarm = new Alarm(
   },
 );
 budgetAlertLambdaErrorAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
+const apiKeyAlertLambdaErrorAlarm = new Alarm(
+  operationalStack,
+  'ApiKeyAlertLambdaErrorAlarm',
+  {
+    metric: apiKeyAlertLambda.metricErrors({
+      period: Duration.minutes(5),
+      statistic: 'Sum',
+    }),
+    threshold: 1,
+    evaluationPeriods: 1,
+    comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+    treatMissingData: TreatMissingData.NOT_BREACHING,
+  },
+);
+apiKeyAlertLambdaErrorAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
+// Catches the inverse failure mode from the error alarm above: the schedule rule itself
+// stops invoking this Lambda at all (disabled, deleted, or broken target), which produces
+// zero error datapoints and would otherwise go undetected indefinitely.
+const apiKeyAlertMissedInvocationAlarm = new Alarm(
+  operationalStack,
+  'ApiKeyAlertMissedInvocationAlarm',
+  {
+    metric: apiKeyAlertLambda.metricInvocations({
+      period: Duration.days(2),
+      statistic: 'Sum',
+    }),
+    threshold: 1,
+    evaluationPeriods: 1,
+    comparisonOperator: ComparisonOperator.LESS_THAN_THRESHOLD,
+    treatMissingData: TreatMissingData.BREACHING,
+  },
+);
+apiKeyAlertMissedInvocationAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
 budgetAlertLambda.addToRolePolicy(new PolicyStatement({
   actions: ['ses:SendEmail'],
   resources: [
     dataStack.formatArn({ service: 'ses', resource: 'identity', resourceName: '*' }),
   ],
 }));
+apiKeyAlertLambda.addToRolePolicy(new PolicyStatement({
+  actions: ['ses:SendEmail'],
+  resources: [
+    dataStack.formatArn({ service: 'ses', resource: 'identity', resourceName: '*' }),
+  ],
+}));
+// ListApiKeys is scoped to the GraphQL API resource itself (apis/{apiId}) per AWS's IAM
+// resource-type reference for appsync actions — individual API keys are not separately
+// IAM-addressable, so a sub-resource ARN here would never match and would AccessDeny.
+apiKeyAlertLambda.addToRolePolicy(new PolicyStatement({
+  actions: ['appsync:ListApiKeys'],
+  resources: [
+    dataStack.formatArn({
+      service: 'appsync',
+      resource: 'apis',
+      resourceName: backend.data.resources.graphqlApi.apiId,
+    }),
+  ],
+}));
+backend.apiKeyAlert.addEnvironment('APPSYNC_API_ID', backend.data.resources.graphqlApi.apiId);
+backend.apiKeyAlert.addEnvironment('WARNING_WINDOW_DAYS', String(API_KEY_ALERT_WARNING_WINDOW_DAYS));
+const apiKeyAlertSchedule = new Rule(
+  operationalStack,
+  'ApiKeyExpiryCheckSchedule',
+  { schedule: Schedule.rate(API_KEY_ALERT_SCHEDULE) },
+);
+apiKeyAlertSchedule.addTarget(new LambdaFunctionTarget(apiKeyAlertLambda));
 orientationAlertLambda.addToRolePolicy(new PolicyStatement({
   actions: ['ses:SendEmail'],
   resources: [

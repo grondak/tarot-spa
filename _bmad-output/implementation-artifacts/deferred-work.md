@@ -86,3 +86,15 @@
 ## Deferred from: code review of story-4-4 (2026-10-02)
 
 - **`revokeInviteKey` schema contract test verifies via source-text substring matching, not real schema compilation** (`amplify/data/resource.test.ts`) — inherited unchanged from the existing `Config` contract test in the same file; a project-wide testing-pattern gap (would pass even if the asserted strings existed only in a comment, or if the `extractModelBlock` extraction heuristic mis-bounded the operation), not something introduced fresh by this story.
+
+## Deferred from: code review of spec-api-key-expiry-reminder (2026-10-02)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-api-key-expiry-reminder.md`
+  summary: Three near-identical `ses:SendEmail` `PolicyStatement` blocks now exist in `amplify/backend.ts` (`budgetAlertLambda`, `orientationAlertLambda`, `apiKeyAlertLambda`) with no shared helper.
+  evidence: Pre-existing duplication (the first two copies predate this change); this diff only added a third copy of an already-established pattern rather than introducing the duplication itself.
+- source_spec: `_bmad-output/implementation-artifacts/spec-api-key-expiry-reminder.md`
+  summary: No CDK-level/synth test exists anywhere in this repo for `amplify/backend.ts`'s constructs (alarm thresholds/metrics, schedule rates, IAM resource ARNs, environment-variable wiring) — including the new `api-key-alert` wiring this change added.
+  evidence: This is a project-wide gap predating this change (`budget-alert`'s and `orientation-reconciler`'s equivalent wiring have never had synth-level test coverage either); the IAM-resource-ARN mistake this review just caught in the new code would have been exactly the kind of thing such a test suite could catch automatically.
+- source_spec: `_bmad-output/implementation-artifacts/spec-api-key-expiry-reminder.md`
+  summary: The new `api-key-alert` Lambda has no Dead Letter Queue or on-failure destination for its asynchronous EventBridge-triggered invocation — a sustained failure relies entirely on the CloudWatch error-count alarm, with no retained failed-invocation payload for debugging.
+  evidence: Matches the only prior precedent for this exact invocation shape (`orientation-reconciler`'s EventBridge-triggered Lambda also has no DLQ/destination, only an error alarm); not a regression introduced uniquely by this change.

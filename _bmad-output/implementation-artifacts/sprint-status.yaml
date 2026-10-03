@@ -106,7 +106,8 @@ action_items:
   - epic: 2
     action: "API-key expiry handling per the Epic 2 retro decision: reminder email to the cutout address ahead of ~2026-08-16; rotate via redeploy on reminder"
     owner: "Tony"
-    status: open
+    status: in-progress
+    priority: "code complete via spec-api-key-expiry-reminder.md: new amplify/functions/api-key-alert Lambda, daily EventBridge schedule, SES reminder email, code-reviewed (2 adversarial layers) and patched. npm test/lint/typecheck/build all pass. Not yet done: this project's own Definition of Done requires proportional live verification — no AWS credentials were available in the implementing session, so npx ampx sandbox --once + a real deployed-email check is still Tony's to perform before closing this out"
   - epic: 2
     action: "Bedrock one-time setup before Story 3.2: model access enabled in sandbox account/region; correct Opus inference-profile identifier confirmed and recorded"
     owner: "Tony"
@@ -164,7 +165,8 @@ action_items:
   - epic: 3
     action: "Build the API-key expiry reminder mechanism (email to cutout address ahead of ~2026-08-16 expiry) - urgent, ~3 weeks runway as of 2026-07-26"
     owner: "Amelia"
-    status: open
+    status: in-progress
+    priority: "code complete via spec-api-key-expiry-reminder.md: new amplify/functions/api-key-alert Lambda, daily EventBridge schedule, SES reminder email, code-reviewed (2 adversarial layers) and patched. npm test/lint/typecheck/build all pass. Not yet done: this project's own Definition of Done requires proportional live verification — no AWS credentials were available in the implementing session, so npx ampx sandbox --once + a real deployed-email check is still Tony's to perform before closing this out"
   - epic: 4
     action: "Reproduced the open 'Account couldn't load' transient live during Story 4.3 verification with a specific trigger (token refresh mid authenticated-mutation on the Admin Dashboard) — filed as Story 4-5, supersedes the epic-3 version of this item with a concrete repro"
     owner: "Amelia"
