@@ -111,4 +111,24 @@ describe('AccountBar', () => {
     expect(await screen.findByRole('button', { name: 'Grant Invite Key' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Log Out' })).toBeVisible();
   });
+
+  it('calls onOpenAccount when the "Your account" label is clicked', async () => {
+    const onOpenAccount = vi.fn();
+    getMyAccount.mockResolvedValue({ generation: 'SecondGen', onwardKeyGenerated: false });
+    render(<AccountBar onOpenAccount={onOpenAccount} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Your account' }));
+
+    expect(onOpenAccount).toHaveBeenCalledOnce();
+  });
+
+  it('calls onShowHowItWorks when "How it works" is clicked', async () => {
+    const onShowHowItWorks = vi.fn();
+    getMyAccount.mockResolvedValue({ generation: 'SecondGen', onwardKeyGenerated: false });
+    render(<AccountBar onShowHowItWorks={onShowHowItWorks} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'How it works' }));
+
+    expect(onShowHowItWorks).toHaveBeenCalledOnce();
+  });
 });

@@ -4,6 +4,8 @@ import { Hub } from 'aws-amplify/utils';
 import { SPREADS, shuffleAndDraw, encodeDraw, decodeDraw } from './utils/deck';
 import ContextEntry from './components/ContextEntry';
 import AdminDashboard from './components/AdminDashboard';
+import AccountScreen from './components/AccountScreen';
+import HowItWorks from './components/HowItWorks';
 import SpreadView from './components/SpreadView';
 import SignUp from './components/SignUp';
 import LogIn from './components/LogIn';
@@ -91,6 +93,8 @@ export default function App() {
   const [rateLimited, setRateLimited] = useState(false);
   const [isAdminUser, setIsAdminUser] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
+  const [showAccountScreen, setShowAccountScreen] = useState(false);
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [authRefreshRevision, setAuthRefreshRevision] = useState(0);
   const [guideResult, setGuideResult] = useState(null);
   const [orientBusy, setOrientBusy] = useState(false);
@@ -608,6 +612,8 @@ export default function App() {
     setGuideResult(null);
     setIsAdminUser(false);
     setShowAdminDashboard(false);
+    setShowAccountScreen(false);
+    setShowHowItWorks(false);
   }
 
   function handleSignedIn() {
@@ -680,9 +686,15 @@ export default function App() {
       <AccountBar
         isAdmin={isAdminUser}
         onShowAdminDashboard={() => setShowAdminDashboard(true)}
+        onOpenAccount={() => setShowAccountScreen(true)}
+        onShowHowItWorks={() => setShowHowItWorks(true)}
         onSignedOut={handleSignedOut}
       />
-      {showAdminDashboard ? (
+      {showHowItWorks ? (
+        <HowItWorks onBack={() => setShowHowItWorks(false)} />
+      ) : showAccountScreen ? (
+        <AccountScreen onBack={() => setShowAccountScreen(false)} />
+      ) : showAdminDashboard ? (
         <AdminDashboard onBack={() => setShowAdminDashboard(false)} />
       ) : guideResult ? (
         <OrientationGuideResults
@@ -721,6 +733,8 @@ export function AccountBar({
   onSignedOut = () => {},
   isAdmin = false,
   onShowAdminDashboard = () => {},
+  onOpenAccount = () => {},
+  onShowHowItWorks = () => {},
 }) {
   const [account, setAccount] = useState(null);
   const [loadStatus, setLoadStatus] = useState('loading');
@@ -764,7 +778,13 @@ export function AccountBar({
 
   return (
     <header className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 border-b border-gray-800 bg-gray-950 px-4 py-3 text-white">
-      <span className="shrink-0 text-xs font-semibold uppercase tracking-widest text-gray-400">Your account</span>
+      <button
+        type="button"
+        onClick={onOpenAccount}
+        className="shrink-0 text-xs font-semibold uppercase tracking-widest text-gray-400 hover:text-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+      >
+        Your account
+      </button>
       <div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
         {account && <GrantInviteKey account={account} refreshAccountFn={getMyAccount} />}
         {!account && loadStatus === 'loading' && <span role="status" className="text-sm text-gray-400">Loading account…</span>}
@@ -807,6 +827,13 @@ export function AccountBar({
             Admin Dashboard
           </button>
         )}
+        <button
+          type="button"
+          onClick={onShowHowItWorks}
+          className="rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        >
+          How it works
+        </button>
         <button
           type="button"
           onClick={handleLogOut}
