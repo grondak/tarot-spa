@@ -71,4 +71,14 @@ describe('PublicLanding', () => {
     expect(screen.getByRole('textbox', { name: 'Email' })).toBeVisible();
     expect(quickDraw.compareDocumentPosition(requestAccess) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
+
+  it('shows How it works and returns to the landing pitch', () => {
+    render(<PublicLanding />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'How it works' }));
+    expect(screen.getByRole('heading', { name: 'How it works' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByText(lede)).toBeVisible();
+  });
 });
