@@ -55,6 +55,10 @@ const schema = a.schema({
       status: a.enum(['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED']),
       errorCode: a.string(),
       completedAt: a.datetime(),
+      // DynamoDB TTL attribute (Unix epoch seconds) — enabled in backend.ts.
+      // Set once at creation in start-orientation-guide; AWS auto-deletes the
+      // row after this time (usually within ~48h of it elapsing).
+      expiresAt: a.integer(),
     })
     // The owner may only read their own Session. Every write goes through the
     // orientation-guide Lambda's direct IAM/DynamoDB access.
@@ -67,6 +71,18 @@ const schema = a.schema({
   MonthlySpend: a
     .model({
       spent: a.float(),
+    })
+    .authorization((allow) => [allow.authenticated().to([])]),
+  // Lifetime running counters for adminMetrics, so its dashboard numbers stay
+  // accurate once Session rows start expiring via TTL. Incremented atomically
+  // (DynamoDB `ADD`) by orientation-guide (on SUCCEEDED) and orientation-judge
+  // (on scoring) — never by anything else. No default CRUD for any principal,
+  // same lockdown as MonthlySpend: every read/write is direct IAM.
+  Metrics: a
+    .model({
+      succeededSessionCount: a.integer(),
+      scoredSessionCount: a.integer(),
+      groundednessScoreSum: a.float(),
     })
     .authorization((allow) => [allow.authenticated().to([])]),
   Config: a

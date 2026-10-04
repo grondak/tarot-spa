@@ -10,6 +10,7 @@ import {
 } from 'aws-cdk-lib/aws-cloudwatch';
 import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { CfnBudget } from 'aws-cdk-lib/aws-budgets';
+import { CfnTable } from 'aws-cdk-lib/aws-dynamodb';
 import { PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import {
   Alias,
@@ -85,8 +86,16 @@ const accountTable = backend.data.resources.tables.Account;
 const configTable = backend.data.resources.tables.Config;
 const dailyUsageTable = backend.data.resources.tables.DailyUsage;
 const inviteKeyTable = backend.data.resources.tables.InviteKey;
+const metricsTable = backend.data.resources.tables.Metrics;
 const monthlySpendTable = backend.data.resources.tables.MonthlySpend;
 const sessionTable = backend.data.resources.tables.Session;
+
+// Session rows carry a user's own words plus the full generated guide, so they're
+// auto-deleted via DynamoDB TTL rather than kept indefinitely (see SESSION_RETENTION_DAYS).
+(sessionTable.node.defaultChild as CfnTable).timeToLiveSpecification = {
+  attributeName: 'expiresAt',
+  enabled: true,
+};
 const redemptionLambda = backend.postConfirmation.resources.lambda;
 const adminMetricsLambda = backend.adminMetrics.resources.lambda;
 const apiKeyAlertLambda = backend.apiKeyAlert.resources.lambda;
@@ -428,10 +437,12 @@ sessionTable.grant(
 dailyUsageTable.grantReadWriteData(orientationGuideLambda);
 monthlySpendTable.grantReadWriteData(orientationGuideLambda);
 configTable.grantReadData(orientationGuideLambda);
+metricsTable.grantWriteData(orientationGuideLambda);
 backend.orientationGuide.addEnvironment('SESSION_TABLE_NAME', sessionTable.tableName);
 backend.orientationGuide.addEnvironment('DAILY_USAGE_TABLE_NAME', dailyUsageTable.tableName);
 backend.orientationGuide.addEnvironment('MONTHLY_SPEND_TABLE_NAME', monthlySpendTable.tableName);
 backend.orientationGuide.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
+backend.orientationGuide.addEnvironment('METRICS_TABLE_NAME', metricsTable.tableName);
 // Version pinning protects durable executions; the stateless judge is deliberately unqualified.
 orientationJudgeLambda.grantInvoke(orientationGuideLambda);
 backend.orientationGuide.addEnvironment(
@@ -444,7 +455,9 @@ sessionTable.grant(
   'dynamodb:GetItem',
   'dynamodb:UpdateItem',
 );
+metricsTable.grantWriteData(orientationJudgeLambda);
 backend.orientationJudge.addEnvironment('SESSION_TABLE_NAME', sessionTable.tableName);
+backend.orientationJudge.addEnvironment('METRICS_TABLE_NAME', metricsTable.tableName);
 
 sessionTable.grant(
   startOrientationGuideLambda,
@@ -494,15 +507,15 @@ backend.usageCounter.addEnvironment('DAILY_USAGE_TABLE_NAME', dailyUsageTable.ta
 backend.usageCounter.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
 
 accountTable.grantReadData(adminMetricsLambda);
-sessionTable.grantReadData(adminMetricsLambda);
 dailyUsageTable.grantReadData(adminMetricsLambda);
 monthlySpendTable.grantReadData(adminMetricsLambda);
 configTable.grantReadData(adminMetricsLambda);
+metricsTable.grantReadData(adminMetricsLambda);
 backend.adminMetrics.addEnvironment('ACCOUNT_TABLE_NAME', accountTable.tableName);
-backend.adminMetrics.addEnvironment('SESSION_TABLE_NAME', sessionTable.tableName);
 backend.adminMetrics.addEnvironment('DAILY_USAGE_TABLE_NAME', dailyUsageTable.tableName);
 backend.adminMetrics.addEnvironment('MONTHLY_SPEND_TABLE_NAME', monthlySpendTable.tableName);
 backend.adminMetrics.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
+backend.adminMetrics.addEnvironment('METRICS_TABLE_NAME', metricsTable.tableName);
 
 // Cross-region inference profiles fan out to account-less foundation models in
 // multiple US regions. Accepted residual risk: the foundation-model resource uses
