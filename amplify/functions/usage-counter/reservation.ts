@@ -1,4 +1,4 @@
-import { GetCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
+import { GetCommand, PutCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { type Config, isValidConfig } from '../../config';
 
 export type CommandClient = { send(command: unknown): Promise<unknown> };
@@ -207,6 +207,44 @@ export async function reserveUsage(dynamo: CommandClient, input: UsageReservatio
       }
       if (attempt === TRANSACTION_ATTEMPTS) throw error;
     }
+  }
+}
+
+type QuestionLogEntry = {
+  id: string;
+  owner: string;
+  createdAt: string;
+  completedAt: string;
+  hadResult: boolean;
+};
+
+// Content-free, permanent admin log entry for one finished Orientation Guide
+// request — never the context/guide text, just who/when/how-long/whether-it-
+// worked. Called from every place a Session reaches a terminal state
+// (orientation-guide's persistResult and compensate, orientation-reconciler's
+// terminalizePendingSession). Idempotent (attribute_not_exists(id), id =
+// the Session's own id) and best-effort: this never throws, so a logging
+// hiccup can never affect the real guide generation or reconciliation.
+export async function writeQuestionLog(
+  dynamo: CommandClient,
+  questionLogTable: string,
+  entry: QuestionLogEntry,
+) {
+  try {
+    await dynamo.send(new PutCommand({
+      TableName: questionLogTable,
+      Item: {
+        id: entry.id,
+        owner: entry.owner,
+        occurredAt: entry.createdAt,
+        durationMs: Date.parse(entry.completedAt) - Date.parse(entry.createdAt),
+        hadResult: entry.hadResult,
+      },
+      ConditionExpression: 'attribute_not_exists(id)',
+    }));
+  } catch (error) {
+    if (isErrorNamed(error, 'ConditionalCheckFailedException')) return;
+    console.error('QUESTION_LOG_WRITE_FAILED', entry.id);
   }
 }
 

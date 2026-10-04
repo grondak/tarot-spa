@@ -10,7 +10,7 @@ import {
   ScanCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { isErrorNamed } from '../usage-counter/reservation';
+import { isErrorNamed, writeQuestionLog } from '../usage-counter/reservation';
 
 type CommandClient = {
   send(command: unknown): Promise<unknown>;
@@ -18,6 +18,8 @@ type CommandClient = {
 
 type PendingSession = {
   id?: string;
+  owner?: string;
+  createdAt?: string;
 };
 
 type Dependencies = {
@@ -27,6 +29,11 @@ type Dependencies = {
   workerFunctionArn: string;
   workerFunctionName: string;
   workerQualifier: string;
+  // Deliberately not part of the fail-closed configuration check below — same
+  // as orientation-guide's metricsTableName/questionLogTableName: best-effort,
+  // not essential to reconciling stuck Sessions. See writeQuestionLog's own
+  // internal try/catch.
+  questionLogTableName: string;
   now: () => Date;
 };
 
@@ -52,6 +59,7 @@ const defaultDependencies: Dependencies = {
   workerFunctionArn: process.env.ORIENTATION_GUIDE_FUNCTION_ARN ?? '',
   workerFunctionName: process.env.ORIENTATION_GUIDE_FUNCTION_NAME ?? '',
   workerQualifier: process.env.ORIENTATION_GUIDE_FUNCTION_QUALIFIER ?? '',
+  questionLogTableName: process.env.QUESTION_LOG_TABLE_NAME ?? '',
   now: () => new Date(),
 };
 
@@ -74,9 +82,10 @@ async function invokeMissingExecution(deps: Dependencies, sessionId: string) {
 
 async function terminalizePendingSession(
   deps: Dependencies,
-  sessionId: string,
+  session: PendingSession,
   timestamp: string,
 ) {
+  const sessionId = session.id;
   try {
     await deps.dynamo.send(new UpdateCommand({
       TableName: deps.sessionTableName,
@@ -91,12 +100,22 @@ async function terminalizePendingSession(
         ':timestamp': timestamp,
       },
     }));
-    return true;
   } catch (error) {
     // The worker or another pass already moved the Session forward.
     if (isErrorNamed(error, 'ConditionalCheckFailedException')) return false;
     throw error;
   }
+
+  if (sessionId && session.owner && session.createdAt) {
+    await writeQuestionLog(deps.dynamo, deps.questionLogTableName, {
+      id: sessionId,
+      owner: session.owner,
+      createdAt: session.createdAt,
+      completedAt: timestamp,
+      hadResult: false,
+    });
+  }
+  return true;
 }
 
 async function findExactExecution(deps: Dependencies, sessionId: string) {
@@ -142,8 +161,8 @@ export function createHandler(deps: Dependencies = defaultDependencies) {
         ConsistentRead: true,
         ExclusiveStartKey: exclusiveStartKey,
         FilterExpression: '#s = :pending AND updatedAt <= :staleBefore',
-        ProjectionExpression: 'id',
-        ExpressionAttributeNames: { '#s': 'status' },
+        ProjectionExpression: 'id, #owner, createdAt',
+        ExpressionAttributeNames: { '#s': 'status', '#owner': 'owner' },
         ExpressionAttributeValues: {
           ':pending': 'PENDING',
           ':staleBefore': staleBefore,
@@ -171,7 +190,7 @@ export function createHandler(deps: Dependencies = defaultDependencies) {
         if (
           execution.Status
           && TERMINAL_EXECUTION_STATUSES.has(execution.Status)
-          && await terminalizePendingSession(deps, session.id, timestamp)
+          && await terminalizePendingSession(deps, session, timestamp)
         ) {
           result.terminalized += 1;
         }

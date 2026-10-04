@@ -37,7 +37,7 @@ function isAccountConditionalFailure(error: unknown) {
     && error.CancellationReasons?.[0]?.Code === 'ConditionalCheckFailed';
 }
 
-async function mintAdminKey(deps: HandlerDependencies) {
+async function mintAdminKey(deps: HandlerDependencies, mintedBy: string | undefined) {
   if (!deps.inviteKeyTableName) {
     throw new Error('invite-key-mint table configuration is missing');
   }
@@ -50,6 +50,11 @@ async function mintAdminKey(deps: HandlerDependencies) {
       id: code,
       status: 'unredeemed',
       generation: 'FirstGen',
+      // DynamoDBDocumentClient rejects `undefined` attribute values by default
+      // (removeUndefinedValues is off) — null is the safe "absent" value here.
+      // AppSync always populates identity for this allow.group('Admin')
+      // resolver in practice, but this keeps the write crash-proof regardless.
+      mintedBy: mintedBy ?? null,
       createdAt: timestamp,
       updatedAt: timestamp,
     },
@@ -67,7 +72,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
     // wins if both are ever present (confirmed against live production payloads).
     const fieldName = event.fieldName ?? event.info?.fieldName;
     if (fieldName === 'adminMintInviteKey') {
-      return mintAdminKey(deps);
+      return mintAdminKey(deps, event.identity?.sub);
     }
     // `!= null` (not `!== undefined`) so an explicit `null` from either source is
     // treated the same as an absent field name, not rejected as "unrecognized".
@@ -112,6 +117,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
                 id: code,
                 status: 'unredeemed',
                 generation: 'SecondGen',
+                mintedBy: accountId,
                 createdAt: timestamp,
                 updatedAt: timestamp,
               },

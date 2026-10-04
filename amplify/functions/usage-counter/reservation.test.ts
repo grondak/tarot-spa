@@ -7,6 +7,7 @@ import {
   rollbackUsage,
   utcDate,
   utcMonth,
+  writeQuestionLog,
 } from './reservation';
 
 function client(...results: unknown[]) {
@@ -380,5 +381,50 @@ describe('usage reservations', () => {
     const failing = { send: vi.fn().mockRejectedValue(new Error('rollback failed')) };
     await expect(rollbackUsage(failing, usage)).rejects.toThrow('rollback failed');
     expect(failing.send).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('writeQuestionLog', () => {
+  const entry = {
+    id: '12345678-1234-4234-9234-123456789012',
+    owner: 'account-1',
+    createdAt: '2026-07-22T18:00:00.000Z',
+    completedAt: '2026-07-22T18:00:05.500Z',
+    hadResult: true,
+  };
+
+  it('writes the content-free entry with a computed duration, guarded by id', async () => {
+    const dynamo = client({});
+
+    await writeQuestionLog(dynamo, 'QuestionLogTable', entry);
+
+    expect(dynamo.send).toHaveBeenCalledOnce();
+    expect(dynamo.send.mock.calls[0][0].input).toEqual({
+      TableName: 'QuestionLogTable',
+      Item: {
+        id: entry.id,
+        owner: 'account-1',
+        occurredAt: '2026-07-22T18:00:00.000Z',
+        durationMs: 5500,
+        hadResult: true,
+      },
+      ConditionExpression: 'attribute_not_exists(id)',
+    });
+  });
+
+  it('swallows a conditional-check failure silently (already logged by another pass)', async () => {
+    const dynamo = { send: vi.fn().mockRejectedValue({ name: 'ConditionalCheckFailedException' }) };
+
+    await expect(writeQuestionLog(dynamo, 'QuestionLogTable', entry)).resolves.toBeUndefined();
+  });
+
+  it('swallows an unrelated failure and logs it, without throwing', async () => {
+    const dynamo = { send: vi.fn().mockRejectedValue(new Error('DynamoDB unavailable')) };
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(writeQuestionLog(dynamo, 'QuestionLogTable', entry)).resolves.toBeUndefined();
+    expect(errorSpy).toHaveBeenCalledWith('QUESTION_LOG_WRITE_FAILED', entry.id);
+
+    errorSpy.mockRestore();
   });
 });

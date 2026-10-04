@@ -26,6 +26,7 @@ import { CfnWebACL, CfnWebACLAssociation } from 'aws-cdk-lib/aws-wafv2';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
 import { postConfirmation } from './auth/post-confirmation/resource';
+import { adminLogs } from './functions/admin-logs/resource';
 import { adminMetrics } from './functions/admin-metrics/resource';
 import { apiKeyAlert } from './functions/api-key-alert/resource';
 import { budgetAlert } from './functions/budget-alert/resource';
@@ -67,6 +68,7 @@ const backend = defineBackend({
   auth,
   data,
   postConfirmation,
+  adminLogs,
   adminMetrics,
   apiKeyAlert,
   budgetAlert,
@@ -89,6 +91,7 @@ const dailyUsageTable = backend.data.resources.tables.DailyUsage;
 const inviteKeyTable = backend.data.resources.tables.InviteKey;
 const metricsTable = backend.data.resources.tables.Metrics;
 const monthlySpendTable = backend.data.resources.tables.MonthlySpend;
+const questionLogTable = backend.data.resources.tables.QuestionLog;
 const sessionTable = backend.data.resources.tables.Session;
 
 // Session rows carry a user's own words plus the full generated guide, so they're
@@ -101,6 +104,7 @@ backend.data.resources.cfnResources.amplifyDynamoDbTables.Session.timeToLiveAttr
   enabled: true,
 };
 const redemptionLambda = backend.postConfirmation.resources.lambda;
+const adminLogsLambda = backend.adminLogs.resources.lambda;
 const adminMetricsLambda = backend.adminMetrics.resources.lambda;
 const apiKeyAlertLambda = backend.apiKeyAlert.resources.lambda;
 const budgetAlertLambda = backend.budgetAlert.resources.lambda;
@@ -443,11 +447,13 @@ dailyUsageTable.grantReadWriteData(orientationGuideLambda);
 monthlySpendTable.grantReadWriteData(orientationGuideLambda);
 configTable.grantReadData(orientationGuideLambda);
 metricsTable.grantWriteData(orientationGuideLambda);
+questionLogTable.grantWriteData(orientationGuideLambda);
 backend.orientationGuide.addEnvironment('SESSION_TABLE_NAME', sessionTable.tableName);
 backend.orientationGuide.addEnvironment('DAILY_USAGE_TABLE_NAME', dailyUsageTable.tableName);
 backend.orientationGuide.addEnvironment('MONTHLY_SPEND_TABLE_NAME', monthlySpendTable.tableName);
 backend.orientationGuide.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
 backend.orientationGuide.addEnvironment('METRICS_TABLE_NAME', metricsTable.tableName);
+backend.orientationGuide.addEnvironment('QUESTION_LOG_TABLE_NAME', questionLogTable.tableName);
 // Version pinning protects durable executions; the stateless judge is deliberately unqualified.
 orientationJudgeLambda.grantInvoke(orientationGuideLambda);
 backend.orientationGuide.addEnvironment(
@@ -481,12 +487,14 @@ sessionTable.grant(
   'dynamodb:Scan',
   'dynamodb:UpdateItem',
 );
+questionLogTable.grantWriteData(orientationReconcilerLambda);
 workerAlias.grantInvoke(orientationReconcilerLambda);
 orientationReconcilerLambda.addToRolePolicy(new PolicyStatement({
   actions: ['lambda:ListDurableExecutionsByFunction'],
   resources: [workerAlias.functionArn],
 }));
 backend.orientationReconciler.addEnvironment('SESSION_TABLE_NAME', sessionTable.tableName);
+backend.orientationReconciler.addEnvironment('QUESTION_LOG_TABLE_NAME', questionLogTable.tableName);
 backend.orientationReconciler.addEnvironment(
   'ORIENTATION_GUIDE_FUNCTION_ARN',
   workerAlias.functionArn,
@@ -537,6 +545,13 @@ backend.adminMetrics.addEnvironment('DAILY_USAGE_TABLE_NAME', dailyUsageTable.ta
 backend.adminMetrics.addEnvironment('MONTHLY_SPEND_TABLE_NAME', monthlySpendTable.tableName);
 backend.adminMetrics.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
 backend.adminMetrics.addEnvironment('METRICS_TABLE_NAME', metricsTable.tableName);
+
+inviteKeyTable.grantReadData(adminLogsLambda);
+accountTable.grantReadData(adminLogsLambda);
+questionLogTable.grantReadData(adminLogsLambda);
+backend.adminLogs.addEnvironment('INVITE_KEY_TABLE_NAME', inviteKeyTable.tableName);
+backend.adminLogs.addEnvironment('ACCOUNT_TABLE_NAME', accountTable.tableName);
+backend.adminLogs.addEnvironment('QUESTION_LOG_TABLE_NAME', questionLogTable.tableName);
 
 // Cross-region inference profiles fan out to account-less foundation models in
 // multiple US regions. Accepted residual risk: the foundation-model resource uses

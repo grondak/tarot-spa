@@ -14,7 +14,7 @@ type PostConfirmationEvent = {
   userName: string;
   userPoolId: string;
   request: {
-    userAttributes: { sub: string };
+    userAttributes: { sub: string; email?: string };
     clientMetadata?: { inviteKeyCode?: string };
   };
 };
@@ -134,6 +134,8 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
                   owner: accountId,
                   generation: keyResult.Item.generation,
                   onwardKeyGenerated: false,
+                  email: event.request.userAttributes.email,
+                  redeemedInviteKey: inviteKeyCode,
                   createdAt: timestamp,
                   updatedAt: timestamp,
                 },
