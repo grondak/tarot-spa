@@ -37,6 +37,7 @@ import { orientationJudge } from './functions/orientation-judge/resource';
 import { orientationAlert } from './functions/orientation-alert/resource';
 import { orientationReconciler } from './functions/orientation-reconciler/resource';
 import { requestAccess } from './functions/request-access/resource';
+import { sessionScrubber } from './functions/session-scrubber/resource';
 import { startOrientationGuide } from './functions/start-orientation-guide/resource';
 import { usageCounter } from './functions/usage-counter/resource';
 import { assertMonthlyBudgetCeilingHolds } from './config';
@@ -77,6 +78,7 @@ const backend = defineBackend({
   orientationJudge,
   orientationReconciler,
   requestAccess,
+  sessionScrubber,
   startOrientationGuide,
   usageCounter,
 });
@@ -85,8 +87,19 @@ const accountTable = backend.data.resources.tables.Account;
 const configTable = backend.data.resources.tables.Config;
 const dailyUsageTable = backend.data.resources.tables.DailyUsage;
 const inviteKeyTable = backend.data.resources.tables.InviteKey;
+const metricsTable = backend.data.resources.tables.Metrics;
 const monthlySpendTable = backend.data.resources.tables.MonthlySpend;
 const sessionTable = backend.data.resources.tables.Session;
+
+// Session rows carry a user's own words plus the full generated guide, so they're
+// auto-deleted via DynamoDB TTL rather than kept indefinitely (see SESSION_RETENTION_DAYS).
+// Amplify Gen 2 tables are backed by a Custom::AmplifyDynamoDBTable resource, not a plain
+// CfnTable (it supports in-place schema changes) — `.node.defaultChild` on the L2 table is
+// undefined, so TTL has to go through this wrapper instead.
+backend.data.resources.cfnResources.amplifyDynamoDbTables.Session.timeToLiveAttribute = {
+  attributeName: 'expiresAt',
+  enabled: true,
+};
 const redemptionLambda = backend.postConfirmation.resources.lambda;
 const adminMetricsLambda = backend.adminMetrics.resources.lambda;
 const apiKeyAlertLambda = backend.apiKeyAlert.resources.lambda;
@@ -99,6 +112,7 @@ const orientationJudgeLambda = backend.orientationJudge.resources.lambda;
 const orientationAlertLambda = backend.orientationAlert.resources.lambda;
 const orientationReconcilerLambda = backend.orientationReconciler.resources.lambda;
 const requestAccessLambda = backend.requestAccess.resources.lambda;
+const sessionScrubberLambda = backend.sessionScrubber.resources.lambda;
 const startOrientationGuideLambda = backend.startOrientationGuide.resources.lambda;
 const usageCounterLambda = backend.usageCounter.resources.lambda;
 
@@ -428,10 +442,12 @@ sessionTable.grant(
 dailyUsageTable.grantReadWriteData(orientationGuideLambda);
 monthlySpendTable.grantReadWriteData(orientationGuideLambda);
 configTable.grantReadData(orientationGuideLambda);
+metricsTable.grantWriteData(orientationGuideLambda);
 backend.orientationGuide.addEnvironment('SESSION_TABLE_NAME', sessionTable.tableName);
 backend.orientationGuide.addEnvironment('DAILY_USAGE_TABLE_NAME', dailyUsageTable.tableName);
 backend.orientationGuide.addEnvironment('MONTHLY_SPEND_TABLE_NAME', monthlySpendTable.tableName);
 backend.orientationGuide.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
+backend.orientationGuide.addEnvironment('METRICS_TABLE_NAME', metricsTable.tableName);
 // Version pinning protects durable executions; the stateless judge is deliberately unqualified.
 orientationJudgeLambda.grantInvoke(orientationGuideLambda);
 backend.orientationGuide.addEnvironment(
@@ -444,7 +460,9 @@ sessionTable.grant(
   'dynamodb:GetItem',
   'dynamodb:UpdateItem',
 );
+metricsTable.grantWriteData(orientationJudgeLambda);
 backend.orientationJudge.addEnvironment('SESSION_TABLE_NAME', sessionTable.tableName);
+backend.orientationJudge.addEnvironment('METRICS_TABLE_NAME', metricsTable.tableName);
 
 sessionTable.grant(
   startOrientationGuideLambda,
@@ -488,21 +506,37 @@ const reconciliationSchedule = new Rule(
 );
 reconciliationSchedule.addTarget(new LambdaFunctionTarget(orientationReconcilerLambda));
 
+sessionTable.grant(
+  sessionScrubberLambda,
+  'dynamodb:Scan',
+  'dynamodb:UpdateItem',
+);
+backend.sessionScrubber.addEnvironment('SESSION_TABLE_NAME', sessionTable.tableName);
+// Looser cadence than the 1-minute reconciliation schedule above — this isn't
+// recovering in-flight work, so a ~15-minute worst-case lag past the 24h
+// retention boundary (SESSION_RETENTION_DAYS) is a fine, cheap guarantee.
+const sessionScrubSchedule = new Rule(
+  operationalStack,
+  'SessionScrubSchedule',
+  { schedule: Schedule.rate(Duration.minutes(15)) },
+);
+sessionScrubSchedule.addTarget(new LambdaFunctionTarget(sessionScrubberLambda));
+
 dailyUsageTable.grantReadData(usageCounterLambda);
 configTable.grantReadData(usageCounterLambda);
 backend.usageCounter.addEnvironment('DAILY_USAGE_TABLE_NAME', dailyUsageTable.tableName);
 backend.usageCounter.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
 
 accountTable.grantReadData(adminMetricsLambda);
-sessionTable.grantReadData(adminMetricsLambda);
 dailyUsageTable.grantReadData(adminMetricsLambda);
 monthlySpendTable.grantReadData(adminMetricsLambda);
 configTable.grantReadData(adminMetricsLambda);
+metricsTable.grantReadData(adminMetricsLambda);
 backend.adminMetrics.addEnvironment('ACCOUNT_TABLE_NAME', accountTable.tableName);
-backend.adminMetrics.addEnvironment('SESSION_TABLE_NAME', sessionTable.tableName);
 backend.adminMetrics.addEnvironment('DAILY_USAGE_TABLE_NAME', dailyUsageTable.tableName);
 backend.adminMetrics.addEnvironment('MONTHLY_SPEND_TABLE_NAME', monthlySpendTable.tableName);
 backend.adminMetrics.addEnvironment('CONFIG_TABLE_NAME', configTable.tableName);
+backend.adminMetrics.addEnvironment('METRICS_TABLE_NAME', metricsTable.tableName);
 
 // Cross-region inference profiles fan out to account-less foundation models in
 // multiple US regions. Accepted residual risk: the foundation-model resource uses

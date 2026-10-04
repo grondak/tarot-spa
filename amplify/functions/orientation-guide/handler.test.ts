@@ -76,6 +76,8 @@ function dependencies(overrides: Record<string, unknown> = {}) {
     config: { dailyLimit: 5, monthlyBudget: 30 } as Record<string, unknown>,
     configReadCount: 0,
     mutateConfigAfterRead: null as (() => Record<string, unknown>) | null,
+    metricsUpdates: [] as Record<string, unknown>[],
+    metricsError: null as unknown,
   };
   const dynamo = {
     send: vi.fn(async (command: unknown) => {
@@ -144,6 +146,14 @@ function dependencies(overrides: Record<string, unknown> = {}) {
         }
         state.usageCompensated = true;
         state.compensationCount += 1;
+        return {};
+      }
+
+      if (name === 'UpdateCommand' && input.TableName === 'MetricsTable') {
+        expect(input.Key).toEqual({ id: 'global' });
+        expect(input.UpdateExpression).toBe('ADD succeededSessionCount :one SET updatedAt = :updatedAt');
+        state.metricsUpdates.push(input);
+        if (state.metricsError) throw state.metricsError;
         return {};
       }
 
@@ -228,6 +238,7 @@ function dependencies(overrides: Record<string, unknown> = {}) {
       monthlySpend: 'MonthlyTable',
       config: 'ConfigTable',
     },
+    metricsTableName: 'MetricsTable',
     tavilyApiKey: 'secret-from-environment',
     judgeFunctionArn: 'arn:aws:lambda:us-east-1:123456789012:function:orientation-judge',
     drawCards: vi.fn(() => [baseCard]),
@@ -285,6 +296,7 @@ describe('durable orientation-guide lifecycle', () => {
     expect(deps.state.compensationCount).toBe(0);
     expect(deps.bedrock.send).toHaveBeenCalledOnce();
     expect(deps.lambda.send).toHaveBeenCalledOnce();
+    expect(deps.state.metricsUpdates).toHaveLength(1);
     const tavilyRequest = JSON.parse(
       (deps.fetchFn.mock.calls[0][1] as RequestInit).body as string,
     ) as { query: string };
@@ -308,6 +320,17 @@ describe('durable orientation-guide lifecycle', () => {
       'persist-result',
       'judge-dispatch',
     ]);
+  });
+
+  it('completes successfully even when the Metrics counter write fails', async () => {
+    const deps = dependencies();
+    deps.state.metricsError = new Error('metrics table unavailable');
+
+    const { execution } = await run(deps);
+
+    expect(execution.getStatus()).toBe('SUCCEEDED');
+    expect(deps.state.session.status).toBe('SUCCEEDED');
+    expect(deps.state.metricsUpdates).toHaveLength(1);
   });
 
   it('marks a limit rejection FAILED without compensation or providers', async () => {

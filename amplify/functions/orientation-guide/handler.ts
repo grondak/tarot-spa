@@ -84,6 +84,11 @@ type HandlerDependencies = {
     monthlySpend: string;
     config: string;
   };
+  // Deliberately outside `tableNames`: that group gates the whole handler via
+  // the fail-closed `Object.values(...).some(...)` check below, but Metrics is
+  // a best-effort lifetime counter, not essential to generating a Guide — see
+  // the try/catch around its write in persistResult.
+  metricsTableName: string;
   tavilyApiKey: string;
   judgeFunctionArn: string;
   drawCards: (count: number) => Card[];
@@ -110,6 +115,7 @@ const defaultDependencies: HandlerDependencies = {
     monthlySpend: process.env.MONTHLY_SPEND_TABLE_NAME ?? '',
     config: process.env.CONFIG_TABLE_NAME ?? '',
   },
+  metricsTableName: process.env.METRICS_TABLE_NAME ?? '',
   tavilyApiKey: process.env.TAVILY_API_KEY ?? '',
   judgeFunctionArn: process.env.ORIENTATION_JUDGE_FUNCTION_ARN ?? '',
   drawCards: shuffleAndDraw,
@@ -375,6 +381,21 @@ export function createStepBodies(deps: HandlerDependencies = defaultDependencies
     } catch (error) {
       if (isErrorNamed(error, 'ConditionalCheckFailedException')) return;
       throw error;
+    }
+
+    // Lifetime counter for adminMetrics — best-effort: the Guide already
+    // succeeded and is already persisted above, so a Metrics hiccup here must
+    // never fail the request. Retry-safe because this only runs once the
+    // RUNNING -> SUCCEEDED transition above has actually happened.
+    try {
+      await deps.dynamo.send(new UpdateCommand({
+        TableName: deps.metricsTableName,
+        Key: { id: 'global' },
+        UpdateExpression: 'ADD succeededSessionCount :one SET updatedAt = :updatedAt',
+        ExpressionAttributeValues: { ':one': 1, ':updatedAt': timestamp },
+      }));
+    } catch {
+      console.error('METRICS_INCREMENT_FAILED', sessionId);
     }
   }
 

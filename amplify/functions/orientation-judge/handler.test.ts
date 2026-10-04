@@ -40,13 +40,22 @@ function dependencies() {
       guide: 'The kiln move exposes a scheduling bottleneck.',
       context: 'Erica is deciding whether to move the kiln.',
     } as Record<string, unknown>,
+    metricsUpdates: [] as Record<string, unknown>[],
+    metricsError: null as unknown,
   };
   const dynamo = {
     send: vi.fn(async (command: unknown) => {
       if (commandName(command) === 'GetCommand') {
         return { Item: { ...state.session } };
       }
-      if (commandName(command) === 'UpdateCommand') return {};
+      if (commandName(command) === 'UpdateCommand') {
+        const input = commandInput(command);
+        if (input.TableName === 'MetricsTable') {
+          state.metricsUpdates.push(input);
+          if (state.metricsError) throw state.metricsError;
+        }
+        return {};
+      }
       throw new Error(`Unexpected ${commandName(command)}`);
     }),
   };
@@ -61,6 +70,7 @@ function dependencies() {
     dynamo,
     bedrock,
     tableNames: { session: 'SessionTable' },
+    metricsTableName: 'MetricsTable',
     now: () => new Date('2026-07-25T16:00:00.000Z'),
     state,
   };
@@ -69,11 +79,13 @@ function dependencies() {
 function commands(
   send: ReturnType<typeof vi.fn>,
   name: string,
+  tableName?: string,
 ) {
   return send.mock.calls
     .map(([command]) => command)
     .filter((command) => commandName(command) === name)
-    .map(commandInput);
+    .map(commandInput)
+    .filter((input) => !tableName || input.TableName === tableName);
 }
 
 afterEach(() => {
@@ -108,7 +120,7 @@ describe('orientation-judge handler', () => {
       Key: { id: SESSION_ID },
       ConsistentRead: true,
     }]);
-    expect(commands(deps.dynamo.send, 'UpdateCommand')).toEqual([{
+    expect(commands(deps.dynamo.send, 'UpdateCommand', 'SessionTable')).toEqual([{
       TableName: 'SessionTable',
       Key: { id: SESSION_ID },
       ConditionExpression: '(#s = :succeeded OR attribute_not_exists(#s)) AND attribute_not_exists(groundednessScore)',
@@ -120,6 +132,30 @@ describe('orientation-judge handler', () => {
         ':updatedAt': '2026-07-25T16:00:00.000Z',
       },
     }]);
+    expect(deps.state.metricsUpdates).toEqual([{
+      TableName: 'MetricsTable',
+      Key: { id: 'global' },
+      UpdateExpression: 'ADD scoredSessionCount :one, groundednessScoreSum :score SET updatedAt = :updatedAt',
+      ExpressionAttributeValues: {
+        ':one': 1,
+        ':score': 0.4,
+        ':updatedAt': '2026-07-25T16:00:00.000Z',
+      },
+    }]);
+  });
+
+  it('completes scoring even when the Metrics counter write fails', async () => {
+    const deps = dependencies();
+    deps.state.metricsError = new Error('metrics table unavailable');
+    deps.bedrock.send.mockResolvedValueOnce(modelResponse([
+      { claim: 'One', anchored: true },
+      { claim: 'Two', anchored: false },
+    ]));
+
+    await expect(createHandler(deps)({ sessionId: SESSION_ID })).resolves.toBeUndefined();
+
+    expect(commands(deps.dynamo.send, 'UpdateCommand', 'SessionTable')).toHaveLength(1);
+    expect(deps.state.metricsUpdates).toHaveLength(1);
   });
 
   it.each([
@@ -137,7 +173,7 @@ describe('orientation-judge handler', () => {
 
     await createHandler(deps)({ sessionId: SESSION_ID });
 
-    const [update] = commands(deps.dynamo.send, 'UpdateCommand');
+    const [update] = commands(deps.dynamo.send, 'UpdateCommand', 'SessionTable');
     expect(update.ExpressionAttributeValues).toMatchObject({ ':score': expectedScore });
   });
 
@@ -174,7 +210,8 @@ describe('orientation-judge handler', () => {
     await createHandler(deps)({ sessionId: SESSION_ID });
 
     expect(deps.bedrock.send).toHaveBeenCalledOnce();
-    expect(commands(deps.dynamo.send, 'UpdateCommand')).toHaveLength(1);
+    expect(commands(deps.dynamo.send, 'UpdateCommand', 'SessionTable')).toHaveLength(1);
+    expect(deps.state.metricsUpdates).toHaveLength(1);
   });
 
   it('does not repay Haiku spend for an already-scored Session', async () => {
@@ -266,7 +303,7 @@ describe('orientation-judge handler', () => {
 
     await createHandler(deps)({ sessionId: SESSION_ID });
 
-    const [update] = commands(deps.dynamo.send, 'UpdateCommand');
+    const [update] = commands(deps.dynamo.send, 'UpdateCommand', 'SessionTable');
     expect(update.ExpressionAttributeValues).toMatchObject({ ':score': 1 });
   });
 

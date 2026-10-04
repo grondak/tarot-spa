@@ -92,9 +92,11 @@ export default function App() {
   const [cards, setCards] = useState([]);
   const [rateLimited, setRateLimited] = useState(false);
   const [isAdminUser, setIsAdminUser] = useState(false);
-  const [showAdminDashboard, setShowAdminDashboard] = useState(false);
-  const [showAccountScreen, setShowAccountScreen] = useState(false);
-  const [showHowItWorks, setShowHowItWorks] = useState(false);
+  // Mutually exclusive by construction (unlike three independent booleans) so
+  // opening one of these screens from another always closes the first —
+  // Back is then always exactly one click from wherever you are back to your
+  // Guide/SpreadView/ContextEntry, never revealing a stale screen underneath.
+  const [overlayScreen, setOverlayScreen] = useState(null);
   const [authRefreshRevision, setAuthRefreshRevision] = useState(0);
   const [guideResult, setGuideResult] = useState(null);
   const [orientBusy, setOrientBusy] = useState(false);
@@ -203,7 +205,7 @@ export default function App() {
             setOrientSpreadKey(null);
             setGuideResult(null);
             setIsAdminUser(false);
-            setShowAdminDashboard(false);
+            setOverlayScreen(null);
           }
         }
       }
@@ -256,7 +258,7 @@ export default function App() {
       // rather than treating "couldn't tell" as a confirmed demotion.
       if (!active || admin === null) return;
       setIsAdminUser(admin);
-      if (!admin) setShowAdminDashboard(false);
+      if (!admin) setOverlayScreen((current) => (current === 'admin' ? null : current));
     });
 
     return () => {
@@ -611,9 +613,7 @@ export default function App() {
     setOrientSpreadKey(null);
     setGuideResult(null);
     setIsAdminUser(false);
-    setShowAdminDashboard(false);
-    setShowAccountScreen(false);
-    setShowHowItWorks(false);
+    setOverlayScreen(null);
   }
 
   function handleSignedIn() {
@@ -685,17 +685,19 @@ export default function App() {
     <>
       <AccountBar
         isAdmin={isAdminUser}
-        onShowAdminDashboard={() => setShowAdminDashboard(true)}
-        onOpenAccount={() => setShowAccountScreen(true)}
-        onShowHowItWorks={() => setShowHowItWorks(true)}
+        onShowAdminDashboard={() => setOverlayScreen('admin')}
+        onOpenAccount={() => setOverlayScreen('account')}
+        onShowHowItWorks={() => setOverlayScreen('howItWorks')}
         onSignedOut={handleSignedOut}
+        showReturnToGuide={Boolean(guideResult) && overlayScreen !== null}
+        onReturnToGuide={() => setOverlayScreen(null)}
       />
-      {showHowItWorks ? (
-        <HowItWorks onBack={() => setShowHowItWorks(false)} />
-      ) : showAccountScreen ? (
-        <AccountScreen onBack={() => setShowAccountScreen(false)} />
-      ) : showAdminDashboard ? (
-        <AdminDashboard onBack={() => setShowAdminDashboard(false)} />
+      {overlayScreen === 'howItWorks' ? (
+        <HowItWorks onBack={() => setOverlayScreen(null)} />
+      ) : overlayScreen === 'account' ? (
+        <AccountScreen onBack={() => setOverlayScreen(null)} />
+      ) : overlayScreen === 'admin' ? (
+        <AdminDashboard onBack={() => setOverlayScreen(null)} />
       ) : guideResult ? (
         <OrientationGuideResults
           result={guideResult}
@@ -735,6 +737,8 @@ export function AccountBar({
   onShowAdminDashboard = () => {},
   onOpenAccount = () => {},
   onShowHowItWorks = () => {},
+  showReturnToGuide = false,
+  onReturnToGuide = () => {},
 }) {
   const [account, setAccount] = useState(null);
   const [loadStatus, setLoadStatus] = useState('loading');
@@ -786,6 +790,16 @@ export function AccountBar({
         Your account
       </button>
       <div className="flex min-w-0 flex-wrap items-center justify-end gap-3">
+        {showReturnToGuide && (
+          <button
+            type="button"
+            onClick={onReturnToGuide}
+            className="flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            <span className="h-2 w-2 shrink-0 rounded-full bg-white" aria-hidden="true" />
+            Your Guide is ready
+          </button>
+        )}
         {account && <GrantInviteKey account={account} refreshAccountFn={getMyAccount} />}
         {!account && loadStatus === 'loading' && <span role="status" className="text-sm text-gray-400">Loading account…</span>}
         {!account && loadStatus === 'missing' && (

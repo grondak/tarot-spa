@@ -8,7 +8,7 @@ One Amplify Hosting app (App ID `d3l9xh49fqq1ce`) connected to `grondak/tarot-sp
 
 Each environment — sandbox, `staging`, `main` — has its own Cognito pool, DynamoDB tables, Lambdas, and secrets. Nothing carries over between them automatically.
 
-Workflow: develop on `staging`, push directly (no branch protection there). Open a PR from `staging` into `main` to promote — `main` requires a PR (GitHub branch protection: PR required, no required approving-review count, direct pushes blocked). Merging auto-redeploys `main`.
+Workflow: each new idea gets its own feature branch cut from `staging`, merged back into `staging` directly (`git merge`, no PR — no branch protection there) once it's done. Ideas accumulate on `staging` like this; when it's in a state worth promoting, open a PR from `staging` into `main` — `main` requires a PR (GitHub branch protection: PR required, no required approving-review count, direct pushes blocked). Merging auto-redeploys `main`.
 
 ## Secrets
 

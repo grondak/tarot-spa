@@ -5,7 +5,6 @@ import {
   ScanCommand,
 } from '@aws-sdk/lib-dynamodb';
 import {
-  effectiveStatus,
   readConfig,
   type CommandClient,
   utcMonth,
@@ -14,10 +13,10 @@ import {
 type HandlerDependencies = {
   dynamo: CommandClient;
   accountTableName: string;
-  sessionTableName: string;
   dailyUsageTableName: string;
   monthlySpendTableName: string;
   configTableName: string;
+  metricsTableName: string;
   now: () => Date;
 };
 
@@ -25,13 +24,14 @@ type AccountItem = {
   generation?: string;
 };
 
-type SessionItem = {
-  status?: string;
-  groundednessScore?: number;
-};
-
 type DailyUsageItem = {
   count?: number;
+};
+
+type MetricsItem = {
+  succeededSessionCount?: number;
+  scoredSessionCount?: number;
+  groundednessScoreSum?: number;
 };
 
 type ScanOptions = {
@@ -42,10 +42,10 @@ type ScanOptions = {
 const defaultDependencies: HandlerDependencies = {
   dynamo: DynamoDBDocumentClient.from(new DynamoDBClient({})),
   accountTableName: process.env.ACCOUNT_TABLE_NAME ?? '',
-  sessionTableName: process.env.SESSION_TABLE_NAME ?? '',
   dailyUsageTableName: process.env.DAILY_USAGE_TABLE_NAME ?? '',
   monthlySpendTableName: process.env.MONTHLY_SPEND_TABLE_NAME ?? '',
   configTableName: process.env.CONFIG_TABLE_NAME ?? '',
+  metricsTableName: process.env.METRICS_TABLE_NAME ?? '',
   now: () => new Date(),
 };
 
@@ -78,10 +78,10 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
   return async () => {
     if (
       !deps.accountTableName
-      || !deps.sessionTableName
       || !deps.dailyUsageTableName
       || !deps.monthlySpendTableName
       || !deps.configTableName
+      || !deps.metricsTableName
     ) {
       throw new Error('admin-metrics table configuration is missing');
     }
@@ -90,8 +90,8 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
     const [
       config,
       monthlySpendResult,
+      metricsResult,
       accounts,
-      sessions,
       dailyUsageRecords,
     ] = await Promise.all([
       readConfig(deps.dynamo, deps.configTableName),
@@ -100,12 +100,13 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
         Key: { id: utcMonth(now) },
         ConsistentRead: true,
       })) as Promise<{ Item?: { spent?: number } }>,
+      deps.dynamo.send(new GetCommand({
+        TableName: deps.metricsTableName,
+        Key: { id: 'global' },
+        ConsistentRead: true,
+      })) as Promise<{ Item?: MetricsItem }>,
       scanAll<AccountItem>(deps.dynamo, deps.accountTableName, {
         ProjectionExpression: 'generation',
-      }),
-      scanAll<SessionItem>(deps.dynamo, deps.sessionTableName, {
-        ProjectionExpression: '#status, groundednessScore',
-        ExpressionAttributeNames: { '#status': 'status' },
       }),
       scanAll<DailyUsageItem>(deps.dynamo, deps.dailyUsageTableName, {
         ProjectionExpression: '#count',
@@ -119,18 +120,10 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
       if (account.generation === 'SecondGen') usersByGeneration.SecondGen += 1;
     }
 
-    const succeededSessions = sessions.filter(
-      (session) => effectiveStatus(session) === 'SUCCEEDED',
-    );
-    const scoredSessions = succeededSessions.filter(
-      (session): session is SessionItem & { groundednessScore: number } => (
-        typeof session.groundednessScore === 'number'
-      ),
-    );
-    const scoreTotal = scoredSessions.reduce(
-      (total, session) => total + session.groundednessScore,
-      0,
-    );
+    const succeededSessionCount = metricsResult.Item?.succeededSessionCount ?? 0;
+    const scoredSessionCount = metricsResult.Item?.scoredSessionCount ?? 0;
+    const groundednessScoreSum = metricsResult.Item?.groundednessScoreSum ?? 0;
+
     const hitCount = dailyUsageRecords.filter(
       (record) => typeof record.count === 'number' && record.count >= config.dailyLimit,
     ).length;
@@ -138,7 +131,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
     return {
       generatedAt: now.toISOString(),
       usersByGeneration,
-      succeededSessionCount: succeededSessions.length,
+      succeededSessionCount,
       dailyLimitHitRate: dailyUsageRecords.length > 0
         ? hitCount / dailyUsageRecords.length
         : null,
@@ -151,10 +144,10 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
         dailyLimit: config.dailyLimit,
         monthlyBudget: config.monthlyBudget,
       },
-      averageGroundednessScore: scoredSessions.length > 0
-        ? scoreTotal / scoredSessions.length
+      averageGroundednessScore: scoredSessionCount > 0
+        ? groundednessScoreSum / scoredSessionCount
         : null,
-      scoredSessionCount: scoredSessions.length,
+      scoredSessionCount,
     };
   };
 }

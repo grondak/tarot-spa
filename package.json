@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "backfill-sessions": "node scripts/backfill-session-status.mjs",
     "grant-admin": "node scripts/grant-admin.mjs",
+    "scrub-old-sessions": "node scripts/scrub-old-sessions.mjs",
     "seed-invite-key": "node scripts/seed-invite-key.mjs",
     "seed-config": "node scripts/seed-config.mjs"
   },

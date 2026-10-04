@@ -59,6 +59,7 @@ describe('start-orientation-guide handler', () => {
         status: 'PENDING',
         createdAt: '2026-07-19T18:00:00.000Z',
         updatedAt: '2026-07-19T18:00:00.000Z',
+        expiresAt: 1784570400, // now (2026-07-19T18:00:00Z) + SESSION_RETENTION_DAYS (1 day)
       },
       ConditionExpression: 'attribute_not_exists(id)',
     });

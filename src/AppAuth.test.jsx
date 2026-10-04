@@ -279,6 +279,43 @@ describe('App authenticated sign-out round trip', () => {
     expect(screen.queryByRole('heading', { name: 'Admin Dashboard' })).not.toBeInTheDocument();
   });
 
+  it('never stacks header screens — opening a second one from the first still reaches the current page in one Back click', async () => {
+    localStorage.setItem(
+      'tarotSpaActiveOrientationSession',
+      '12345678-1234-4234-9234-123456789012',
+    );
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Your Orientation Guide', level: 1 })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Your account' }));
+    expect(await screen.findByRole('heading', { name: 'Your Account' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'How it works' }));
+    expect(await screen.findByRole('heading', { name: 'How it works' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(await screen.findByRole('heading', { name: 'Your Orientation Guide', level: 1 })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Your Account' })).not.toBeInTheDocument();
+  });
+
+  it('shows a "Your Guide is ready" shortcut while browsing away from a completed Guide, and only then', async () => {
+    localStorage.setItem(
+      'tarotSpaActiveOrientationSession',
+      '12345678-1234-4234-9234-123456789012',
+    );
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Your Orientation Guide', level: 1 })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Your Guide is ready' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'How it works' }));
+    expect(await screen.findByRole('heading', { name: 'How it works' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Your Guide is ready' }));
+
+    expect(await screen.findByRole('heading', { name: 'Your Orientation Guide', level: 1 })).toBeVisible();
+  });
+
   it('never renders the Admin Dashboard control for a non-admin account', async () => {
     render(<App />);
 

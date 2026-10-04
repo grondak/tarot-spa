@@ -6,6 +6,7 @@ import {
   PutCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { SPREADS } from '../../../src/utils/deck';
+import { SESSION_RETENTION_DAYS } from '../../config';
 import { effectiveStatus, isErrorNamed } from '../usage-counter/reservation';
 
 type StartOrientationGuideEvent = {
@@ -86,7 +87,8 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
       throw new Error('start-orientation-guide configuration is missing');
     }
 
-    const timestamp = deps.now().toISOString();
+    const nowMs = deps.now().getTime();
+    const timestamp = new Date(nowMs).toISOString();
     let existing: ExistingSession | undefined;
 
     try {
@@ -100,6 +102,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
           status: 'PENDING',
           createdAt: timestamp,
           updatedAt: timestamp,
+          expiresAt: Math.floor(nowMs / 1000) + SESSION_RETENTION_DAYS * 86400,
         },
         ConditionExpression: 'attribute_not_exists(id)',
       }));

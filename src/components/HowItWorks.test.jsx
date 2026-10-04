@@ -9,6 +9,8 @@ describe('HowItWorks', () => {
 
     expect(screen.getByRole('heading', { name: 'How it works' })).toBeVisible();
     expect(screen.getByText(/OODA loop/)).toBeVisible();
+    expect(screen.getByText(/Data retention:/)).toBeVisible();
+    expect(screen.getByText(/Cost:/)).toBeVisible();
     expect(screen.getByText(/Getting in:/)).toBeVisible();
 
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));

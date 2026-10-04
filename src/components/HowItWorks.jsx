@@ -81,6 +81,24 @@ export default function HowItWorks({ onBack = () => {} }) {
           </a>
         </div>
 
+        <div className="mx-auto mt-6 max-w-2xl space-y-6 border-t border-gray-800 pt-6 text-gray-300">
+          <p>
+            <strong className="text-white">Data retention:</strong> what you type and the Guide
+            you get back aren’t kept past 24 hours — at that point both get replaced in place
+            with a fixed placeholder notice (not real content for anyone, including us, to read),
+            rather than just being scheduled for deletion later. That’s not enough to build a
+            history or personalize anything — it’s there only so a broken request can be debugged
+            and fixed while it’s still fresh. Expect that window to keep shrinking.
+          </p>
+          <p>
+            <strong className="text-white">Cost:</strong> this app is free, for now — we’re
+            testing whether people actually use it. Each account gets 10 full Guide outputs a
+            day. You know the phrase, “if the service is free, you’re the product”? You don’t
+            want to be our product. Eventually this will cost $12/year — a buck a month. Not too
+            shabby.
+          </p>
+        </div>
+
         <div className="mx-auto mt-6 max-w-2xl space-y-6 text-gray-300">
           <p>
             <strong className="text-white">Getting in:</strong> access is invite-only while this
