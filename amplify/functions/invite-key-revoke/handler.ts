@@ -1,7 +1,10 @@
 import { ConditionalCheckFailedException, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
-type RevokeInviteKeyEvent = { arguments: { code: string } };
+type RevokeInviteKeyEvent = {
+  arguments: { code: string };
+  identity?: { sub?: string } | null;
+};
 type CommandClient = { send(command: unknown): Promise<unknown> };
 
 type HandlerDependencies = {
@@ -52,12 +55,16 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
         TableName: deps.inviteKeyTableName,
         Key: { id: code },
         ConditionExpression: '#status = :unredeemed',
-        UpdateExpression: 'SET #status = :revoked, updatedAt = :timestamp',
+        UpdateExpression: 'SET #status = :revoked, updatedAt = :timestamp, revokedBy = :revokedBy, revokedAt = :timestamp',
         ExpressionAttributeNames: { '#status': 'status' },
         ExpressionAttributeValues: {
           ':unredeemed': 'unredeemed',
           ':revoked': 'revoked',
           ':timestamp': timestamp,
+          // See invite-key-mint's mintedBy comment: null, not undefined — this
+          // resolver is allow.group('Admin'), so identity is always populated
+          // in practice, but this keeps the write crash-proof regardless.
+          ':revokedBy': event.identity?.sub ?? null,
         },
       }));
     } catch (error) {

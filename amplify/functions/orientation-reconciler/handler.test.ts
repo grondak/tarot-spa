@@ -19,6 +19,7 @@ function dependencies() {
     workerFunctionArn: WORKER_ARN,
     workerFunctionName: 'orientation-guide',
     workerQualifier: 'live',
+    questionLogTableName: 'QuestionLogTable',
     now: () => new Date('2026-07-22T18:00:00.000Z'),
   };
 }
@@ -98,7 +99,7 @@ describe('orientation-reconciler handler', () => {
       TableName: 'SessionTable',
       ConsistentRead: true,
       FilterExpression: '#s = :pending AND updatedAt <= :staleBefore',
-      ProjectionExpression: 'id',
+      ProjectionExpression: 'id, #owner, createdAt',
       ExpressionAttributeValues: {
         ':pending': 'PENDING',
         ':staleBefore': new Date(
@@ -161,6 +162,49 @@ describe('orientation-reconciler handler', () => {
         ':timestamp': '2026-07-22T18:00:00.000Z',
       },
     }])));
+  });
+
+  it('writes a content-free Questions Log entry when terminalizing a stuck Session', async () => {
+    const deps = dependencies();
+    deps.dynamo.send.mockImplementation(async (command) => {
+      if (commandName(command) === 'ScanCommand') {
+        return {
+          Items: [{
+            id: 'stuck-session',
+            owner: 'account-1',
+            createdAt: '2026-07-22T17:55:00.000Z',
+          }],
+        };
+      }
+      if (commandName(command) === 'UpdateCommand') return {};
+      if (commandName(command) === 'PutCommand') return {};
+      throw new Error(`Unexpected ${commandName(command)}`);
+    });
+    deps.lambda.send.mockResolvedValueOnce({
+      DurableExecutions: [{ DurableExecutionName: 'stuck-session', Status: 'FAILED' }],
+    });
+
+    await expect(createHandler(deps)()).resolves.toEqual({
+      inspected: 1,
+      dispatched: 0,
+      terminalized: 1,
+      running: 0,
+    });
+
+    const put = deps.dynamo.send.mock.calls.find(
+      ([command]) => commandName(command) === 'PutCommand',
+    )?.[0];
+    expect(commandInput(put)).toEqual({
+      TableName: 'QuestionLogTable',
+      Item: {
+        id: 'stuck-session',
+        owner: 'account-1',
+        occurredAt: '2026-07-22T17:55:00.000Z',
+        durationMs: 5 * 60 * 1000,
+        hadResult: false,
+      },
+      ConditionExpression: 'attribute_not_exists(id)',
+    });
   });
 
   it('paginates the Session scan and tolerates reconciliation races', async () => {

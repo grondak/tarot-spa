@@ -78,6 +78,8 @@ function dependencies(overrides: Record<string, unknown> = {}) {
     mutateConfigAfterRead: null as (() => Record<string, unknown>) | null,
     metricsUpdates: [] as Record<string, unknown>[],
     metricsError: null as unknown,
+    questionLogWrites: [] as Record<string, unknown>[],
+    questionLogError: null as unknown,
   };
   const dynamo = {
     send: vi.fn(async (command: unknown) => {
@@ -210,6 +212,12 @@ function dependencies(overrides: Record<string, unknown> = {}) {
         return {};
       }
 
+      if (name === 'PutCommand' && input.TableName === 'QuestionLogTable') {
+        state.questionLogWrites.push(input);
+        if (state.questionLogError) throw state.questionLogError;
+        return {};
+      }
+
       throw new Error(`Unexpected ${name}`);
     }),
   };
@@ -239,6 +247,7 @@ function dependencies(overrides: Record<string, unknown> = {}) {
       config: 'ConfigTable',
     },
     metricsTableName: 'MetricsTable',
+    questionLogTableName: 'QuestionLogTable',
     tavilyApiKey: 'secret-from-environment',
     judgeFunctionArn: 'arn:aws:lambda:us-east-1:123456789012:function:orientation-judge',
     drawCards: vi.fn(() => [baseCard]),
@@ -297,6 +306,17 @@ describe('durable orientation-guide lifecycle', () => {
     expect(deps.bedrock.send).toHaveBeenCalledOnce();
     expect(deps.lambda.send).toHaveBeenCalledOnce();
     expect(deps.state.metricsUpdates).toHaveLength(1);
+    expect(deps.state.questionLogWrites).toEqual([{
+      TableName: 'QuestionLogTable',
+      Item: {
+        id: SESSION_ID,
+        owner: 'account-1',
+        occurredAt: '2026-07-19T18:00:00.000Z',
+        durationMs: 5000,
+        hadResult: true,
+      },
+      ConditionExpression: 'attribute_not_exists(id)',
+    }]);
     const tavilyRequest = JSON.parse(
       (deps.fetchFn.mock.calls[0][1] as RequestInit).body as string,
     ) as { query: string };
@@ -333,6 +353,17 @@ describe('durable orientation-guide lifecycle', () => {
     expect(deps.state.metricsUpdates).toHaveLength(1);
   });
 
+  it('completes successfully even when the Questions Log write fails', async () => {
+    const deps = dependencies();
+    deps.state.questionLogError = new Error('question log table unavailable');
+
+    const { execution } = await run(deps);
+
+    expect(execution.getStatus()).toBe('SUCCEEDED');
+    expect(deps.state.session.status).toBe('SUCCEEDED');
+    expect(deps.state.questionLogWrites).toHaveLength(1);
+  });
+
   it('marks a limit rejection FAILED without compensation or providers', async () => {
     const deps = dependencies();
     deps.state.reserveError = canceled('None', 'ConditionalCheckFailed', 'None');
@@ -349,6 +380,17 @@ describe('durable orientation-guide lifecycle', () => {
     expect(deps.fetchFn).not.toHaveBeenCalled();
     expect(deps.bedrock.send).not.toHaveBeenCalled();
     expect(deps.lambda.send).not.toHaveBeenCalled();
+    expect(deps.state.questionLogWrites).toEqual([{
+      TableName: 'QuestionLogTable',
+      Item: {
+        id: SESSION_ID,
+        owner: 'account-1',
+        occurredAt: '2026-07-19T18:00:00.000Z',
+        durationMs: 5000,
+        hadResult: false,
+      },
+      ConditionExpression: 'attribute_not_exists(id)',
+    }]);
   });
 
   it.each([
@@ -956,12 +998,12 @@ describe('orientation-guide step bodies', () => {
 
     await expect(steps.markRunning(SESSION_ID)).resolves.toBeUndefined();
     await expect(steps.persistResult(
-      SESSION_ID,
+      { id: SESSION_ID },
       [positionedCard],
       { currentEvents: [], tavilyTimedOut: false },
       'checkpointed guide',
     )).resolves.toBeUndefined();
-    await expect(steps.markFailed(SESSION_ID, 'GENERATION_FAILED')).resolves.toBeUndefined();
+    await expect(steps.markFailed({ id: SESSION_ID }, 'GENERATION_FAILED')).resolves.toBeUndefined();
 
     expect(inputs).toHaveLength(3);
     inputs.forEach((input) => {

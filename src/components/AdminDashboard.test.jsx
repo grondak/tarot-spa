@@ -19,9 +19,26 @@ const metrics = {
   config: { dailyLimit: 5, monthlyBudget: 30 },
 };
 
+const emptyLogs = {
+  generatedAt: '2026-07-26T18:04:00.000Z',
+  mintingLog: [],
+  adminActionLog: [],
+  signupLog: [],
+  questionsLog: [],
+};
+
+function resolveLogs(overrides = {}) {
+  return () => Promise.resolve({ ...emptyLogs, ...overrides });
+}
+
 describe('AdminDashboard', () => {
   it('renders an announced loading state', () => {
-    render(<AdminDashboard getAdminMetricsFn={() => new Promise(() => {})} />);
+    render(
+      <AdminDashboard
+        getAdminMetricsFn={() => new Promise(() => {})}
+        getAdminLogsFn={() => new Promise(() => {})}
+      />,
+    );
 
     expect(screen.getByRole('status')).toHaveTextContent('Loading metrics');
   });
@@ -31,6 +48,7 @@ describe('AdminDashboard', () => {
     render(
       <AdminDashboard
         getAdminMetricsFn={() => new Promise(() => {})}
+        getAdminLogsFn={() => new Promise(() => {})}
         onBack={onBack}
       />,
     );
@@ -43,7 +61,7 @@ describe('AdminDashboard', () => {
     const getAdminMetricsFn = vi.fn()
       .mockRejectedValueOnce(new Error('network unavailable'))
       .mockResolvedValueOnce(metrics);
-    render(<AdminDashboard getAdminMetricsFn={getAdminMetricsFn} />);
+    render(<AdminDashboard getAdminMetricsFn={getAdminMetricsFn} getAdminLogsFn={resolveLogs()} />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Metrics couldn’t load');
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
@@ -53,7 +71,12 @@ describe('AdminDashboard', () => {
   });
 
   it('renders every metric, the score clarifier, and the refresh timestamp', async () => {
-    render(<AdminDashboard getAdminMetricsFn={() => Promise.resolve(metrics)} />);
+    render(
+      <AdminDashboard
+        getAdminMetricsFn={() => Promise.resolve(metrics)}
+        getAdminLogsFn={resolveLogs()}
+      />,
+    );
 
     expect(await screen.findByRole('button', { name: 'Mint Key' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Check key' })).toBeVisible();
@@ -77,6 +100,7 @@ describe('AdminDashboard', () => {
           averageGroundednessScore: null,
           scoredSessionCount: 0,
         })}
+        getAdminLogsFn={resolveLogs()}
       />,
     );
 
@@ -90,7 +114,12 @@ describe('AdminDashboard', () => {
     const update = vi.fn().mockResolvedValue({ data: { dailyLimit: 9, monthlyBudget: 12.34 } });
     generateClient.mockReturnValue({ models: { Config: { update } } });
 
-    render(<AdminDashboard getAdminMetricsFn={() => Promise.resolve(metrics)} />);
+    render(
+      <AdminDashboard
+        getAdminMetricsFn={() => Promise.resolve(metrics)}
+        getAdminLogsFn={resolveLogs()}
+      />,
+    );
 
     expect(await screen.findByLabelText('Daily request limit')).toHaveValue(5);
     expect(screen.getByLabelText('Monthly budget (USD)')).toHaveValue(30);
@@ -116,7 +145,12 @@ describe('AdminDashboard', () => {
     const update = vi.fn().mockResolvedValue({ data: null, errors: [{ message: 'Not Authorized to access updateConfig on type Mutation' }] });
     generateClient.mockReturnValue({ models: { Config: { update } } });
 
-    render(<AdminDashboard getAdminMetricsFn={() => Promise.resolve(metrics)} />);
+    render(
+      <AdminDashboard
+        getAdminMetricsFn={() => Promise.resolve(metrics)}
+        getAdminLogsFn={resolveLogs()}
+      />,
+    );
 
     expect(await screen.findByLabelText('Daily request limit')).toHaveValue(5);
     expect(screen.getByLabelText('Monthly budget (USD)')).toHaveValue(30);
@@ -137,6 +171,7 @@ describe('AdminDashboard', () => {
     render(
       <AdminDashboard
         getAdminMetricsFn={() => Promise.resolve(metrics)}
+        getAdminLogsFn={resolveLogs()}
         onBack={onBack}
       />,
     );
@@ -144,5 +179,64 @@ describe('AdminDashboard', () => {
     await screen.findByRole('heading', { name: 'Admin Dashboard' });
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it('shows "No entries yet" for each log section when all logs are empty', async () => {
+    render(
+      <AdminDashboard
+        getAdminMetricsFn={() => Promise.resolve(metrics)}
+        getAdminLogsFn={resolveLogs()}
+      />,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Minting Log' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Admin Action Log' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Signup Log' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Questions Log' })).toBeVisible();
+    expect(screen.getAllByText('No entries yet.')).toHaveLength(4);
+  });
+
+  it('renders minting, admin action, signup, and questions log rows', async () => {
+    render(
+      <AdminDashboard
+        getAdminMetricsFn={() => Promise.resolve(metrics)}
+        getAdminLogsFn={resolveLogs({
+          mintingLog: [{
+            code: 'ABCD-EFGH-JKMP',
+            generation: 'FirstGen',
+            status: 'unredeemed',
+            mintedByEmail: 'admin@example.com',
+            createdAt: '2026-07-26T18:04:00.000Z',
+          }],
+          adminActionLog: [{
+            code: 'ABCD-EFGH-JKMP',
+            action: 'minted',
+            byEmail: 'admin@example.com',
+            at: '2026-07-26T18:04:00.000Z',
+          }],
+          signupLog: [{
+            email: 'erica@example.com',
+            redeemedInviteKey: 'ABCD-EFGH-JKMP',
+            generation: 'SecondGen',
+            createdAt: '2026-07-26T18:04:00.000Z',
+          }],
+          questionsLog: [{
+            ownerEmail: 'erica@example.com',
+            occurredAt: '2026-07-26T18:04:00.000Z',
+            durationMs: 5500,
+            hadResult: true,
+          }],
+        })}
+      />,
+    );
+
+    expect(await screen.findAllByText('ABCD-EFGH-JKMP')).toHaveLength(3);
+    expect(screen.getAllByText('admin@example.com')).toHaveLength(2);
+    expect(screen.getByText('minted')).toBeVisible();
+    expect(screen.getAllByText('erica@example.com')).toHaveLength(2);
+    expect(screen.getByText('5.5s')).toBeVisible();
+    expect(screen.getByText('Yes')).toBeVisible();
+    // Never surfaces raw Session content, even by field name leaking through.
+    expect(screen.queryByText(/context|guide/i)).not.toBeInTheDocument();
   });
 });

@@ -22,6 +22,7 @@ import {
   type CommandClient,
   utcDate,
   utcMonth,
+  writeQuestionLog,
 } from '../usage-counter/reservation';
 
 type OrientationEvent = {
@@ -53,6 +54,7 @@ type SessionRecord = {
   context?: string;
   spreadKey?: string;
   status?: string;
+  createdAt?: string;
 };
 
 type Config = {
@@ -85,10 +87,12 @@ type HandlerDependencies = {
     config: string;
   };
   // Deliberately outside `tableNames`: that group gates the whole handler via
-  // the fail-closed `Object.values(...).some(...)` check below, but Metrics is
-  // a best-effort lifetime counter, not essential to generating a Guide — see
-  // the try/catch around its write in persistResult.
+  // the fail-closed `Object.values(...).some(...)` check below, but Metrics
+  // and the Questions Log are best-effort, not essential to generating a
+  // Guide — see writeQuestionLog's own internal try/catch, and the try/catch
+  // around the Metrics write in persistResult.
   metricsTableName: string;
+  questionLogTableName: string;
   tavilyApiKey: string;
   judgeFunctionArn: string;
   drawCards: (count: number) => Card[];
@@ -116,6 +120,7 @@ const defaultDependencies: HandlerDependencies = {
     config: process.env.CONFIG_TABLE_NAME ?? '',
   },
   metricsTableName: process.env.METRICS_TABLE_NAME ?? '',
+  questionLogTableName: process.env.QUESTION_LOG_TABLE_NAME ?? '',
   tavilyApiKey: process.env.TAVILY_API_KEY ?? '',
   judgeFunctionArn: process.env.ORIENTATION_JUDGE_FUNCTION_ARN ?? '',
   drawCards: shuffleAndDraw,
@@ -349,11 +354,12 @@ export function createStepBodies(deps: HandlerDependencies = defaultDependencies
   }
 
   async function persistResult(
-    sessionId: string,
+    session: SessionRecord,
     cards: PositionedCard[],
     grounding: { currentEvents: CurrentEvent[]; tavilyTimedOut: boolean },
     guide: string,
   ) {
+    const sessionId = session.id;
     const timestamp = deps.now().toISOString();
     const payloadCards = cards.map(({ name, position, inverted }) => ({
       name,
@@ -397,6 +403,16 @@ export function createStepBodies(deps: HandlerDependencies = defaultDependencies
     } catch {
       console.error('METRICS_INCREMENT_FAILED', sessionId);
     }
+
+    if (session.owner && session.createdAt) {
+      await writeQuestionLog(deps.dynamo, deps.questionLogTableName, {
+        id: sessionId,
+        owner: session.owner,
+        createdAt: session.createdAt,
+        completedAt: timestamp,
+        hadResult: true,
+      });
+    }
   }
 
   async function judgeDispatch(sessionId: string) {
@@ -433,7 +449,8 @@ export function createStepBodies(deps: HandlerDependencies = defaultDependencies
     });
   }
 
-  async function markFailed(sessionId: string, errorCode: string) {
+  async function markFailed(session: SessionRecord, errorCode: string) {
+    const sessionId = session.id;
     const timestamp = deps.now().toISOString();
     try {
       await deps.dynamo.send(new UpdateCommand({
@@ -453,6 +470,16 @@ export function createStepBodies(deps: HandlerDependencies = defaultDependencies
     } catch (error) {
       if (isErrorNamed(error, 'ConditionalCheckFailedException')) return;
       throw error;
+    }
+
+    if (session.owner && session.createdAt) {
+      await writeQuestionLog(deps.dynamo, deps.questionLogTableName, {
+        id: sessionId,
+        owner: session.owner,
+        createdAt: session.createdAt,
+        completedAt: timestamp,
+        hadResult: false,
+      });
     }
   }
 
@@ -497,7 +524,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
     } catch {
       await context.step(
         'mark-failed',
-        () => steps.markFailed(sessionId, 'GENERATION_FAILED'),
+        () => steps.markFailed(session, 'GENERATION_FAILED'),
       );
       return;
     }
@@ -524,14 +551,14 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
       );
       await context.step(
         'mark-failed',
-        () => steps.markFailed(sessionId, 'GENERATION_FAILED'),
+        () => steps.markFailed(session, 'GENERATION_FAILED'),
       );
       return;
     }
     if (!reservation.reserved) {
       await context.step(
         'mark-failed',
-        () => steps.markFailed(sessionId, reservation.errorCode),
+        () => steps.markFailed(session, reservation.errorCode),
       );
       return;
     }
@@ -570,7 +597,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
       );
       await context.step(
         'mark-failed',
-        () => steps.markFailed(sessionId, 'GENERATION_FAILED'),
+        () => steps.markFailed(session, 'GENERATION_FAILED'),
       );
       return;
     }
@@ -578,7 +605,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
     try {
       await context.step(
         'persist-result',
-        () => steps.persistResult(sessionId, cards, grounding, guide),
+        () => steps.persistResult(session, cards, grounding, guide),
         {
           retryStrategy: (_error, attempt) => ({
             shouldRetry: attempt < 3,

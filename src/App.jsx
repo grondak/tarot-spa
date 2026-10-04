@@ -106,6 +106,11 @@ export default function App() {
   const [orientRecoveryRevision, setOrientRecoveryRevision] = useState(0);
   const authRequestId = useRef(0);
   const authStateRef = useRef('loading');
+  // One-shot: an admin lands on the Admin Dashboard by default, but only the
+  // first time admin status is confirmed this session — not re-applied on
+  // every later auth-refresh recheck, so it never clobbers somewhere they've
+  // since navigated to on purpose.
+  const adminDefaultAppliedRef = useRef(false);
   const orientationFlowId = useRef(0);
   const orientationDelays = useRef(new Set());
   const orientationSubmitting = useRef(false);
@@ -258,7 +263,14 @@ export default function App() {
       // rather than treating "couldn't tell" as a confirmed demotion.
       if (!active || admin === null) return;
       setIsAdminUser(admin);
-      if (!admin) setOverlayScreen((current) => (current === 'admin' ? null : current));
+      if (!admin) {
+        setOverlayScreen((current) => (current === 'admin' ? null : current));
+        return;
+      }
+      if (!adminDefaultAppliedRef.current) {
+        adminDefaultAppliedRef.current = true;
+        setOverlayScreen((current) => (current === null ? 'admin' : current));
+      }
     });
 
     return () => {
@@ -600,6 +612,7 @@ export default function App() {
     cancelOrientationDelays();
     orientationSubmitting.current = false;
     authStateRef.current = 'unauthenticated';
+    adminDefaultAppliedRef.current = false;
     clearActiveOrientationSession();
     clearOrientationRedrawContext();
     setAuthState('unauthenticated');

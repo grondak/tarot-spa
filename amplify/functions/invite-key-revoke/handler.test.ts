@@ -9,8 +9,8 @@ function dependencies() {
   };
 }
 
-function event(code: string) {
-  return { arguments: { code } };
+function event(code: string, sub: string | null = 'admin-789') {
+  return { arguments: { code }, identity: sub ? { sub } : null };
 }
 
 describe('invite-key-revoke handler', () => {
@@ -30,17 +30,29 @@ describe('invite-key-revoke handler', () => {
         TableName: 'InviteKeyTable',
         Key: { id: 'ABCD-EFGH-JKMP' },
         ConditionExpression: '#status = :unredeemed',
-        UpdateExpression: 'SET #status = :revoked, updatedAt = :timestamp',
+        UpdateExpression: 'SET #status = :revoked, updatedAt = :timestamp, revokedBy = :revokedBy, revokedAt = :timestamp',
         ExpressionAttributeNames: { '#status': 'status' },
         ExpressionAttributeValues: {
           ':unredeemed': 'unredeemed',
           ':revoked': 'revoked',
           ':timestamp': '2026-10-02T12:00:00.000Z',
+          ':revokedBy': 'admin-789',
         },
       });
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('writes a null revokedBy when no caller identity is present', async () => {
+    const deps = dependencies();
+    deps.dynamo.send.mockResolvedValueOnce({});
+
+    await createHandler(deps)(event('ABCD-EFGH-JKMP', null));
+
+    expect(deps.dynamo.send.mock.calls[0][0].input.ExpressionAttributeValues).toMatchObject({
+      ':revokedBy': null,
+    });
   });
 
   it('trims the code before using it as the DynamoDB key', async () => {
