@@ -9,6 +9,7 @@ import {
 import { Hub } from 'aws-amplify/utils';
 import App from './App';
 import { getMyAccount } from './utils/account';
+import { getAdminLogs } from './utils/adminLogs';
 import { getAdminMetrics } from './utils/adminMetrics';
 import { updateAdminConfig } from './utils/adminConfig';
 import {
@@ -27,6 +28,7 @@ vi.mock('aws-amplify/auth', () => ({
 }));
 
 vi.mock('./utils/account', () => ({ getMyAccount: vi.fn() }));
+vi.mock('./utils/adminLogs', () => ({ getAdminLogs: vi.fn() }));
 vi.mock('./utils/adminMetrics', () => ({ getAdminMetrics: vi.fn() }));
 vi.mock('./utils/adminConfig', () => ({ updateAdminConfig: vi.fn() }));
 vi.mock('./utils/orientation', async (importOriginal) => ({
@@ -111,6 +113,7 @@ describe('App authenticated sign-out round trip', () => {
     getCurrentUser.mockReset();
     fetchAuthSession.mockReset();
     getMyAccount.mockReset();
+    getAdminLogs.mockReset();
     getAdminMetrics.mockReset();
     updateAdminConfig.mockReset();
     getSession.mockReset();
@@ -138,6 +141,13 @@ describe('App authenticated sign-out round trip', () => {
       averageGroundednessScore: 0.28,
       scoredSessionCount: 38,
       config: { dailyLimit: 5, monthlyBudget: 30 },
+    });
+    getAdminLogs.mockResolvedValue({
+      generatedAt: '2026-07-26T18:04:00.000Z',
+      mintingLog: [],
+      adminActionLog: [],
+      signupLog: [],
+      questionsLog: [],
     });
     startOrientationGuide.mockResolvedValue({
       sessionId: '12345678-1234-4234-9234-123456789012',
@@ -276,6 +286,34 @@ describe('App authenticated sign-out round trip', () => {
     expect(await screen.findByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Log Out' }));
     expect(await screen.findByRole('button', { name: 'I have an Invite Key' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Admin Dashboard' })).not.toBeInTheDocument();
+  });
+
+  it('lands an Admin on the Admin Dashboard by default, with no click needed', async () => {
+    fetchAuthSession.mockResolvedValue({
+      tokens: { idToken: { payload: { 'cognito:groups': ['Admin'] } } },
+    });
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Help Me Orient' })).not.toBeInTheDocument();
+  });
+
+  it('does not re-force the Admin Dashboard default after navigating away, even across a later auth recheck', async () => {
+    fetchAuthSession.mockResolvedValue({
+      tokens: { idToken: { payload: { 'cognito:groups': ['Admin'] } } },
+    });
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('heading', { name: 'Help Me Orient' })).toBeVisible();
+
+    await act(async () => {
+      await Hub.listen.mock.calls[0][1]();
+    });
+
+    expect(screen.getByRole('heading', { name: 'Help Me Orient' })).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'Admin Dashboard' })).not.toBeInTheDocument();
   });
 

@@ -6,7 +6,7 @@ const event = {
   userName: 'new-user',
   userPoolId: 'us-east-1_pool',
   request: {
-    userAttributes: { sub: 'account-123' },
+    userAttributes: { sub: 'account-123', email: 'tony@example.com' },
     clientMetadata: { inviteKeyCode: 'FIRST-GEN-TEST' },
   },
 };
@@ -48,6 +48,8 @@ describe('post-confirmation handler', () => {
       id: 'account-123',
       generation: 'FirstGen',
       onwardKeyGenerated: false,
+      email: 'tony@example.com',
+      redeemedInviteKey: 'FIRST-GEN-TEST',
     });
     expect(transaction.TransactItems[1].Put.Item.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(transaction.TransactItems[1].Put.Item.updatedAt).toBe(

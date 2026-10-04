@@ -48,6 +48,7 @@ describe('invite-key-mint handler', () => {
       id: 'ABCD-EFGH-JKMP',
       status: 'unredeemed',
       generation: 'SecondGen',
+      mintedBy: 'account-123',
     });
     expect(keyPut.Item.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(keyPut.Item.updatedAt).toBe(keyPut.Item.createdAt);
@@ -100,6 +101,7 @@ describe('invite-key-mint handler', () => {
           id: 'ABCD-EFGH-JKMP',
           status: 'unredeemed',
           generation: 'FirstGen',
+          mintedBy: null,
           createdAt: '2026-07-28T21:10:00.000Z',
           updatedAt: '2026-07-28T21:10:00.000Z',
         },
@@ -108,6 +110,20 @@ describe('invite-key-mint handler', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('records the minting admin on the admin field when identity is present', async () => {
+    const deps = dependencies();
+    deps.dynamo.send.mockResolvedValueOnce({});
+
+    await createHandler(deps)({
+      fieldName: 'adminMintInviteKey',
+      identity: { sub: 'admin-789' },
+    });
+
+    expect(deps.dynamo.send.mock.calls[0][0].input.Item).toMatchObject({
+      mintedBy: 'admin-789',
+    });
   });
 
   it('propagates an admin-key collision', async () => {

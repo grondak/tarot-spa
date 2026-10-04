@@ -7,6 +7,7 @@ import {
   MIN_MONTHLY_BUDGET_USD,
   MONTHLY_BUDGET_VALIDATION_MESSAGE,
 } from '../config';
+import { adminLogs } from '../functions/admin-logs/resource';
 import { adminMetrics } from '../functions/admin-metrics/resource';
 import { checkInviteKey } from '../functions/check-invite-key/resource';
 import { inviteKeyMint } from '../functions/invite-key-mint/resource';
@@ -20,6 +21,11 @@ const schema = a.schema({
     .model({
       generation: a.enum(['FirstGen', 'SecondGen']),
       onwardKeyGenerated: a.boolean().default(false),
+      // Captured once at signup (post-confirmation) for the admin-facing
+      // signup log — identity, never content. Not used for anything
+      // functional (sign-in/sign-up both go through Cognito directly).
+      email: a.string(),
+      redeemedInviteKey: a.string(),
     })
     // `.identityClaim('sub')` matches the bare Cognito `sub` the post-confirmation
     // trigger writes to `owner` (it writes directly via DynamoDB, bypassing AppSync's
@@ -36,6 +42,12 @@ const schema = a.schema({
       status: a.enum(['unredeemed', 'redeemed', 'revoked']),
       generation: a.enum(['FirstGen', 'SecondGen']),
       redeemedBy: a.id(),
+      // Admin-facing minting/admin-action logs: who minted this key (every
+      // key has one — self-serve mints set it to the minting user's own
+      // sub) and, if applicable, who revoked it and when.
+      mintedBy: a.string(),
+      revokedBy: a.string(),
+      revokedAt: a.datetime(),
     })
     // No default CRUD via GraphQL for any principal: InviteKey has no per-user owner
     // (it's minted by an operator, redeemed by someone without an identity yet). All
@@ -88,6 +100,22 @@ const schema = a.schema({
       succeededSessionCount: a.integer(),
       scoredSessionCount: a.integer(),
       groundednessScoreSum: a.float(),
+    })
+    .authorization((allow) => [allow.authenticated().to([])]),
+  // Content-free, permanent record of finished Orientation Guide requests
+  // for the admin-facing questions log: who, when, how long, whether it
+  // produced a result — deliberately no context/guide/cards field exists
+  // here at all, so there's nothing to accidentally expose. Unlike Session,
+  // no TTL: nothing sensitive in it, so it's kept indefinitely. Written by
+  // orientation-guide (on SUCCEEDED/FAILED) and orientation-reconciler (on
+  // terminalizing a stuck PENDING session) via the shared writeQuestionLog
+  // helper. No default CRUD for any principal — same lockdown as Metrics.
+  QuestionLog: a
+    .model({
+      owner: a.string(),
+      occurredAt: a.datetime(),
+      durationMs: a.integer(),
+      hadResult: a.boolean(),
     })
     .authorization((allow) => [allow.authenticated().to([])]),
   Config: a
@@ -151,6 +179,11 @@ const schema = a.schema({
     .returns(a.json())
     .authorization((allow) => [allow.group('Admin')])
     .handler(a.handler.function(adminMetrics)),
+  adminLogs: a
+    .query()
+    .returns(a.json())
+    .authorization((allow) => [allow.group('Admin')])
+    .handler(a.handler.function(adminLogs)),
 });
 
 export type Schema = ClientSchema<typeof schema>;
