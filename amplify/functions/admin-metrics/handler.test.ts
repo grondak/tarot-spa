@@ -17,6 +17,7 @@ function commandInput(command: unknown) {
 function dependencies(options: {
   config?: Record<string, unknown> | null;
   monthlySpend?: Record<string, unknown>;
+  metrics?: Record<string, unknown>;
   pages?: Record<string, Page[]>;
 } = {}) {
   const pages = Object.fromEntries(
@@ -36,6 +37,9 @@ function dependencies(options: {
       if (commandName(command) === 'GetCommand' && input.TableName === 'MonthlySpendTable') {
         return options.monthlySpend ? { Item: options.monthlySpend } : {};
       }
+      if (commandName(command) === 'GetCommand' && input.TableName === 'MetricsTable') {
+        return options.metrics ? { Item: options.metrics } : {};
+      }
       if (commandName(command) === 'ScanCommand') {
         return pages[input.TableName as string]?.shift() ?? { Items: [] };
       }
@@ -46,10 +50,10 @@ function dependencies(options: {
   return {
     dynamo,
     accountTableName: 'AccountTable',
-    sessionTableName: 'SessionTable',
     dailyUsageTableName: 'DailyUsageTable',
     monthlySpendTableName: 'MonthlySpendTable',
     configTableName: 'ConfigTable',
+    metricsTableName: 'MetricsTable',
     now: () => new Date('2026-07-26T18:04:00.000Z'),
   };
 }
@@ -85,21 +89,13 @@ describe('admin-metrics handler', () => {
   it('computes generation, delivered-Guide, hit-rate, spend, and score aggregates', async () => {
     const deps = dependencies({
       monthlySpend: { spent: 4.32 },
+      metrics: { succeededSessionCount: 3, scoredSessionCount: 2, groundednessScoreSum: 0.6 },
       pages: {
         AccountTable: [{
           Items: [
             { generation: 'FirstGen' },
             { generation: 'FirstGen' },
             { generation: 'SecondGen' },
-          ],
-        }],
-        SessionTable: [{
-          Items: [
-            { status: 'SUCCEEDED', groundednessScore: 0.2 },
-            { status: 'SUCCEEDED' },
-            { groundednessScore: 0.4 },
-            { status: 'PENDING', groundednessScore: 1 },
-            { status: 'FAILED', groundednessScore: 1 },
           ],
         }],
         DailyUsageTable: [{
@@ -115,7 +111,7 @@ describe('admin-metrics handler', () => {
       dailyLimitHitRate: 0.5,
       dailyUsageRecordCount: 4,
       monthlySpend: { spentToDate: 4.32, budget: 30 },
-      averageGroundednessScore: 0.30000000000000004,
+      averageGroundednessScore: 0.3,
       scoredSessionCount: 2,
       config: { dailyLimit: 3, monthlyBudget: 30 },
     });
@@ -123,6 +119,7 @@ describe('admin-metrics handler', () => {
 
   it('paginates every scan and passes each continuation key to DynamoDB', async () => {
     const deps = dependencies({
+      metrics: { succeededSessionCount: 2, scoredSessionCount: 2, groundednessScoreSum: 1 },
       pages: {
         AccountTable: [
           {
@@ -130,13 +127,6 @@ describe('admin-metrics handler', () => {
             LastEvaluatedKey: { id: 'account-cursor' },
           },
           { Items: [{ generation: 'SecondGen' }] },
-        ],
-        SessionTable: [
-          {
-            Items: [{ status: 'SUCCEEDED', groundednessScore: 0 }],
-            LastEvaluatedKey: { id: 'session-cursor' },
-          },
-          { Items: [{ status: 'SUCCEEDED', groundednessScore: 1 }] },
         ],
         DailyUsageTable: [
           {
@@ -162,7 +152,6 @@ describe('admin-metrics handler', () => {
       .filter((input) => input.ExclusiveStartKey);
     expect(continuationScans).toEqual(expect.arrayContaining([
       expect.objectContaining({ ExclusiveStartKey: { id: 'account-cursor' } }),
-      expect.objectContaining({ ExclusiveStartKey: { id: 'session-cursor' } }),
       expect.objectContaining({ ExclusiveStartKey: { id: 'usage-cursor' } }),
     ]));
   });

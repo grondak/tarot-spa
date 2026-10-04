@@ -28,6 +28,9 @@ type HandlerDependencies = {
   tableNames: {
     session: string;
   };
+  // Deliberately outside `tableNames`: Metrics is a best-effort lifetime
+  // counter, not essential to scoring — see the try/catch around its write.
+  metricsTableName: string;
   now: () => Date;
 };
 
@@ -47,6 +50,7 @@ const defaultDependencies: HandlerDependencies = {
   tableNames: {
     session: process.env.SESSION_TABLE_NAME ?? '',
   },
+  metricsTableName: process.env.METRICS_TABLE_NAME ?? '',
   now: () => new Date(),
 };
 
@@ -209,6 +213,21 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
     } catch (error) {
       if (isErrorNamed(error, 'ConditionalCheckFailedException')) return;
       throw error;
+    }
+
+    // Lifetime counter for adminMetrics — best-effort: the score is already
+    // persisted above, so a Metrics hiccup here must never undo the scoring.
+    // Retry-safe: this only runs once the write above (guarded by
+    // attribute_not_exists(groundednessScore)) has actually happened.
+    try {
+      await deps.dynamo.send(new UpdateCommand({
+        TableName: deps.metricsTableName,
+        Key: { id: 'global' },
+        UpdateExpression: 'ADD scoredSessionCount :one, groundednessScoreSum :score SET updatedAt = :updatedAt',
+        ExpressionAttributeValues: { ':one': 1, ':score': score, ':updatedAt': timestamp },
+      }));
+    } catch {
+      console.error('METRICS_INCREMENT_FAILED', sessionId);
     }
 
     console.log(`ORIENTATION_JUDGE_SCORED ${sessionId} ${floaters}/${claims.length}`);
