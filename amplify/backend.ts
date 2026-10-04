@@ -37,6 +37,7 @@ import { orientationJudge } from './functions/orientation-judge/resource';
 import { orientationAlert } from './functions/orientation-alert/resource';
 import { orientationReconciler } from './functions/orientation-reconciler/resource';
 import { requestAccess } from './functions/request-access/resource';
+import { sessionScrubber } from './functions/session-scrubber/resource';
 import { startOrientationGuide } from './functions/start-orientation-guide/resource';
 import { usageCounter } from './functions/usage-counter/resource';
 import { assertMonthlyBudgetCeilingHolds } from './config';
@@ -77,6 +78,7 @@ const backend = defineBackend({
   orientationJudge,
   orientationReconciler,
   requestAccess,
+  sessionScrubber,
   startOrientationGuide,
   usageCounter,
 });
@@ -110,6 +112,7 @@ const orientationJudgeLambda = backend.orientationJudge.resources.lambda;
 const orientationAlertLambda = backend.orientationAlert.resources.lambda;
 const orientationReconcilerLambda = backend.orientationReconciler.resources.lambda;
 const requestAccessLambda = backend.requestAccess.resources.lambda;
+const sessionScrubberLambda = backend.sessionScrubber.resources.lambda;
 const startOrientationGuideLambda = backend.startOrientationGuide.resources.lambda;
 const usageCounterLambda = backend.usageCounter.resources.lambda;
 
@@ -502,6 +505,22 @@ const reconciliationSchedule = new Rule(
   { schedule: Schedule.rate(Duration.minutes(1)) },
 );
 reconciliationSchedule.addTarget(new LambdaFunctionTarget(orientationReconcilerLambda));
+
+sessionTable.grant(
+  sessionScrubberLambda,
+  'dynamodb:Scan',
+  'dynamodb:UpdateItem',
+);
+backend.sessionScrubber.addEnvironment('SESSION_TABLE_NAME', sessionTable.tableName);
+// Looser cadence than the 1-minute reconciliation schedule above — this isn't
+// recovering in-flight work, so a ~15-minute worst-case lag past the 24h
+// retention boundary (SESSION_RETENTION_DAYS) is a fine, cheap guarantee.
+const sessionScrubSchedule = new Rule(
+  operationalStack,
+  'SessionScrubSchedule',
+  { schedule: Schedule.rate(Duration.minutes(15)) },
+);
+sessionScrubSchedule.addTarget(new LambdaFunctionTarget(sessionScrubberLambda));
 
 dailyUsageTable.grantReadData(usageCounterLambda);
 configTable.grantReadData(usageCounterLambda);

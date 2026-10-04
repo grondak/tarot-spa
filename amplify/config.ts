@@ -13,6 +13,14 @@ export const MAX_MONTHLY_BUDGET_USD = 30;
 // guide) is kept before DynamoDB TTL auto-deletes it.
 export const SESSION_RETENTION_DAYS = 1;
 
+// At SESSION_RETENTION_DAYS, session-scrubber (and the one-shot
+// scripts/scrub-old-sessions.mjs backfill) overwrite context/guide with this
+// fixed pair — a deterministic guarantee that real content never survives
+// past the retention window, independent of when TTL actually reclaims the
+// row (DynamoDB TTL deletion itself is best-effort, "usually within 48h").
+export const SCRUBBED_CONTEXT_PLACEHOLDER = "This Session's original context was cleared 24 hours after creation, per this app's data retention policy. See How it works for details.";
+export const SCRUBBED_GUIDE_PLACEHOLDER = "This Session's original Guide was cleared 24 hours after creation, per this app's data retention policy. See How it works for details.";
+
 export const DAILY_LIMIT_VALIDATION_MESSAGE = 'Daily limit must be a whole number from 1 to 100.';
 export const MONTHLY_BUDGET_VALIDATION_MESSAGE = 'Monthly budget must be between $0.03 and $30.00.';
 
