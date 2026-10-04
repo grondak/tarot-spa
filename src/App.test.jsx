@@ -131,4 +131,22 @@ describe('AccountBar', () => {
 
     expect(onShowHowItWorks).toHaveBeenCalledOnce();
   });
+
+  it('hides the "Your Guide is ready" shortcut by default', async () => {
+    getMyAccount.mockResolvedValue({ generation: 'SecondGen', onwardKeyGenerated: false });
+    render(<AccountBar />);
+
+    await screen.findByRole('button', { name: 'Log Out' });
+    expect(screen.queryByRole('button', { name: 'Your Guide is ready' })).not.toBeInTheDocument();
+  });
+
+  it('calls onReturnToGuide when the "Your Guide is ready" shortcut is clicked', async () => {
+    const onReturnToGuide = vi.fn();
+    getMyAccount.mockResolvedValue({ generation: 'SecondGen', onwardKeyGenerated: false });
+    render(<AccountBar showReturnToGuide onReturnToGuide={onReturnToGuide} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Your Guide is ready' }));
+
+    expect(onReturnToGuide).toHaveBeenCalledOnce();
+  });
 });
