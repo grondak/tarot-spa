@@ -10,7 +10,6 @@ import {
 } from 'aws-cdk-lib/aws-cloudwatch';
 import { SnsAction } from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { CfnBudget } from 'aws-cdk-lib/aws-budgets';
-import { CfnTable } from 'aws-cdk-lib/aws-dynamodb';
 import { PolicyStatement, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import {
   Alias,
@@ -92,7 +91,10 @@ const sessionTable = backend.data.resources.tables.Session;
 
 // Session rows carry a user's own words plus the full generated guide, so they're
 // auto-deleted via DynamoDB TTL rather than kept indefinitely (see SESSION_RETENTION_DAYS).
-(sessionTable.node.defaultChild as CfnTable).timeToLiveSpecification = {
+// Amplify Gen 2 tables are backed by a Custom::AmplifyDynamoDBTable resource, not a plain
+// CfnTable (it supports in-place schema changes) — `.node.defaultChild` on the L2 table is
+// undefined, so TTL has to go through this wrapper instead.
+backend.data.resources.cfnResources.amplifyDynamoDbTables.Session.timeToLiveAttribute = {
   attributeName: 'expiresAt',
   enabled: true,
 };
