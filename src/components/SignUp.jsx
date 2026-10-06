@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { confirmSignUp, signIn, signUp } from 'aws-amplify/auth';
+import { confirmSignUp, resendSignUpCode, signIn, signUp } from 'aws-amplify/auth';
 import { checkInviteKey } from '../utils/inviteKeys';
 import Field from './Field';
 
@@ -26,6 +26,7 @@ export default function SignUp({
   checkInviteKeyFn = checkInviteKey,
   signUpFn = signUp,
   confirmSignUpFn = confirmSignUp,
+  resendSignUpCodeFn = resendSignUpCode,
   signInFn = signIn,
   onConfirmed = () => {},
   onShowLogIn = () => {},
@@ -36,6 +37,7 @@ export default function SignUp({
   const [confirmationCode, setConfirmationCode] = useState('');
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   // React batches setBusy(true) — a rapid double-click/Enter can re-enter this handler
   // before the disabled button re-renders. A ref is checked synchronously to close that gap.
@@ -86,6 +88,7 @@ export default function SignUp({
     submittingRef.current = true;
     setBusy(true);
     setError('');
+    setNotice('');
 
     try {
       // Cognito forwards clientMetadata per API call: metadata on signUp() reaches the
@@ -122,10 +125,29 @@ export default function SignUp({
     }
   }
 
+  async function handleResendCode() {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setBusy(true);
+    setError('');
+    setNotice('');
+
+    try {
+      await resendSignUpCodeFn({ username: email });
+      setNotice("We've sent a new confirmation code to your email.");
+    } catch (resendError) {
+      setError(friendlyAuthError(resendError, "Couldn't resend the code. Please try again."));
+    } finally {
+      submittingRef.current = false;
+      setBusy(false);
+    }
+  }
+
   function handleBackToSignUp() {
     setNeedsConfirmation(false);
     setConfirmationCode('');
     setError('');
+    setNotice('');
   }
 
   return (
@@ -151,6 +173,7 @@ export default function SignUp({
             />
           )}
 
+          {notice && <p className="text-sm text-emerald-400">{notice}</p>}
           {error && <p role="alert" className="text-sm text-red-400">{error}</p>}
 
           <button
@@ -161,6 +184,16 @@ export default function SignUp({
             {busy ? 'Please wait…' : needsConfirmation ? 'Confirm account' : 'Create account'}
           </button>
 
+          {needsConfirmation && (
+            <button
+              type="button"
+              onClick={handleResendCode}
+              disabled={busy}
+              className="w-full text-center text-sm text-gray-400 underline-offset-2 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-wait disabled:opacity-60"
+            >
+              Didn't get a code? Resend it
+            </button>
+          )}
           {needsConfirmation && (
             <button
               type="button"
