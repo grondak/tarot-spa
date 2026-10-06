@@ -15,11 +15,12 @@ function renderForm(status) {
   return { checkInviteKeyFn, signUpFn };
 }
 
-async function reachConfirmationStep({ signUpFn, signInFn } = {}) {
+async function reachConfirmationStep({ signUpFn, signInFn, resendSignUpCodeFn } = {}) {
   const checkInviteKeyFn = vi.fn().mockResolvedValue('unredeemed');
   const resolvedSignUpFn = signUpFn ?? vi.fn().mockResolvedValue({ nextStep: { signUpStep: 'CONFIRM_SIGN_UP' } });
   const confirmSignUpFn = vi.fn().mockResolvedValue({ isSignUpComplete: true, nextStep: { signUpStep: 'DONE' } });
   const resolvedSignInFn = signInFn ?? vi.fn().mockResolvedValue({ isSignedIn: true });
+  const resolvedResendSignUpCodeFn = resendSignUpCodeFn ?? vi.fn().mockResolvedValue({});
   const onConfirmed = vi.fn();
 
   render(
@@ -27,6 +28,7 @@ async function reachConfirmationStep({ signUpFn, signInFn } = {}) {
       checkInviteKeyFn={checkInviteKeyFn}
       signUpFn={resolvedSignUpFn}
       confirmSignUpFn={confirmSignUpFn}
+      resendSignUpCodeFn={resolvedResendSignUpCodeFn}
       signInFn={resolvedSignInFn}
       onConfirmed={onConfirmed}
     />,
@@ -38,7 +40,14 @@ async function reachConfirmationStep({ signUpFn, signInFn } = {}) {
   fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
   await screen.findByLabelText('Confirmation code');
 
-  return { checkInviteKeyFn, signUpFn: resolvedSignUpFn, confirmSignUpFn, signInFn: resolvedSignInFn, onConfirmed };
+  return {
+    checkInviteKeyFn,
+    signUpFn: resolvedSignUpFn,
+    confirmSignUpFn,
+    resendSignUpCodeFn: resolvedResendSignUpCodeFn,
+    signInFn: resolvedSignInFn,
+    onConfirmed,
+  };
 }
 
 describe('SignUp invite-key validation', () => {
@@ -123,6 +132,27 @@ describe('SignUp confirmation step', () => {
       password: 'A-valid-password1!',
     }));
     await waitFor(() => expect(onConfirmed).toHaveBeenCalled());
+  });
+
+  it('resends the confirmation code and shows a confirmation notice', async () => {
+    const resendSignUpCodeFn = vi.fn().mockResolvedValue({});
+    await reachConfirmationStep({ resendSignUpCodeFn });
+
+    fireEvent.click(screen.getByRole('button', { name: /resend it/i }));
+
+    await waitFor(() => expect(resendSignUpCodeFn).toHaveBeenCalledWith({ username: 'friend@example.com' }));
+    expect(await screen.findByText(/sent a new confirmation code/i)).toBeVisible();
+  });
+
+  it('shows a friendly error when resending the code fails', async () => {
+    const resendSignUpCodeFn = vi.fn().mockRejectedValue(
+      Object.assign(new Error('too many requests'), { name: 'LimitExceededException' }),
+    );
+    await reachConfirmationStep({ resendSignUpCodeFn });
+
+    fireEvent.click(screen.getByRole('button', { name: /resend it/i }));
+
+    expect(await screen.findByText('Too many attempts — wait a moment and try again.')).toBeVisible();
   });
 
   it('lets the user go back to fix a mistyped email', async () => {
