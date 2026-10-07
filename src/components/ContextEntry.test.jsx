@@ -124,6 +124,32 @@ describe('ContextEntry canonical state', () => {
     }
   });
 
+  it('shows three sample seed buttons that fill Context when clicked', () => {
+    renderEntry();
+
+    expect(screen.getByRole('button', { name: 'A career crossroads' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'A team disagreement' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'A money tradeoff' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'A career crossroads' }));
+    expect(screen.getByLabelText('Context').value).not.toBe('');
+  });
+
+  it('lets a sample seed replace whatever was already typed', () => {
+    renderEntry();
+
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'Something I typed.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'A money tradeoff' }));
+
+    expect(screen.getByLabelText('Context')).not.toHaveValue('Something I typed.');
+  });
+
+  it('disables the sample seed buttons while busy', () => {
+    renderEntry({ orientBusy: true });
+
+    expect(screen.getByRole('button', { name: 'A career crossroads' })).toBeDisabled();
+  });
+
   it('pre-fills the textarea from initialContext', () => {
     renderEntry({
       initialContext: 'Seeded from a previous session.',
