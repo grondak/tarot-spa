@@ -3,6 +3,20 @@ import OrnamentalDivider from './OrnamentalDivider';
 import SpreadSelector from './SpreadSelector';
 
 const CONTEXT_HINT = 'Tell me about your upcoming decision, and what you know or think you know about the situation.';
+const SAMPLE_SEEDS = [
+  {
+    label: 'A career crossroads',
+    context: "I've been offered a senior role at a 12-person startup — 15% less base pay, but equity and a title bump. My current company has been stable for three years, but I've had the same scope since my last promotion 18 months ago, and two peers who joined after me have since been promoted past me. The startup's product is in a market I don't fully understand yet, and their last funding round closed only four months ago. I keep telling myself I want 'growth,' but I haven't actually looked for other roles at my current company first. My partner is supportive either way but just started a demanding new job of their own this year.",
+  },
+  {
+    label: 'A team disagreement',
+    context: "A close friend and I started a side project seven weeks ago, nights and weekends, no deadline from anyone but ourselves. I want to ship something rough in the next two weeks so we can get real user feedback; they want another six to eight weeks to get the core flow right before anyone sees it. We've slipped two self-imposed 'soft launch' dates already. Neither of us has shipped a side project to real users before. I notice I get anxious when things stay unfinished, and they get anxious when things go out imperfect — so I can't tell if I'm right that we need feedback, or just impatient to feel done.",
+  },
+  {
+    label: 'A money tradeoff',
+    context: "I have about $14,000 in savings beyond my emergency fund. I've been wanting to take six weeks to travel somewhere I've never been — something I've talked about for three years but never actually booked. At the same time, I'm saving for a home down payment, and at my current rate I'm about two years from a 10% down payment in my market; spending the $14,000 on travel would push that timeline out by roughly a year. I don't have a trip booked, a destination picked, or time off approved yet — it's still entirely hypothetical. I keep framing it as 'now or never,' but I've been saying that for three years already.",
+  },
+];
 const GENERATION_ERROR = 'Something went wrong generating your Guide — nothing was used up. Your context is still here; try again.';
 const MONTHLY_ERROR = "Everyone's shared monthly Guide budget is spent — Orientation Guides return when the month rolls over. Quick Draw is always free.";
 const STATUS_UNKNOWN = 'Your Guide is taking longer than expected. We kept this request so you can check it again; usage may already have been reserved.';
@@ -69,6 +83,22 @@ export default function ContextEntry({
           <p className="mt-2 text-sm text-gray-400">Systems Thinking Tarot</p>
         </div>
         <form noValidate onSubmit={handleSubmit}>
+          <div className="mt-8">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Not sure what to write? Try one</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {SAMPLE_SEEDS.map((seed) => (
+                <button
+                  key={seed.label}
+                  type="button"
+                  onClick={() => setContext(seed.context)}
+                  disabled={orientBusy}
+                  className="rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {seed.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="mt-8">
             <label htmlFor="context" className="text-xs font-semibold uppercase tracking-widest text-gray-400">Context</label>
             <div className="mt-2">
