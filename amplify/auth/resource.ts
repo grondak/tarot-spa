@@ -5,13 +5,10 @@ export const auth = defineAuth({
   loginWith: { email: true },
   groups: ['Admin'],
   triggers: { postConfirmation },
-  // Cognito's default email sender (COGNITO_DEFAULT) gives no delivery/bounce visibility
-  // and is prone to spam-filtering — verification emails have gone missing for real
-  // invitees. oodadss.com is SES-verified (DKIM) and the account has SES production access.
-  senders: {
-    email: {
-      fromEmail: 'no-reply@oodadss.com',
-      fromName: 'Systems Thinking Tarot',
-    },
-  },
+  // SES sending (senders.email) is live on staging but deliberately held back here:
+  // Cognito's own identity-verification check for THIS pool has failed deploy six times
+  // with "Email address is not verified" for an SES identity that is, in fact, fully
+  // verified (confirmed via direct SES send + staging's identical, stable config) —
+  // an AWS-side quirk isolated to this specific pool, open with AWS Support. Re-add the
+  // senders block (see staging's resource.ts / git history) once that's resolved.
 });
