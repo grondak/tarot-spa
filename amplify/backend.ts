@@ -85,6 +85,24 @@ const backend = defineBackend({
   usageCounter,
 });
 
+// SES-backed Cognito email, set directly on the L1 CfnUserPool rather than through
+// defineAuth's `senders.email` (amplify/auth/resource.ts). That abstraction can only build
+// the SES SourceArn from the full `fromEmail` address (identity/no-reply@oodadss.com) — it
+// has no way to opt into CDK's `UserPoolEmail.withSES({ sesVerifiedDomain })`, which instead
+// points Cognito at the *domain* identity (identity/oodadss.com). That distinction turned out
+// to matter: the email-address-shaped ARN was rejected by Cognito's own identity-verification
+// check as "not verified" on one pool while the identical SES identity/config was accepted on
+// another (same account, same verified domain) — six reproducible failures over two days. AWS's
+// own example ARN in their Cognito+SES integration doc uses the domain, not the address; this
+// mirrors that.
+const cfnUserPool = backend.auth.resources.cfnResources.cfnUserPool;
+const userPoolStack = Stack.of(backend.auth.resources.userPool);
+cfnUserPool.emailConfiguration = {
+  emailSendingAccount: 'DEVELOPER',
+  sourceArn: userPoolStack.formatArn({ service: 'ses', resource: 'identity', resourceName: 'oodadss.com' }),
+  from: 'Systems Thinking Tarot <no-reply@oodadss.com>',
+};
+
 const accountTable = backend.data.resources.tables.Account;
 const configTable = backend.data.resources.tables.Config;
 const dailyUsageTable = backend.data.resources.tables.DailyUsage;

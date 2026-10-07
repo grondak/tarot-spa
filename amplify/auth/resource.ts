@@ -5,13 +5,9 @@ export const auth = defineAuth({
   loginWith: { email: true },
   groups: ['Admin'],
   triggers: { postConfirmation },
-  // Cognito's default email sender (COGNITO_DEFAULT) gives no delivery/bounce visibility
-  // and is prone to spam-filtering — verification emails have gone missing for real
-  // invitees. oodadss.com is SES-verified (DKIM) and the account has SES production access.
-  senders: {
-    email: {
-      fromEmail: 'no-reply@oodadss.com',
-      fromName: 'Systems Thinking Tarot',
-    },
-  },
+  // SES email sending is configured in backend.ts as an L1 CfnUserPool override, not here —
+  // defineAuth's `senders.email` can only build the SES SourceArn from the full `fromEmail`
+  // address (identity/no-reply@oodadss.com), and Cognito's own verification check rejected
+  // that ARN shape as "not verified" on one pool while accepting it on another with the
+  // identical SES identity. See backend.ts for the domain-identity-ARN fix and the full story.
 });
