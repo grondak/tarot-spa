@@ -22,6 +22,7 @@ export default function OrientationGuideResults({
     .split(/\n\s*\n/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
+  const question = typeof result.context === 'string' ? result.context.trim() : '';
   const showEvents = result.tavilyTimedOut || result.currentEvents.length > 0;
 
   return (
@@ -31,6 +32,17 @@ export default function OrientationGuideResults({
         <p className="mt-1 text-sm text-gray-400">
           {spread.label} · {spread.description}
         </p>
+
+        {question && (
+          <section className="mt-8">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+              Your Question
+            </h2>
+            <p className="mt-4 whitespace-pre-line break-words rounded-xl border border-gray-800 bg-gray-900 px-6 py-4 text-gray-200">
+              {question}
+            </p>
+          </section>
+        )}
 
         <section className="mt-12">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-gray-400">

@@ -69,6 +69,24 @@ describe('OrientationGuideResults', () => {
     ).toBeVisible();
   });
 
+  it('shows the intake question above the draw', () => {
+    renderResults({ context: 'Should I take the job in Lisbon?' });
+
+    const questionHeading = screen.getByRole('heading', { name: 'Your Question', level: 2 });
+    const drawHeading = screen.getByRole('heading', { name: 'Your Draw', level: 2 });
+    expect(questionHeading).toBeVisible();
+    expect(screen.getByText('Should I take the job in Lisbon?')).toBeVisible();
+    expect(
+      questionHeading.compareDocumentPosition(drawHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it.each([undefined, '', '   '])('omits the question section when context is %j', (context) => {
+    renderResults({ context });
+
+    expect(screen.queryByRole('heading', { name: 'Your Question' })).not.toBeInTheDocument();
+  });
+
   it('renders Current Events titles and content without inventing link UI', () => {
     renderResults();
 
