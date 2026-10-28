@@ -179,4 +179,24 @@ describe('OrientationGuideResults', () => {
     expect(onRedrawTweak).not.toHaveBeenCalled();
     print.mockRestore();
   });
+
+  it('offers Save only when onSave is given, reports success, and surfaces a failed save', () => {
+    const { unmount } = renderResults();
+    expect(screen.queryByRole('button', { name: /Save to this device/ })).not.toBeInTheDocument();
+    unmount();
+
+    const onSave = vi.fn(() => true);
+    const view = render(
+      <OrientationGuideResults result={result} onSave={onSave} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save to this device' }));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Saved to this device' })).toBeDisabled();
+    view.unmount();
+
+    render(<OrientationGuideResults result={result} onSave={() => false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Save to this device' }));
+    expect(screen.getByRole('alert')).toHaveTextContent(/couldn’t be saved/);
+    expect(screen.getByRole('button', { name: 'Save to this device' })).toBeEnabled();
+  });
 });

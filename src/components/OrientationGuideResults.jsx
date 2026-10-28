@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { FULL_DECK } from '../data/systemsTarot';
 import { SPREADS } from '../utils/deck';
 import CardDisplay from './CardDisplay';
@@ -10,7 +11,10 @@ export default function OrientationGuideResults({
   result,
   onRedrawFresh = () => {},
   onRedrawTweak = () => {},
+  onSave,
+  showRedraw = true,
 }) {
+  const [saveStatus, setSaveStatus] = useState('idle');
   const spread = SPREADS[result.spreadKey];
   const cards = result.cards
     .map(({ name, position, inverted }) => {
@@ -105,20 +109,34 @@ export default function OrientationGuideResults({
           <OrnamentalDivider />
         </div>
         <div className="mt-12 flex flex-wrap justify-center gap-3 print:hidden">
-          <button
-            type="button"
-            onClick={onRedrawFresh}
-            className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-          >
-            Provide another observation
-          </button>
-          <button
-            type="button"
-            onClick={onRedrawTweak}
-            className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-          >
-            Tweak existing observation
-          </button>
+          {showRedraw && (
+            <>
+              <button
+                type="button"
+                onClick={onRedrawFresh}
+                className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              >
+                Provide another observation
+              </button>
+              <button
+                type="button"
+                onClick={onRedrawTweak}
+                className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              >
+                Tweak existing observation
+              </button>
+            </>
+          )}
+          {onSave && (
+            <button
+              type="button"
+              onClick={() => setSaveStatus(onSave() ? 'saved' : 'error')}
+              disabled={saveStatus === 'saved'}
+              className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-default disabled:opacity-70"
+            >
+              {saveStatus === 'saved' ? 'Saved to this device' : 'Save to this device'}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => window.print()}
@@ -127,6 +145,11 @@ export default function OrientationGuideResults({
             Download PDF
           </button>
         </div>
+        {saveStatus === 'error' && (
+          <p role="alert" className="mt-4 text-center text-sm text-red-400 print:hidden">
+            This reading couldn’t be saved — your browser may be blocking storage.
+          </p>
+        )}
       </section>
     </main>
   );

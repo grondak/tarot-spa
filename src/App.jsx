@@ -12,6 +12,7 @@ import LogIn from './components/LogIn';
 import GrantInviteKey from './components/GrantInviteKey';
 import PublicLanding from './components/PublicLanding';
 import OrientationGuideResults from './components/OrientationGuideResults';
+import SavedReadings from './components/SavedReadings';
 import { getMyAccount } from './utils/account';
 import { isAdmin } from './utils/adminAuth';
 import {
@@ -20,6 +21,7 @@ import {
   isCompleteGuideSession,
   startOrientationGuide,
 } from './utils/orientation';
+import { saveReading } from './utils/savedReadings';
 
 const ORIENTATION_POLL_MS = 5000;
 const ORIENTATION_DEADLINE_MS = 300000;
@@ -98,6 +100,7 @@ export default function App() {
   // Guide/SpreadView/ContextEntry, never revealing a stale screen underneath.
   const [overlayScreen, setOverlayScreen] = useState(null);
   const [authRefreshRevision, setAuthRefreshRevision] = useState(0);
+  const [userId, setUserId] = useState(null);
   const [guideResult, setGuideResult] = useState(null);
   const [orientBusy, setOrientBusy] = useState(false);
   const [orientError, setOrientError] = useState(null);
@@ -174,8 +177,9 @@ export default function App() {
     async function refreshAuth() {
       const requestId = ++authRequestId.current;
       try {
-        await getCurrentUser();
+        const user = await getCurrentUser();
         if (requestId === authRequestId.current) {
+          setUserId(user?.userId ?? null);
           authStateRef.current = 'authenticated';
           setAuthState('authenticated');
           setAuthRefreshRevision((value) => value + 1);
@@ -701,6 +705,7 @@ export default function App() {
         onShowAdminDashboard={() => setOverlayScreen('admin')}
         onOpenAccount={() => setOverlayScreen('account')}
         onShowHowItWorks={() => setOverlayScreen('howItWorks')}
+        onShowSavedReadings={() => setOverlayScreen('saved')}
         onSignedOut={handleSignedOut}
         showReturnToGuide={Boolean(guideResult) && overlayScreen !== null}
         onReturnToGuide={() => setOverlayScreen(null)}
@@ -709,11 +714,14 @@ export default function App() {
         <HowItWorks onBack={() => setOverlayScreen(null)} />
       ) : overlayScreen === 'account' ? (
         <AccountScreen onBack={() => setOverlayScreen(null)} />
+      ) : overlayScreen === 'saved' ? (
+        <SavedReadings userId={userId} onBack={() => setOverlayScreen(null)} />
       ) : overlayScreen === 'admin' ? (
         <AdminDashboard onBack={() => setOverlayScreen(null)} />
       ) : guideResult ? (
         <OrientationGuideResults
           result={guideResult}
+          onSave={userId ? () => saveReading(userId, guideResult) : undefined}
           onRedrawFresh={handleRedrawFresh}
           onRedrawTweak={handleRedrawTweak}
         />
@@ -750,6 +758,7 @@ export function AccountBar({
   onShowAdminDashboard = () => {},
   onOpenAccount = () => {},
   onShowHowItWorks = () => {},
+  onShowSavedReadings = () => {},
   showReturnToGuide = false,
   onReturnToGuide = () => {},
 }) {
@@ -854,6 +863,13 @@ export function AccountBar({
             Admin Dashboard
           </button>
         )}
+        <button
+          type="button"
+          onClick={onShowSavedReadings}
+          className="rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        >
+          Saved readings
+        </button>
         <button
           type="button"
           onClick={onShowHowItWorks}
