@@ -7,6 +7,16 @@ import PublicLanding from './PublicLanding';
 const lede = "Most bad decisions aren't made because people lack information — they're made because people are oriented incorrectly before they decide. Draw your own Cards, Current Events are sourced live, and an LLM applies a systems-thinking Lens to your own situation in one shot — producing an Orientation Guide: not advice, not a summary, a different way of seeing the decision in front of you.";
 
 describe('PublicLanding', () => {
+  it('explains the OODADSS name between the pitch and Quick Draw', () => {
+    render(<PublicLanding />);
+
+    const why = screen.getByRole('heading', { name: 'Why OODADSS?' });
+    const quickDraw = screen.getByRole('heading', { name: 'Quick Draw' });
+    expect(why).toBeVisible();
+    expect(screen.getByText(/does not tell you what to do/)).toBeVisible();
+    expect(why.compareDocumentPosition(quickDraw) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('renders the pitch without account surfaces', () => {
     render(<PublicLanding />);
 

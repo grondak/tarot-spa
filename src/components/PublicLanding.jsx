@@ -97,6 +97,23 @@ export default function PublicLanding({ onShowSignUp = () => {}, onShowLogIn = (
         </div>
       </section>
 
+      <section aria-labelledby="why-oodadss" className="mx-auto max-w-3xl border-t border-gray-800 py-12">
+        <p className="text-center text-xs font-semibold uppercase tracking-wider text-gray-400">The name</p>
+        <h2 id="why-oodadss" className="mt-2 text-center text-2xl font-bold">Why OODADSS?</h2>
+        <div className="mt-6 space-y-4 text-gray-300">
+          <p>
+            <strong className="text-white">OODA</strong> is the loop every decision runs through — Observe, Orient, Decide, Act.{' '}
+            <strong className="text-white">DSS</strong> is a Decision Support System: a tool that helps you decide without deciding for you.
+          </p>
+          <p>
+            Orientation is the step people rush, and it is where decisions are quietly won or lost. A decision support system does not tell you what to do. It shows your situation from angles you would not have found alone, then steps back. You decide.
+          </p>
+          <p>
+            Systems Thinking Tarot is the first of these tools. Its 78 cards distill a career's worth of systems thinking — including twenty years of formal training and software architecture, development, and delivery — into provocations that open a different view of the decision in front of you.
+          </p>
+        </div>
+      </section>
+
       <section className="mx-auto max-w-3xl border-t border-gray-800 py-12">
         <div className="text-center">
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Try It Now — No Account Needed</p>
