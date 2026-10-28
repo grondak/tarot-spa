@@ -104,7 +104,7 @@ export default function OrientationGuideResults({
         <div className="mt-12">
           <OrnamentalDivider />
         </div>
-        <div className="mt-12 flex flex-wrap justify-center gap-3">
+        <div className="mt-12 flex flex-wrap justify-center gap-3 print:hidden">
           <button
             type="button"
             onClick={onRedrawFresh}
@@ -118,6 +118,13 @@ export default function OrientationGuideResults({
             className="rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             Tweak existing observation
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="rounded-lg bg-indigo-700 px-4 py-2 text-sm text-white hover:bg-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            Download PDF
           </button>
         </div>
       </section>

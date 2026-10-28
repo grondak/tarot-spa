@@ -165,4 +165,18 @@ describe('OrientationGuideResults', () => {
     expect(onRedrawTweak).toHaveBeenCalledTimes(1);
     expect(onRedrawFresh).not.toHaveBeenCalled();
   });
+
+  it('opens the print dialog from Download PDF without triggering a redraw', () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {});
+    renderResults();
+
+    const button = screen.getByRole('button', { name: 'Download PDF' });
+    expect(button.parentElement).toHaveClass('print:hidden');
+    fireEvent.click(button);
+
+    expect(print).toHaveBeenCalledTimes(1);
+    expect(onRedrawFresh).not.toHaveBeenCalled();
+    expect(onRedrawTweak).not.toHaveBeenCalled();
+    print.mockRestore();
+  });
 });

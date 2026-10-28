@@ -6,7 +6,7 @@ export default function CardDisplay({ card, position }) {
   const { inverted } = card;
 
   return (
-    <div className="flex flex-col bg-gray-900 rounded-2xl overflow-hidden shadow-xl border border-gray-700">
+    <div className="flex flex-col break-inside-avoid bg-gray-900 rounded-2xl overflow-hidden shadow-xl border border-gray-700">
       {/* Position label */}
       {position && (
         <div className="px-4 py-2 bg-indigo-900/60 text-indigo-300 text-xs font-semibold uppercase tracking-widest text-center">

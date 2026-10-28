@@ -794,7 +794,7 @@ export function AccountBar({
   }
 
   return (
-    <header className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 border-b border-gray-800 bg-gray-950 px-4 py-3 text-white">
+    <header className="print:hidden mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 border-b border-gray-800 bg-gray-950 px-4 py-3 text-white">
       <button
         type="button"
         onClick={onOpenAccount}

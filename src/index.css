@@ -19,3 +19,21 @@ body {
   min-height: 100vh;
   background: #030712;
 }
+
+/* Print / Save-as-PDF: drop the dark theme so the saved guide is readable and ink-friendly. */
+@media print {
+  :root,
+  body {
+    background: #ffffff !important;
+    color: #111111 !important;
+    color-scheme: light;
+  }
+
+  main,
+  main * {
+    background: transparent !important;
+    color: #111111 !important;
+    border-color: #bbbbbb !important;
+    box-shadow: none !important;
+  }
+}
