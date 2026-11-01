@@ -42,6 +42,7 @@ import { requestAccess } from './functions/request-access/resource';
 import { sessionScrubber } from './functions/session-scrubber/resource';
 import { startOrientationGuide } from './functions/start-orientation-guide/resource';
 import { usageCounter } from './functions/usage-counter/resource';
+import { widenSearch } from './functions/widen-search/resource';
 import { assertMonthlyBudgetCeilingHolds } from './config';
 
 // Fixed outer AWS safety ceiling (PRD FR-10/§6): a CloudFormation-managed,
@@ -85,6 +86,7 @@ const backend = defineBackend({
   sessionScrubber,
   startOrientationGuide,
   usageCounter,
+  widenSearch,
 });
 
 // SES-backed Cognito email, set directly on the L1 CfnUserPool rather than through

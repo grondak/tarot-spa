@@ -15,6 +15,7 @@ import { inviteKeyRevoke } from '../functions/invite-key-revoke/resource';
 import { requestAccess } from '../functions/request-access/resource';
 import { startOrientationGuide } from '../functions/start-orientation-guide/resource';
 import { usageCounter } from '../functions/usage-counter/resource';
+import { widenSearch } from '../functions/widen-search/resource';
 
 const schema = a.schema({
   Account: a
@@ -244,6 +245,12 @@ const schema = a.schema({
     .returns(a.json())
     .authorization((allow) => [allow.group('Admin')])
     .handler(a.handler.function(adminLogs)),
+  widenSearch: a
+    .query()
+    .arguments({ term: a.string().required() })
+    .returns(a.json())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(widenSearch)),
 });
 
 export type Schema = ClientSchema<typeof schema>;

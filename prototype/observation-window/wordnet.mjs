@@ -45,11 +45,13 @@ export function loadWordNet() {
     return [...new Set([t, t.replace(/ies$/, 'y'), t.replace(/(es|s)$/, ''), t.replace(/ing$/, ''), t.replace(/ing$/, 'e'), t.replace(/ed$/, ''), t.replace(/ed$/, 'e')])];
   };
 
-  return function lookup(term) {
+  // `exact` skips the word-form guesses (plural, -ing, -ed), so one dictionary entry maps to
+  // exactly one lookup; scripts/build-wordnet-table.mjs relies on this to precompute them.
+  function lookup(term, { exact = false } = {}) {
     const synonyms = new Set();
     const broader = new Set();
     const self = term.toLowerCase();
-    for (const lemma of lemmaCandidates(term)) {
+    for (const lemma of exact ? [term.toLowerCase()] : lemmaCandidates(term)) {
       for (const pos of POS) {
         for (const offset of (index[pos].get(lemma) ?? []).slice(0, SENSES_PER_POS)) {
           const synset = data[pos].get(offset);
@@ -68,5 +70,8 @@ export function loadWordNet() {
     const syn = [...synonyms].filter((w) => single(w) && w !== self);
     const synSet = new Set(syn);
     return { term: self, synonyms: syn, broader: [...broader].filter((w) => single(w) && w !== self && !synSet.has(w)) };
-  };
+  }
+  lookup.lemmas = () => POS.flatMap((pos) => [...index[pos].keys()]);
+  lookup.lemmaCandidates = lemmaCandidates;
+  return lookup;
 }
