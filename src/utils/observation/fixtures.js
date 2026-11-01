@@ -43,3 +43,18 @@ export const runRows = [
 export const makeModel = (overrides = {}) => buildModel({
   feeds: feedRows, items: itemRows, runs: runRows, now: NOW, stem: stemmer, ...overrides,
 });
+
+// The outside-interest pool: collected like any feed, never a lane until a day's pick lands.
+export const poolFeedRows = [
+  { id: 'nature', name: 'Nature', group: 'outside interests', kind: 'pool', reason: 'Peer-reviewed science.', sortOrder: 4, lastFetchedAt: hoursAgo(0.5) },
+  { id: 'aeon', name: 'Aeon', group: 'outside interests', kind: 'pool', reason: 'Essays on ideas.', sortOrder: 5, lastFetchedAt: hoursAgo(0.5) },
+  { id: 'nasa', name: 'NASA', group: 'outside interests', kind: 'pool', reason: 'Space science.', sortOrder: 6, lastFetchedAt: hoursAgo(0.5) },
+];
+
+// Every pool feed publishes on each of the last three days (hours 5, 29 and 53 ago).
+export const poolItemRows = ['nature', 'aeon', 'nasa'].flatMap((feed) => [5, 29, 53].map((h) => itemRow({
+  title: `${feed} story ${h}`,
+  summary: 'Something far from the news.',
+  publishedAt: hoursAgo(h),
+  sources: [feed],
+})));

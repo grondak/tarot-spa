@@ -2,6 +2,7 @@
 import { PutCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { COLLECTOR_RUN_RETENTION_DAYS, FEED_ITEM_RETENTION_DAYS } from '../../config';
+import { OUTSIDE_FEED_POOL } from '../../feeds';
 import { createHandler } from './handler';
 
 const NOW_ISO = '2026-10-31T12:00:00.000Z';
@@ -65,7 +66,7 @@ function fakeDynamo() {
       if (input.TableName === tableNames.feed) {
         const values = input.ExpressionAttributeValues!;
         feedRows.set((input.Key as { id: string }).id, {
-          name: values[':name'], group: values[':group'], sortOrder: values[':sortOrder'],
+          name: values[':name'], group: values[':group'], sortOrder: values[':sortOrder'], kind: values[':kind'], reason: values[':reason'],
           lastStatus: values[':status'], lastError: values[':error'],
         });
         return {};
@@ -247,6 +248,20 @@ describe('feed-collector handler', () => {
 
     expect(dynamo.feedRows.get('alpha')).toMatchObject({ name: 'Alpha', group: 'g1', sortOrder: 0 });
     expect(dynamo.feedRows.get('beta')).toMatchObject({ name: 'Beta', group: 'g2', sortOrder: 1 });
+  });
+
+  it('marks the outside-interest pool feeds, with their reason, and everything else as starter', async () => {
+    const pool = { ...OUTSIDE_FEED_POOL[0], url: 'https://pool.example/feed' };
+    const { dynamo, handler } = setup({
+      'https://a.example/feed': rss(item('One', 'https://a.example/1', daysAgo(1))),
+      'https://b.example/feed': rss(item('Two', 'https://b.example/2', daysAgo(1))),
+      'https://pool.example/feed': rss(item('Three', 'https://pool.example/3', daysAgo(1))),
+    }, { feeds: [...feeds, pool] });
+
+    await handler();
+
+    expect(dynamo.feedRows.get('alpha')).toMatchObject({ kind: 'starter', reason: undefined });
+    expect(dynamo.feedRows.get(pool.id)).toMatchObject({ kind: 'pool', reason: pool.reason });
   });
 
   it('writes a run row with the counts, a 60-day expiry, and the per-feed results as JSON text', async () => {

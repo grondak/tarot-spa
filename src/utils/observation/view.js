@@ -42,8 +42,10 @@ export function computeView(model, { t, windowHours, cardCount, solo, search, st
   const isFocused = (item) => isLit(item) && inSolo(item);
   const isRelated = (item) => level > 0 && !matchesExact(item, search);
 
-  // Exact matches rank before related ones; the sort is stable, so source order holds within each.
-  const inWin = allInWin.filter(isFocused).sort((a, b) => Number(isRelated(a)) - Number(isRelated(b)));
+  // Outside-your-interests picks come first, or a one-a-day pick would never reach the top cards.
+  // Then exact matches rank before related ones; the sort is stable, so source order holds within each.
+  const inWin = allInWin.filter(isFocused).sort((a, b) => Number(b.injected) - Number(a.injected)
+    || Number(isRelated(a)) - Number(isRelated(b)));
   const matched = searching ? model.items.filter((i) => matchesExact(i, search)) : [];
   const hits = matched.filter(inSolo);
   const seenWords = new Set();
@@ -112,9 +114,10 @@ export function metaText(v) {
   const lanes = new Set(v.inWin.map((i) => i.lane)).size;
   const shown = Math.min(v.cardCount, v.inWin.length);
   const span = WINDOW_OPTIONS.find((o) => o.hours === v.windowHours)?.label ?? `${v.windowHours} hours`;
+  const picks = v.inWin.some((i) => i.injected) ? ' Items from outside your interests are listed first.' : '';
   const tail = v.filters
     ? ` ${plural(v.hidden, 'other item')} hidden by ${v.filters}.`
     : ' Co-occurrence is not a link.';
-  return `${plural(v.inWin.length, 'item')} across ${plural(lanes, 'source')} within ±${span} of ${v.live ? 'now' : formatTime(v.t)}. Showing the top ${shown} by source order.${tail}`;
+  return `${plural(v.inWin.length, 'item')} across ${plural(lanes, 'source')} within ±${span} of ${v.live ? 'now' : formatTime(v.t)}. Showing the top ${shown} by source order.${picks}${tail}`;
 }
 

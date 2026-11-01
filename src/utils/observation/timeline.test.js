@@ -3,7 +3,9 @@ import { stemmer } from 'stemmer';
 import {
   HOUR, axisMarks, buildModel, laneColor, percentAlong, safeHref,
 } from './timeline';
-import { NOW, feedRows, hoursAgo, itemRow, makeModel, runRows } from './fixtures';
+import {
+  NOW, feedRows, hoursAgo, itemRow, itemRows, makeModel, poolFeedRows, poolItemRows, runRows,
+} from './fixtures';
 
 describe('buildModel', () => {
   it('makes one lane per live feed in source order, keeping a retired feed that still has items', () => {
@@ -107,4 +109,59 @@ describe('axis and colour helpers', () => {
 it('uses run times only (runs without a finish time still work)', () => {
   const model = makeModel({ runs: [...runRows, { startedAt: hoursAgo(0.5) }] });
   expect(model.gaps.length).toBeGreaterThanOrEqual(1);
+});
+
+describe('outside-interest injection in the model', () => {
+  const withPool = (overrides = {}) => makeModel({
+    feeds: [...feedRows, ...poolFeedRows], items: [...itemRows, ...poolItemRows], userId: 'user-1', ...overrides,
+  });
+
+  it('shows one pooled item per day, in an "outside your interests" group after the starter groups', () => {
+    const model = withPool();
+    const injected = model.items.filter((i) => i.injected);
+    expect(injected).toHaveLength(3);
+    expect(new Set(injected.map((i) => new Date(i.ms).toISOString().slice(0, 10))).size).toBe(3);
+    expect(model.groups.at(-1).name).toBe('outside your interests');
+    expect(model.groups.map((g) => g.name).slice(0, 2)).toEqual(['world', 'telecom']);
+  });
+
+  it('makes lanes only for pool sources that were picked, marked injected and carrying their reason', () => {
+    const model = withPool();
+    const lanes = model.feeds.filter((f) => f.injected);
+    expect(lanes.length).toBeGreaterThanOrEqual(1);
+    expect(lanes.length).toBeLessThanOrEqual(3);
+    for (const lane of lanes) expect(lane.reason).toMatch(/\.$/);
+    expect(model.items.filter((i) => i.injected).every((i) => model.feeds[i.lane].injected)).toBe(true);
+  });
+
+  it('keeps every other pooled item out of the window', () => {
+    expect(withPool().items.filter((i) => i.title.endsWith('story 5') || i.title.endsWith('story 29') || i.title.endsWith('story 53')).length).toBe(3);
+  });
+
+  it('leaves starter items exactly as they were', () => {
+    const plain = makeModel();
+    const model = withPool();
+    expect(model.items.filter((i) => !i.injected).map((i) => i.id)).toEqual(plain.items.map((i) => i.id));
+  });
+
+  it('gives a different user a different set of picks, and the same user the same set', () => {
+    const picks = (userId) => withPool({ userId }).items.filter((i) => i.injected).map((i) => i.id).join();
+    expect(picks('user-1')).toBe(picks('user-1'));
+    const others = ['user-2', 'user-3', 'user-4', 'user-5'].map(picks);
+    expect(others.some((p) => p !== picks('user-1'))).toBe(true);
+  });
+
+  it('drops a dismissed source from the picks, and every pick if all are dismissed', () => {
+    const model = withPool({ dismissed: new Set(['nature', 'aeon']) });
+    expect(model.items.filter((i) => i.injected).every((i) => model.feeds[i.lane].id === 'nasa')).toBe(true);
+    const none = withPool({ dismissed: new Set(poolFeedRows.map((f) => f.id)) });
+    expect(none.items.some((i) => i.injected)).toBe(false);
+    expect(none.groups.map((g) => g.name)).not.toContain('outside your interests');
+  });
+
+  it('treats a story the user already follows as theirs, not as an injection', () => {
+    const shared = itemRow({ title: 'Shared', sources: ['bbc', 'nature'] });
+    const model = withPool({ items: [shared] });
+    expect(model.items.find((i) => i.title === 'Shared').injected).toBe(false);
+  });
 });

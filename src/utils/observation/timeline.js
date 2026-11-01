@@ -1,5 +1,7 @@
 // The Observation Window's data model: shared feed rows and items in, lanes, groups and a time
 // axis out. Pure functions; no network, no React. Ported from the Release 0 prototype.
+import { INJECTED_GROUP, pickInjections } from './injection';
+
 export const HOUR = 3600e3;
 const DAY = 24 * HOUR;
 // A gap is a stretch between two collector runs longer than this (the collector is hourly).
@@ -55,29 +57,75 @@ function findGaps(runs) {
 
 // `stem` reduces a word to its stem (the stemmer package); it is a parameter so this file stays
 // free of imports and easy to test.
-export function buildModel({ feeds: feedRows, items: itemRows, runs, now, stem }) {
-  const feeds = orderFeeds(feedRows, itemRows);
+//
+// Feeds of kind 'pool' are the operator's outside-interest pool: they never become lanes of
+// their own. Each day one pooled item is picked for this user (see injection.js) and shown in the
+// "outside your interests" group, unless the user has dismissed that source.
+export function buildModel({
+  feeds: feedRows, items: itemRows, runs, now, stem, userId = '', dismissed = new Set(),
+}) {
+  const poolRows = feedRows.filter((feed) => feed.kind === 'pool');
+  const poolIds = new Set(poolRows.map((feed) => feed.id));
+  const starterRows = feedRows.filter((feed) => feed.kind !== 'pool');
+  const feeds = orderFeeds(starterRows, itemRows);
   const laneOf = new Map(feeds.map((feed, lane) => [feed.id, lane]));
-  const items = [];
+
+  const rows = [];
+  const poolCandidates = [];
   for (const row of itemRows) {
     const ms = parseMs(row.publishedAt);
-    const lanes = (row.sources ?? []).map((id) => laneOf.get(id)).filter((lane) => lane !== undefined);
-    if (ms === null || lanes.length === 0) continue;
+    if (ms === null) continue;
+    const sources = row.sources ?? [];
+    const lanes = sources.map((id) => laneOf.get(id)).filter((lane) => lane !== undefined);
+    if (lanes.length > 0) {
+      rows.push({ row, ms, lane: Math.min(...lanes) });
+      continue;
+    }
+    const feedId = sources.find((id) => poolIds.has(id));
+    if (feedId) poolCandidates.push({ row, ms, feedId });
+  }
+
+  const picks = pickInjections({
+    poolFeeds: poolRows,
+    poolItems: poolCandidates.map(({ row, ms, feedId }) => ({ id: row.id, ms, feedId, row })),
+    userId,
+    dismissed,
+  });
+  // One lane per pool source that has a pick, after the starter lanes, in the pool's own order.
+  const pickedIds = new Set(picks.map((pick) => pick.feedId));
+  for (const feed of poolRows.filter((f) => pickedIds.has(f.id)).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))) {
+    laneOf.set(feed.id, feeds.length);
+    feeds.push({
+      id: feed.id,
+      name: feed.name,
+      group: INJECTED_GROUP,
+      sortOrder: feed.sortOrder ?? 0,
+      retired: false,
+      injected: true,
+      reason: feed.reason ?? '',
+    });
+  }
+  for (const pick of picks) {
+    rows.push({ row: pick.item.row, ms: pick.item.ms, lane: laneOf.get(pick.feedId), injected: true });
+  }
+
+  const items = rows.map(({ row, ms, lane, injected }) => {
     const title = row.title ?? '';
     const summary = row.summary ?? '';
     const hay = `${title} ${summary}`.toLowerCase();
-    items.push({
+    return {
       id: row.id,
       title,
       summary,
       link: row.link,
       ms,
       estimated: Boolean(row.publishedAtEstimated),
-      lane: Math.min(...lanes),
+      lane,
+      injected: Boolean(injected),
       hay,
       stems: new Set((hay.match(/[\p{L}\p{N}]+/gu) ?? []).map(stem)),
-    });
-  }
+    };
+  });
 
   // How many items each word stem appears in, so a search never widens to a word so common it
   // would match everything.

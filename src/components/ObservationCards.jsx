@@ -12,7 +12,8 @@ function TitleLink({ item }) {
   );
 }
 
-function Card({ item, model, view }) {
+function Card({ item, model, view, onDismiss }) {
+  const feed = model.feeds[item.lane];
   const related = view.isRelated(item);
   return (
     <article
@@ -23,6 +24,18 @@ function Card({ item, model, view }) {
         {model.feeds[item.lane].name} · {formatTime(item.ms)}{item.estimated ? ' (date estimated)' : ''}
       </div>
       <TitleLink item={item} />
+      {item.injected && (
+        <div className="mt-1 text-xs text-amber-300">
+          <strong>Outside your interests.</strong> {feed.reason}{' '}
+          <button
+            type="button"
+            className="underline hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            onClick={() => onDismiss(feed.id)}
+          >
+            Not interested in {feed.name}
+          </button>
+        </div>
+      )}
       {related && (
         <div className="mt-1 text-xs text-indigo-300">Related, not exact: {relatedReason(item, view.alts)}</div>
       )}
@@ -31,7 +44,7 @@ function Card({ item, model, view }) {
   );
 }
 
-export default function ObservationCards({ model, view, search }) {
+export default function ObservationCards({ model, view, search, onDismiss }) {
   const shown = view.inWin.slice(0, view.cardCount);
   const rest = view.inWin.slice(view.cardCount);
   return (
@@ -39,7 +52,7 @@ export default function ObservationCards({ model, view, search }) {
       <p className="my-2 text-sm text-gray-400">{metaText(view)}</p>
       {view.inWin.length === 0 && <p className="py-6 text-gray-400">{emptyMessage(view, search)}</p>}
       <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
-        {shown.map((item) => <Card key={item.id} item={item} model={model} view={view} />)}
+        {shown.map((item) => <Card key={item.id} item={item} model={model} view={view} onDismiss={onDismiss} />)}
       </div>
       {rest.length > 0 && (
         <details className="mt-3 text-sm text-gray-300">

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ObservationWindow from './ObservationWindow';
 import { HOUR } from '../utils/observation/timeline';
 import {
-  NOW, feedRows, hoursAgo, itemRow, itemRows, runRows,
+  NOW, feedRows, hoursAgo, itemRow, itemRows, poolFeedRows, poolItemRows, runRows,
 } from '../utils/observation/fixtures';
 
 const data = { feeds: feedRows, items: itemRows, runs: runRows };
@@ -334,5 +334,61 @@ describe('ObservationWindow cards', () => {
     expect(screen.getByText('<b>bold</b>')).toBeVisible();
     expect(document.querySelector('article b, article i')).toBeNull();
     expect(screen.getByText(/^<i>x<\/i>y+$/).textContent).toHaveLength(220);
+  });
+});
+
+describe('ObservationWindow outside-interest picks', () => {
+  const withPool = { feeds: [...feedRows, ...poolFeedRows], items: [...itemRows, ...poolItemRows], runs: runRows };
+  const open = (props = {}) => renderWindow({ loadFn: vi.fn().mockResolvedValue(withPool), userId: 'user-1', ...props });
+
+  it('shows the day\'s pick first, labelled with why it is there', async () => {
+    await open();
+    const [first] = cards();
+    expect(within(first).getByText('Outside your interests.')).toBeVisible();
+    expect(first).toHaveTextContent(/Peer-reviewed science\.|Essays on ideas\.|Space science\./);
+    expect(screen.getByText(/Items from outside your interests are listed first/)).toBeVisible();
+    expect(screen.getByTestId('group-outside your interests')).toBeVisible();
+  });
+
+  it('does not label ordinary cards', async () => {
+    await open();
+    const ordinary = cards().filter((c) => !c.textContent.includes('Outside your interests.'));
+    expect(ordinary.length).toBeGreaterThan(0);
+  });
+
+  it('shows the same pick on every visit for the same user', async () => {
+    await open();
+    const first = cardTitles()[0];
+    document.body.innerHTML = '';
+    await open();
+    expect(cardTitles()[0]).toBe(first);
+  });
+
+  it('stops showing a dismissed source, remembers it, and can restore it', async () => {
+    await open();
+    const [first] = cards();
+    const button = within(first).getByRole('button', { name: /^Not interested in / });
+    const label = button.textContent;
+    fireEvent.click(button);
+
+    expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('owDismissedSources'))).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Restore 1 dismissed source' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Restore 1 dismissed source' }));
+    expect(screen.queryByRole('button', { name: /Restore .* dismissed/ })).not.toBeInTheDocument();
+    expect(localStorage.getItem('owDismissedSources')).toBe('[]');
+  });
+
+  it('starts with the sources dismissed last time', async () => {
+    localStorage.setItem('owDismissedSources', JSON.stringify(['nature', 'aeon', 'nasa']));
+    await open();
+    expect(screen.queryByTestId('group-outside your interests')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restore 3 dismissed sources' })).toBeVisible();
+  });
+
+  it('shows nothing outside the starter feeds when the pool has no news yet', async () => {
+    await renderWindow({ loadFn: vi.fn().mockResolvedValue({ ...withPool, items: itemRows }), userId: 'user-1' });
+    expect(screen.queryByTestId('group-outside your interests')).not.toBeInTheDocument();
   });
 });

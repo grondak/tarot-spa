@@ -5,7 +5,9 @@ import { chooseWidening, expandableTerms, matchesExact, parseSearch, relatedReas
 import {
   computeView, emptyMessage, metaText, searchCountText, soloKey,
 } from './view';
-import { NOW, itemRow, makeModel } from './fixtures';
+import {
+  NOW, feedRows, itemRow, itemRows, makeModel, poolFeedRows, poolItemRows,
+} from './fixtures';
 
 const base = (model, overrides = {}) => ({
   t: NOW,
@@ -176,5 +178,30 @@ describe('texts', () => {
     const v = computeView(model, base(model, { search: s }));
     expect(searchCountText(v)).toMatch(/^1 match in all/);
     expect(searchCountText(computeView(model, base(model)))).toBe('');
+  });
+});
+
+describe('injected items in the view', () => {
+  const model = makeModel({
+    feeds: [...feedRows, ...poolFeedRows], items: [...itemRows, ...poolItemRows], userId: 'user-1',
+  });
+
+  it('ranks the day\'s outside-your-interests pick before everything else, and says so', () => {
+    const v = computeView(model, base(model, { windowHours: 96, cardCount: 24 }));
+    const firstInjected = v.inWin.findIndex((i) => i.injected);
+    expect(v.inWin.slice(0, firstInjected + 1).every((i) => i.injected)).toBe(true);
+    expect(v.inWin[0].injected).toBe(true);
+    expect(metaText(v)).toContain('Items from outside your interests are listed first.');
+  });
+
+  it('can be soloed like any group', () => {
+    const v = computeView(model, base(model, { windowHours: 96, solo: new Set([soloKey.group('outside your interests')]) }));
+    expect(v.inWin.length).toBeGreaterThan(0);
+    expect(v.inWin.every((i) => i.injected)).toBe(true);
+  });
+
+  it('is found by search like any item', () => {
+    const v = computeView(model, base(model, { windowHours: 96, search: parseSearch('story') }));
+    expect(v.inWin.some((i) => i.injected)).toBe(true);
   });
 });

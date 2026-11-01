@@ -143,6 +143,11 @@ const schema = a.schema({
       url: a.string().required(),
       // Position in the starter list. Source order is the ranking until stakes exist (S2.8).
       sortOrder: a.integer().required(),
+      // 'starter' feeds are lanes everyone sees; 'pool' feeds are the outside-interest pool,
+      // shown to each user only as a daily pick (S2.3). Absent on rows from before the pool existed.
+      kind: a.string(),
+      // Pool feeds only: the one-line "why am I seeing this" shown beside an injected item (S2.4).
+      reason: a.string(),
       lastFetchedAt: a.datetime(),
       lastStatus: a.string(),
       lastError: a.string(),

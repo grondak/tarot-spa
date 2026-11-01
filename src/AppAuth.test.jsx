@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   fetchAuthSession,
@@ -369,6 +369,9 @@ describe('App authenticated sign-out round trip', () => {
 
     expect(await screen.findByRole('heading', { name: 'Your Orientation Guide', level: 1 })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Orient' })).toHaveAttribute('aria-current', 'page');
+    // OODA order: you Observe before you Orient.
+    const apps = within(screen.getByRole('navigation', { name: 'Apps' })).getAllByRole('button');
+    expect(apps.map((b) => b.textContent)).toEqual(['Observe', 'Orient']);
 
     fireEvent.click(screen.getByRole('button', { name: 'Observe' }));
     expect(await screen.findByRole('heading', { name: 'Observation Window' })).toBeVisible();

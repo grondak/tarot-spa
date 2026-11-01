@@ -1,9 +1,10 @@
+// In OODA order: you Observe before you Orient.
 const APPS = [
-  { key: 'orient', label: 'Orient', hint: 'Systems Thinking Tarot' },
   { key: 'observe', label: 'Observe', hint: 'Observation Window' },
+  { key: 'orient', label: 'Orient', hint: 'Systems Thinking Tarot' },
 ];
 
-// The site's two apps, side by side. Orient is the tarot; Observe is the Observation Window.
+// The site's two apps, side by side. Observe is the Observation Window; Orient is the tarot.
 export default function AppSwitcher({ current = 'orient', onSelect = () => {} }) {
   return (
     <nav

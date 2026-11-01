@@ -6,12 +6,13 @@ import { soloKey } from '../utils/observation/view';
 
 const rowGrid = { gridTemplateColumns: 'var(--ow-label) 1fr' };
 
-const Dot = memo(function Dot({ left, color, title, estimated, inWindow, off, related, onJump, ms }) {
+const Dot = memo(function Dot({ left, color, title, estimated, inWindow, off, related, injected, onJump, ms }) {
   const classes = [
     'absolute top-[7px] -ml-1 size-[9px] cursor-pointer rounded-full',
     estimated ? 'border-2 !bg-transparent' : '',
     off ? 'pointer-events-none z-0 opacity-[0.07]' : inWindow ? 'z-[2] scale-[1.35] opacity-100' : 'opacity-45',
     related && !off ? 'outline outline-1 outline-offset-1 outline-white' : '',
+    injected && !off ? 'outline outline-1 outline-offset-1 outline-dashed outline-white' : '',
   ].join(' ');
   // The dots are a mouse shortcut for the slider; keyboard users scrub with the slider and
   // the match buttons, and the cards carry the readable text.
@@ -60,7 +61,8 @@ export default function ObservationTimeline({
       inWindow={item.ms >= view.lo && item.ms <= view.hi}
       off={!view.isFocused(item)}
       related={view.isRelated(item)}
-      title={`${model.feeds[item.lane].name}\n${item.title}\n${formatTime(item.ms)}${item.estimated ? ' (date estimated)' : ''}`}
+      injected={item.injected}
+      title={`${item.injected ? 'Outside your interests: ' : ''}${model.feeds[item.lane].name}\n${item.title}\n${formatTime(item.ms)}${item.estimated ? ' (date estimated)' : ''}`}
       onJump={onJump}
     />
   ));

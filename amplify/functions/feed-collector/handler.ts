@@ -6,7 +6,7 @@ import {
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { COLLECTOR_RUN_RETENTION_DAYS, FEED_ITEM_RETENTION_DAYS } from '../../config';
-import { STARTER_FEEDS, type FeedDefinition } from '../../feeds';
+import { COLLECTED_FEEDS, OUTSIDE_FEED_POOL, type FeedDefinition } from '../../feeds';
 import { isErrorNamed } from '../usage-counter/reservation';
 import { parseFeed, type ParsedItem } from './parse';
 
@@ -56,7 +56,7 @@ const defaultDependencies: Dependencies = {
     feedDailyCount: process.env.FEED_DAILY_COUNT_TABLE_NAME ?? '',
     collectorRun: process.env.COLLECTOR_RUN_TABLE_NAME ?? '',
   },
-  feeds: STARTER_FEEDS,
+  feeds: COLLECTED_FEEDS,
   now: () => new Date(),
 };
 
@@ -166,18 +166,29 @@ async function recordFeedStatus(
   result: FeedResult,
   timestamp: string,
 ) {
+  // Attributes a feed no longer has are cleared, so a stale error or reason does not linger.
+  const sets = [
+    '#name = :name', '#group = :group', '#url = :url', 'kind = :kind', 'sortOrder = :sortOrder',
+    'lastFetchedAt = :ts', 'lastStatus = :status', 'createdAt = if_not_exists(createdAt, :ts)', 'updatedAt = :ts',
+  ];
+  const removes: string[] = [];
+  (result.error ? sets : removes).push(result.error ? 'lastError = :error' : 'lastError');
+  (feed.reason ? sets : removes).push(feed.reason ? '#reason = :reason' : '#reason');
   await deps.dynamo.send(new UpdateCommand({
     TableName: deps.tableNames.feed,
     Key: { id: feed.id },
-    UpdateExpression: `SET #name = :name, #group = :group, #url = :url, sortOrder = :sortOrder, lastFetchedAt = :ts, lastStatus = :status, createdAt = if_not_exists(createdAt, :ts), updatedAt = :ts${result.error ? ', lastError = :error' : ' REMOVE lastError'}`,
-    ExpressionAttributeNames: { '#name': 'name', '#group': 'group', '#url': 'url' },
+    UpdateExpression: `SET ${sets.join(', ')}${removes.length ? ` REMOVE ${removes.join(', ')}` : ''}`,
+    ExpressionAttributeNames: { '#name': 'name', '#group': 'group', '#url': 'url', '#reason': 'reason' },
     ExpressionAttributeValues: {
       ':name': feed.name,
       ':group': feed.group,
       ':url': feed.url,
+      // 'pool' feeds are shown to each user only as a daily pick; everything else is a starter lane.
+      ':kind': OUTSIDE_FEED_POOL.some((p) => p.id === feed.id) ? 'pool' : 'starter',
       ':sortOrder': sortOrder,
       ':ts': timestamp,
       ':status': result.status,
+      ...(feed.reason ? { ':reason': feed.reason } : {}),
       ...(result.error ? { ':error': result.error } : {}),
     },
   }));

@@ -12,6 +12,9 @@ export type FeedDefinition = {
   name: string;
   group: string;
   url: string;
+  // Only on the outside-interest pool: one line saying why the Window shows it, which appears
+  // beside every injected item (epic S2.4).
+  reason?: string;
 };
 
 export const STARTER_FEEDS: readonly FeedDefinition[] = [
@@ -35,7 +38,24 @@ export const STARTER_FEEDS: readonly FeedDefinition[] = [
   { id: 'import-ai', group: 'ai development', name: 'Import AI', url: 'https://importai.substack.com/feed' },
   { id: 'openai-news', group: 'ai development', name: 'OpenAI news', url: 'https://openai.com/news/rss.xml' },
   { id: 'simon-willison', group: 'ai development', name: 'Simon Willison', url: 'https://simonwillison.net/atom/everything/' },
-  { id: 'atlas-obscura', group: 'outside interests', name: 'Atlas Obscura', url: 'https://www.atlasobscura.com/feeds/latest' },
-  { id: 'nature', group: 'outside interests', name: 'Nature', url: 'https://www.nature.com/nature.rss' },
-  { id: 'quanta', group: 'outside interests', name: 'Quanta Magazine', url: 'https://www.quantamagazine.org/feed/' },
 ];
+
+// The curated pool for outside-interest injection (epic S2.3): sources far from the starter
+// interests, collected like any other feed but shown to each user only as a daily pick, so the
+// Window does not close into a bubble. Edit this list and deploy to change the pool. The pool is
+// ranked after the starter list.
+export const OUTSIDE_FEED_POOL: readonly FeedDefinition[] = [
+  { id: 'nature', group: 'outside interests', name: 'Nature', url: 'https://www.nature.com/nature.rss', reason: 'Peer-reviewed science, far from business and tech news.' },
+  { id: 'quanta', group: 'outside interests', name: 'Quanta Magazine', url: 'https://www.quantamagazine.org/feed/', reason: 'Mathematics and physics written for curious outsiders.' },
+  { id: 'atlas-obscura', group: 'outside interests', name: 'Atlas Obscura', url: 'https://www.atlasobscura.com/feeds/latest', reason: 'Odd places and local culture, the opposite of headline news.' },
+  { id: 'nasa', group: 'outside interests', name: 'NASA', url: 'https://www.nasa.gov/feed/', reason: 'Space and Earth science from the people doing it.' },
+  { id: 'smithsonian', group: 'outside interests', name: 'Smithsonian Magazine', url: 'https://www.smithsonianmag.com/rss/latest_articles/', reason: 'History, arts and natural history for a longer view.' },
+  { id: 'aeon', group: 'outside interests', name: 'Aeon', url: 'https://aeon.co/feed.rss', reason: 'Essays on ideas and philosophy that the news cycle skips.' },
+  { id: 'the-conversation', group: 'outside interests', name: 'The Conversation', url: 'https://theconversation.com/us/articles.atom', reason: 'Researchers explaining their own subjects, across every field.' },
+];
+
+// Everything the collector fetches, starter list first. Position in this list is the Feed table's
+// sortOrder, so the pool ranks after the starter list.
+export const COLLECTED_FEEDS: readonly FeedDefinition[] = [...STARTER_FEEDS, ...OUTSIDE_FEED_POOL];
+
+export const isPoolFeed = (feed: FeedDefinition) => OUTSIDE_FEED_POOL.some((p) => p.id === feed.id);

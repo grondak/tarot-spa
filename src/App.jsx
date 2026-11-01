@@ -736,7 +736,7 @@ export default function App() {
       ) : overlayScreen === 'admin' ? (
         <AdminDashboard onBack={() => setOverlayScreen(null)} />
       ) : activeApp === 'observe' ? (
-        <ObservationWindow />
+        <ObservationWindow userId={userId} />
       ) : guideResult ? (
         <OrientationGuideResults
           result={guideResult}

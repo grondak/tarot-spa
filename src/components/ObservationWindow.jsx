@@ -10,29 +10,35 @@ import {
 } from '../utils/observation/view';
 
 const COLLAPSED_KEY = 'owCollapsedGroups';
+// Dismissed outside-interest sources are remembered in this browser only (epic S2.4 assumption).
+const DISMISSED_KEY = 'owDismissedSources';
 const CARD_COUNTS = [3, 6, 12, 24];
 const PLAY_STEP_MS = 80;
 
 const buttonClass = 'rounded-md border border-gray-800 bg-gray-900 px-2.5 py-1 text-sm text-white hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-40';
 const accentButtonClass = `${buttonClass} !border-indigo-400 !text-indigo-300`;
 
-function readCollapsed() {
+function readSet(key) {
   try {
-    return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '[]'));
+    return new Set(JSON.parse(localStorage.getItem(key) ?? '[]'));
   } catch {
     return new Set();
   }
 }
 
-function writeCollapsed(collapsed) {
+function writeSet(key, values) {
   try {
-    localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed]));
+    localStorage.setItem(key, JSON.stringify([...values]));
   } catch {
-    // Storage unavailable: the groups just open again next time.
+    // Storage unavailable: the choice just does not survive a reload.
   }
 }
 
+const readCollapsed = () => readSet(COLLAPSED_KEY);
+const writeCollapsed = (collapsed) => writeSet(COLLAPSED_KEY, collapsed);
+
 export default function ObservationWindow({
+  userId = null,
   loadFn = loadObservationData,
   widenFn = widenSearchTerm,
   nowFn = Date.now,
@@ -50,6 +56,7 @@ export default function ObservationWindow({
   const [expansions, setExpansions] = useState(() => new Map());
   const [blocked, setBlocked] = useState(() => new Set());
   const [playing, setPlaying] = useState(false);
+  const [dismissed, setDismissed] = useState(() => readSet(DISMISSED_KEY));
   const asked = useRef(new Set());
   const mounted = useRef(false);
 
@@ -75,8 +82,10 @@ export default function ObservationWindow({
   }, [loadFn, nowFn, loadRevision]);
 
   const model = useMemo(() => (loadState.status === 'ready'
-    ? buildModel({ ...loadState.data, now: loadState.loadedAt, stem: stemmer })
-    : null), [loadState]);
+    ? buildModel({
+      ...loadState.data, now: loadState.loadedAt, stem: stemmer, userId: userId ?? '', dismissed,
+    })
+    : null), [loadState, userId, dismissed]);
   const search = useMemo(() => parseSearch(searchText, whole), [searchText, whole]);
 
   // Ask WordNet about each new word once; a failed lookup just means no widening for that word.
@@ -130,6 +139,19 @@ export default function ObservationWindow({
       return next;
     });
   }, []);
+
+  const dismissSource = useCallback((feedId) => {
+    setDismissed((prev) => {
+      const next = new Set(prev).add(feedId);
+      writeSet(DISMISSED_KEY, next);
+      return next;
+    });
+  }, []);
+
+  const restoreSources = () => {
+    writeSet(DISMISSED_KEY, []);
+    setDismissed(new Set());
+  };
 
   useEffect(() => {
     if (solo.size === 0) return undefined;
@@ -235,6 +257,11 @@ export default function ObservationWindow({
           {view.soloing && (
             <button type="button" className={accentButtonClass} onClick={() => setSolo(new Set())}>Clear solo (Esc)</button>
           )}
+          {dismissed.size > 0 && (
+            <button type="button" className={buttonClass} onClick={restoreSources}>
+              Restore {dismissed.size} dismissed {dismissed.size === 1 ? 'source' : 'sources'}
+            </button>
+          )}
           <input
             type="search"
             value={searchText}
@@ -306,7 +333,7 @@ export default function ObservationWindow({
           </div>
         )}
 
-        <ObservationCards model={model} view={view} search={search} />
+        <ObservationCards model={model} view={view} search={search} onDismiss={dismissSource} />
       </div>
     </main>
   );
