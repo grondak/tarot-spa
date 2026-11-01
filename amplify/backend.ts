@@ -712,6 +712,24 @@ new StringParameter(dataStack, 'SessionTableNameParam', {
   parameterName: sessionTableParam,
   stringValue: sessionTable.tableName,
 });
+// Observation Window tables, for operator scripts (scripts/import-observation-history.mjs).
+// Nothing at runtime reads these: the collector gets its table names from plain env vars.
+new StringParameter(dataStack, 'FeedTableNameParam', {
+  parameterName: `${ssmPrefix}/feed-table-name`,
+  stringValue: feedTable.tableName,
+});
+new StringParameter(dataStack, 'FeedItemTableNameParam', {
+  parameterName: `${ssmPrefix}/feed-item-table-name`,
+  stringValue: feedItemTable.tableName,
+});
+new StringParameter(dataStack, 'FeedDailyCountTableNameParam', {
+  parameterName: `${ssmPrefix}/feed-daily-count-table-name`,
+  stringValue: feedDailyCountTable.tableName,
+});
+new StringParameter(dataStack, 'CollectorRunTableNameParam', {
+  parameterName: `${ssmPrefix}/collector-run-table-name`,
+  stringValue: collectorRunTable.tableName,
+});
 
 // The Lambda gets the SSM *paths* (plain strings) and resolves the names at cold start.
 backend.postConfirmation.addEnvironment('ACCOUNT_TABLE_PARAM', accountTableParam);
