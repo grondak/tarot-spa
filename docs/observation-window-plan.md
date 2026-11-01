@@ -2,6 +2,47 @@
 
 Oct 31, 2026 · @Tony · estimate from the repo as it stands, not a measured pace
 
+## Where it stands (2026-11-01)
+
+All ten packages below are built and live on `main` (commit `fffe538`), checked on staging first. The sections after this one are the original plan, kept as history; where they say something was "left out", this section is the current truth. Story numbers (S1.1 and so on) refer to [observation-window-epic.md](observation-window-epic.md).
+
+### Shipped
+
+| Feature | Stories | What exists |
+| --- | --- | --- |
+| F1 Timeline scrubber | S1.1–S1.8 | Scrub, live pin, playback, click a dot to jump, search (with whole word and next/previous match), widening through WordNet, axis starting at the first item |
+| F2 Lanes and injection | S2.2–S2.4, S2.6, S2.7 | Lanes on one axis, collapsible groups, solo, one outside-your-interests pick a day from a seven-feed pool, labelled with why, dismissable |
+| F2 (partly) | S2.1 | Sources and whole groups can be switched on and off, kept in the browser only. **Not built:** adding a feed by pasting its address. In its place, a "Suggest a source" form that emails the operator |
+| F3 Timing correlation | S3.1–S3.4 | Everything within an adjustable window shown together, overflow counted ("+N more"), "Co-occurrence is not a link" |
+| F9 Collection (enabler) | S9.1, S9.3, S9.4, S9.7–S9.9 | Hourly cloud collector, one shared de-duplicated store, 30-day expiry, daily per-source counts kept, collector gaps shown as hatching |
+| Privacy | (not a story) | "How it works" copy, an Account section and an on-page footer saying what is and isn't stored, and buttons that clear what the browser remembers |
+| Operations | | Alarms for the collector (errors, silence) and for widen-search; `npm run smoke-observation`; history import script; playbook notes |
+
+### Not built yet, from the first release's own list
+
+- **S2.5 Dense lanes stay readable.** Every dot is drawn and only the cards carry titles; the "top 5 get titles" rule isn't there.
+- **S2.8 Reorder** and **S2.9 Remove a source.** The feed list is edited in code (`amplify/feeds.ts`); a retired feed just shows "(retired)" until its items expire.
+- **S9.2 Cadence per source** and **S9.6 Degrade before stopping.** Every feed is fetched hourly.
+- **S9.5 Background cost cap.** There is no separate collection budget. Cost is small and the existing $30 AWS ceiling would catch a surprise, but nothing is capped.
+
+### Next, in the epic's order
+
+1. **Release 2.** F8 handoff to Orient (S8.1–S8.5). A first version is small: an "Add to Orient" button on cards that fills the Orient Context box with a "What I observed" block, about one session. The fuller version feeds the items into the Guide as Current Events, which needs the server to accept supplied items (S8.5) and a decision on untrusted text in the prompt. Then F4 cases and hypotheses, and F5 stakes, baselines and absences.
+2. **Release 3.** F6 entities, pattern signatures, source trust and a map; F7 field notes and others' journals.
+3. **User-added sources.** S2.1 proper (paste an address), S2.8 and S2.9 need a per-user list of sources, which changes the privacy promise that nothing about a user is stored. Worth doing only if people keep asking through the suggestion box.
+
+### Open items
+
+- **Real-use check.** Nobody has signed in to staging or `main` and used the Observe tab with real data yet. Do this before anything else.
+- **Nov 21 self-test.** Pass criterion in `prototype/observation-window/README.md`: name one moment the window changed what you'd do.
+- **Laptop collector.** Still running hourly from this worktree. It is now the only source for Fierce Network and RCR Wireless, which AWS can't fetch. Stop it (README has the commands) once the cloud history is enough.
+- **Sandboxes.** `observation` keeps collecting hourly (`npx ampx sandbox delete --identifier observation` when done). The original `tonyreynolds` sandbox is stuck in UPDATE_FAILED and can't be rolled back; redeploying under a new identifier replaced it.
+- **Epic open questions still open:** the paid-search cap (decide after a month of use), how rule-based stakes work, how the tarot's patterns become matchable signals, and case deletion against cycle timestamps.
+
+---
+
+## The original plan (kept for history)
+
 ## Scope of the first real version
 
 - **Users:** Tony and a few friends, signing in with the existing invite keys.
