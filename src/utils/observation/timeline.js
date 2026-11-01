@@ -1,6 +1,7 @@
 // The Observation Window's data model: shared feed rows and items in, lanes, groups and a time
 // axis out. Pure functions; no network, no React. Ported from the Release 0 prototype.
 import { INJECTED_GROUP, pickInjections } from './injection';
+import { sourceKey } from './keys';
 
 export const HOUR = 3600e3;
 const DAY = 24 * HOUR;
@@ -62,12 +63,16 @@ function findGaps(runs) {
 // their own. Each day one pooled item is picked for this user (see injection.js) and shown in the
 // "outside your interests" group, unless the user has dismissed that source.
 export function buildModel({
-  feeds: feedRows, items: itemRows, runs, now, stem, userId = '', dismissed = new Set(),
+  feeds: feedRows, items: itemRows, runs, now, stem, userId = '', dismissed = new Set(), disabled = new Set(),
 }) {
   const poolRows = feedRows.filter((feed) => feed.kind === 'pool');
   const poolIds = new Set(poolRows.map((feed) => feed.id));
   const starterRows = feedRows.filter((feed) => feed.kind !== 'pool');
-  const feeds = orderFeeds(starterRows, itemRows);
+  const allStarter = orderFeeds(starterRows, itemRows);
+  // Switched-off sources and groups leave the timeline, but their stored items are kept: switching
+  // one back on brings its lane back (epic S2.1). `catalog` lists everything, on or off.
+  const isOff = (feed) => disabled.has(sourceKey.feed(feed.id)) || disabled.has(sourceKey.group(feed.group));
+  const feeds = allStarter.filter((feed) => !isOff(feed));
   const laneOf = new Map(feeds.map((feed, lane) => [feed.id, lane]));
 
   const rows = [];
@@ -85,8 +90,9 @@ export function buildModel({
     if (feedId) poolCandidates.push({ row, ms, feedId });
   }
 
+  const injectionOn = !disabled.has(sourceKey.group(INJECTED_GROUP));
   const picks = pickInjections({
-    poolFeeds: poolRows,
+    poolFeeds: injectionOn ? poolRows : [],
     poolItems: poolCandidates.map(({ row, ms, feedId }) => ({ id: row.id, ms, feedId, row })),
     userId,
     dismissed,
@@ -146,7 +152,18 @@ export function buildModel({
   // The axis starts at the first item (rounded down to the hour), so the slider's left end is a dot.
   const first = items.length ? Math.min(...items.map((item) => item.ms)) : end - DAY;
   const start = Math.min(Math.floor(first / HOUR) * HOUR, end - HOUR);
-  return { feeds, items, groups, stemDf, start, end, gaps: findGaps(runs) };
+  const catalog = [];
+  for (const feed of allStarter) {
+    let group = catalog.find((g) => g.name === feed.group);
+    if (!group) {
+      group = { name: feed.group, feeds: [] };
+      catalog.push(group);
+    }
+    group.feeds.push({ id: feed.id, name: feed.name, retired: feed.retired });
+  }
+  if (poolRows.length > 0) catalog.push({ name: INJECTED_GROUP, feeds: [], injected: true });
+
+  return { feeds, items, groups, catalog, stemDf, start, end, gaps: findGaps(runs) };
 }
 
 export const percentAlong = (model, ms) => ((ms - model.start) / (model.end - model.start)) * 100;

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  COLLAPSED_KEY, DISMISSED_KEY, clearObservationPreferences, readSet, writeSet,
+  COLLAPSED_KEY, DISABLED_KEY, DISMISSED_KEY, clearObservationPreferences, readSet, writeSet,
 } from './preferences';
 
 afterEach(() => {
@@ -25,12 +25,14 @@ describe('observation preferences', () => {
   it('clears both remembered choices and nothing else', () => {
     localStorage.setItem(COLLAPSED_KEY, '["war"]');
     localStorage.setItem(DISMISSED_KEY, '["nature"]');
+    localStorage.setItem(DISABLED_KEY, '["g:war"]');
     localStorage.setItem('tarotSpaSavedReadings', 'keep');
 
     expect(clearObservationPreferences()).toBe(true);
 
     expect(localStorage.getItem(COLLAPSED_KEY)).toBeNull();
     expect(localStorage.getItem(DISMISSED_KEY)).toBeNull();
+    expect(localStorage.getItem(DISABLED_KEY)).toBeNull();
     expect(localStorage.getItem('tarotSpaSavedReadings')).toBe('keep');
   });
 

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { stemmer } from 'stemmer';
 import ObservationCards from './ObservationCards';
+import ObservationSources from './ObservationSources';
 import ObservationTimeline from './ObservationTimeline';
 import { loadObservationData, widenSearchTerm } from '../utils/observation/data';
 import {
-  COLLAPSED_KEY, DISMISSED_KEY, clearObservationPreferences, readSet, writeSet,
+  COLLAPSED_KEY, DISABLED_KEY, DISMISSED_KEY, clearObservationPreferences, readSet, writeSet,
 } from '../utils/observation/preferences';
 import { LEVEL_NAMES, MIN_CARDS, parseSearch } from '../utils/observation/search';
 import { HOUR, buildModel, formatTime } from '../utils/observation/timeline';
@@ -23,6 +24,7 @@ const writeCollapsed = (collapsed) => writeSet(COLLAPSED_KEY, collapsed);
 
 export default function ObservationWindow({
   userId = null,
+  suggestFn,
   loadFn = loadObservationData,
   widenFn = widenSearchTerm,
   nowFn = Date.now,
@@ -41,6 +43,7 @@ export default function ObservationWindow({
   const [blocked, setBlocked] = useState(() => new Set());
   const [playing, setPlaying] = useState(false);
   const [dismissed, setDismissed] = useState(() => readSet(DISMISSED_KEY));
+  const [disabled, setDisabled] = useState(() => readSet(DISABLED_KEY));
   const [forgotten, setForgotten] = useState(false);
   const asked = useRef(new Set());
   const mounted = useRef(false);
@@ -68,9 +71,9 @@ export default function ObservationWindow({
 
   const model = useMemo(() => (loadState.status === 'ready'
     ? buildModel({
-      ...loadState.data, now: loadState.loadedAt, stem: stemmer, userId: userId ?? '', dismissed,
+      ...loadState.data, now: loadState.loadedAt, stem: stemmer, userId: userId ?? '', dismissed, disabled,
     })
-    : null), [loadState, userId, dismissed]);
+    : null), [loadState, userId, dismissed, disabled]);
   const search = useMemo(() => parseSearch(searchText, whole), [searchText, whole]);
 
   // Ask WordNet about each new word once; a failed lookup just means no widening for that word.
@@ -138,10 +141,16 @@ export default function ObservationWindow({
     setDismissed(new Set());
   };
 
+  const changeDisabled = (next) => {
+    writeSet(DISABLED_KEY, next);
+    setDisabled(next);
+  };
+
   const forgetChoices = () => {
     clearObservationPreferences();
     setCollapsed(new Set());
     setDismissed(new Set());
+    setDisabled(new Set());
     setForgotten(true);
   };
 
@@ -173,6 +182,18 @@ export default function ObservationWindow({
           }}>
             Try again
           </button>
+        </div>
+      </main>
+    );
+  }
+
+  if (model.items.length === 0 && disabled.size > 0) {
+    return (
+      <main className="min-h-screen bg-gray-950 px-4 py-12 text-white">
+        <div className="mx-auto max-w-6xl">
+          <h1 className="text-lg font-bold">Observation Window</h1>
+          <p className="mt-2 text-gray-400">Every source with news is switched off.</p>
+          <ObservationSources catalog={model.catalog} disabled={disabled} onChange={changeDisabled} suggestFn={suggestFn} />
         </div>
       </main>
     );
@@ -288,6 +309,8 @@ export default function ObservationWindow({
           </label>
         </div>
 
+        <ObservationSources catalog={model.catalog} disabled={disabled} onChange={changeDisabled} suggestFn={suggestFn} />
+
         <ObservationTimeline
           model={model}
           view={view}
@@ -330,8 +353,8 @@ export default function ObservationWindow({
         <footer className="mt-8 border-t border-gray-800 pt-4 text-sm text-gray-400">
           <p>
             The news here is shared by everyone and kept 30 days. Nothing about what you look at is
-            stored on our servers. The only things remembered are your open and closed groups and any
-            sources you dismissed, and only in this browser.
+            stored on our servers. The only things remembered are your open and closed groups, the
+            sources you switched off and the ones you dismissed, and only in this browser.
           </p>
           <button type="button" className={`mt-2 ${buttonClass}`} onClick={forgetChoices}>
             Forget my choices on this page

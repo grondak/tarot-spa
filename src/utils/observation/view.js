@@ -1,4 +1,5 @@
 // What the page shows for a given scrubber position, window, solo and search. Pure functions.
+import { sourceKey } from './keys';
 import { HOUR, formatTime } from './timeline';
 import {
   chooseWidening, expandableTerms, matchesExact, matchesWidened, relatedReason,
@@ -15,10 +16,7 @@ export const WINDOW_OPTIONS = [
   { hours: 360, label: '15 days' },
 ];
 
-export const soloKey = {
-  group: (name) => `g:${name}`,
-  feed: (id) => `f:${id}`,
-};
+export const soloKey = sourceKey;
 
 // `solo` is a Set of soloKey values; `search` comes from parseSearch.
 export function computeView(model, { t, windowHours, cardCount, solo, search, stem, expansions, blocked }) {

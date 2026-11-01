@@ -102,7 +102,7 @@ export default function AccountScreen({
           <p className="mt-1 text-gray-400">
             Nothing about what you look at in the Observation Window is stored on our servers, so
             there is no history to delete there. This browser remembers which groups you closed and
-            which outside-interest sources you dismissed. Clear that here, or from the Window itself.
+            which sources you switched off or dismissed. Clear that here, or from the Window itself.
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <button

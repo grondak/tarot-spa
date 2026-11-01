@@ -14,6 +14,7 @@ import { inviteKeyMint } from '../functions/invite-key-mint/resource';
 import { inviteKeyRevoke } from '../functions/invite-key-revoke/resource';
 import { requestAccess } from '../functions/request-access/resource';
 import { startOrientationGuide } from '../functions/start-orientation-guide/resource';
+import { suggestSource } from '../functions/suggest-source/resource';
 import { usageCounter } from '../functions/usage-counter/resource';
 import { widenSearch } from '../functions/widen-search/resource';
 
@@ -250,6 +251,12 @@ const schema = a.schema({
     .returns(a.json())
     .authorization((allow) => [allow.group('Admin')])
     .handler(a.handler.function(adminLogs)),
+  suggestSource: a
+    .mutation()
+    .arguments({ suggestion: a.string().required(), contact: a.string() })
+    .returns(a.boolean())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(suggestSource)),
   widenSearch: a
     .query()
     .arguments({ term: a.string().required() })

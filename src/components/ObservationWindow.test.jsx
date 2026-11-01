@@ -418,3 +418,56 @@ describe('ObservationWindow forgetting', () => {
     expect(screen.getByText(/Nothing about what you look at is stored on our servers/)).toBeVisible();
   });
 });
+
+describe('ObservationWindow switching sources off', () => {
+  const sources = () => screen.getByTestId('sources');
+
+  it('takes a switched-off group off the timeline and out of the cards, and remembers it', async () => {
+    await renderWindow();
+    expect(screen.getByText('Sources and suggestions (4 of 4 on)')).toBeVisible();
+    fireEvent.click(within(sources()).getByLabelText('telecom (whole group)'));
+
+    expect(screen.queryByTestId('group-telecom')).not.toBeInTheDocument();
+    expect(cardTitles()).not.toContain('Duty on imports debated');
+    expect(JSON.parse(localStorage.getItem('owDisabledSources'))).toEqual(['g:telecom']);
+    expect(screen.getByText(/Sources and suggestions \(1 of 4 on|Sources and suggestions \(2 of 4 on/)).toBeVisible();
+  });
+
+  it('keeps a source off across visits, and brings it back when switched on', async () => {
+    localStorage.setItem('owDisabledSources', JSON.stringify(['f:aj']));
+    await renderWindow();
+    expect(screen.queryByTestId('lane-aj')).not.toBeInTheDocument();
+    expect(cardTitles()).not.toContain('Ceasefire talks resume');
+
+    fireEvent.click(within(sources()).getByLabelText('Al Jazeera'));
+    expect(screen.getByTestId('lane-aj')).toBeVisible();
+    expect(cardTitles()).toContain('Ceasefire talks resume');
+    expect(JSON.parse(localStorage.getItem('owDisabledSources'))).toEqual([]);
+  });
+
+  it('switches the daily outside-interest pick off with its group', async () => {
+    await renderWindow({
+      loadFn: vi.fn().mockResolvedValue({ feeds: [...feedRows, ...poolFeedRows], items: [...itemRows, ...poolItemRows], runs: runRows }),
+      userId: 'user-1',
+    });
+    expect(screen.getByTestId('group-outside your interests')).toBeVisible();
+    fireEvent.click(within(sources()).getByLabelText('outside your interests (whole group)'));
+    expect(screen.queryByTestId('group-outside your interests')).not.toBeInTheDocument();
+  });
+
+  it('explains an empty window when every source is off, and recovers', async () => {
+    localStorage.setItem('owDisabledSources', JSON.stringify(['g:world', 'g:telecom']));
+    await renderWindow({ loadFn: vi.fn().mockResolvedValue(data) }).catch(() => {});
+    expect(await screen.findByText('Every source with news is switched off.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Switch every source back on' }));
+    expect(await screen.findByLabelText('Timeline scrubber')).toBeVisible();
+  });
+
+  it('is cleared along with the other remembered choices', async () => {
+    localStorage.setItem('owDisabledSources', JSON.stringify(['f:aj']));
+    await renderWindow();
+    fireEvent.click(screen.getByRole('button', { name: 'Forget my choices on this page' }));
+    expect(screen.getByTestId('lane-aj')).toBeVisible();
+    expect(localStorage.getItem('owDisabledSources')).toBeNull();
+  });
+});

@@ -41,6 +41,7 @@ import { orientationReconciler } from './functions/orientation-reconciler/resour
 import { requestAccess } from './functions/request-access/resource';
 import { sessionScrubber } from './functions/session-scrubber/resource';
 import { startOrientationGuide } from './functions/start-orientation-guide/resource';
+import { suggestSource } from './functions/suggest-source/resource';
 import { usageCounter } from './functions/usage-counter/resource';
 import { widenSearch } from './functions/widen-search/resource';
 import { assertMonthlyBudgetCeilingHolds } from './config';
@@ -85,6 +86,7 @@ const backend = defineBackend({
   requestAccess,
   sessionScrubber,
   startOrientationGuide,
+  suggestSource,
   usageCounter,
   widenSearch,
 });
@@ -155,6 +157,7 @@ const orientationJudgeLambda = backend.orientationJudge.resources.lambda;
 const orientationAlertLambda = backend.orientationAlert.resources.lambda;
 const orientationReconcilerLambda = backend.orientationReconciler.resources.lambda;
 const requestAccessLambda = backend.requestAccess.resources.lambda;
+const suggestSourceLambda = backend.suggestSource.resources.lambda;
 const sessionScrubberLambda = backend.sessionScrubber.resources.lambda;
 const startOrientationGuideLambda = backend.startOrientationGuide.resources.lambda;
 const usageCounterLambda = backend.usageCounter.resources.lambda;
@@ -458,6 +461,12 @@ orientationAlertLambda.addToRolePolicy(new PolicyStatement({
   ],
 }));
 requestAccessLambda.addToRolePolicy(new PolicyStatement({
+  actions: ['ses:SendEmail'],
+  resources: [
+    dataStack.formatArn({ service: 'ses', resource: 'identity', resourceName: '*' }),
+  ],
+}));
+suggestSourceLambda.addToRolePolicy(new PolicyStatement({
   actions: ['ses:SendEmail'],
   resources: [
     dataStack.formatArn({ service: 'ses', resource: 'identity', resourceName: '*' }),
@@ -900,6 +909,31 @@ const inviteKeyRateLimit = new CfnWebACL(dataStack, 'ApiRateLimit', {
         sampledRequestsEnabled: true,
         cloudWatchMetricsEnabled: true,
         metricName: 'tarotSpaStartOrientationGuideRateLimit',
+      },
+    },
+    {
+      // Signed-in users only, but each suggestion is an email, so keep a runaway client cheap.
+      name: 'RateLimitSuggestSourcePerIp',
+      priority: 3,
+      action: { block: {} },
+      statement: {
+        rateBasedStatement: {
+          limit: 20,
+          aggregateKeyType: 'IP',
+          scopeDownStatement: {
+            byteMatchStatement: {
+              searchString: 'suggestSource',
+              fieldToMatch: { body: { oversizeHandling: 'MATCH' } },
+              textTransformations: [{ priority: 0, type: 'NONE' }],
+              positionalConstraint: 'CONTAINS',
+            },
+          },
+        },
+      },
+      visibilityConfig: {
+        sampledRequestsEnabled: true,
+        cloudWatchMetricsEnabled: true,
+        metricName: 'tarotSpaSuggestSourceRateLimit',
       },
     },
   ],

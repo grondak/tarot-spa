@@ -165,3 +165,51 @@ describe('outside-interest injection in the model', () => {
     expect(model.items.find((i) => i.title === 'Shared').injected).toBe(false);
   });
 });
+
+describe('switching sources and groups off', () => {
+  const build = (disabled, extra = {}) => makeModel({
+    feeds: [...feedRows, ...poolFeedRows], items: [...itemRows, ...poolItemRows], userId: 'user-1', disabled, ...extra,
+  });
+  const laneIds = (model) => model.feeds.map((f) => f.id);
+
+  it('takes a switched-off source out of the timeline and keeps the rest', () => {
+    const model = build(new Set(['f:aj']));
+    expect(laneIds(model)).not.toContain('aj');
+    expect(laneIds(model)).toContain('bbc');
+    expect(model.items.some((i) => i.title === 'Ceasefire talks resume')).toBe(false);
+  });
+
+  it('takes out every source of a switched-off group', () => {
+    const model = build(new Set(['g:world']));
+    expect(model.groups.map((g) => g.name)).not.toContain('world');
+    expect(laneIds(model)).toEqual(expect.not.arrayContaining(['bbc', 'aj']));
+  });
+
+  it('keeps a story that another, still-on source also carried', () => {
+    const model = build(new Set(['f:bbc']));
+    const chips = model.items.find((i) => i.title === 'Chip supply improves');
+    expect(model.feeds[chips.lane].id).toBe('lr');
+  });
+
+  it('keeps everything in the catalog, on or off, so a source can be switched back on', () => {
+    const model = build(new Set(['g:world', 'f:lr']));
+    const world = model.catalog.find((g) => g.name === 'world');
+    expect(world.feeds.map((f) => f.id)).toEqual(['bbc', 'aj']);
+    expect(model.catalog.map((g) => g.name)).toEqual(['world', 'telecom', 'outside your interests']);
+    expect(model.catalog.at(-1)).toMatchObject({ injected: true, feeds: [] });
+  });
+
+  it('turns the daily outside-your-interests pick off with its group', () => {
+    const model = build(new Set(['g:outside your interests']));
+    expect(model.items.some((i) => i.injected)).toBe(false);
+    expect(model.catalog.map((g) => g.name)).toContain('outside your interests');
+  });
+
+  it('lists no outside group in the catalog when there is no pool', () => {
+    expect(makeModel().catalog.map((g) => g.name)).toEqual(['world', 'telecom']);
+  });
+
+  it('is unchanged when nothing is switched off', () => {
+    expect(laneIds(build(new Set()))).toEqual(laneIds(build(undefined)));
+  });
+});

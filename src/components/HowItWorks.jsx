@@ -118,9 +118,10 @@ export default function HowItWorks({ onBack = () => {} }) {
             Nothing about you is stored on the server — no reading history, searches or clicks.
             Your daily outside-interest pick is worked out in your browser from your account and
             the date. A word you search is sent on its own to look up synonyms and isn’t saved.
-            Which groups you closed and which sources you dismissed stay in this browser only; you
-            can clear them any time from <strong className="text-white">Your account</strong>.
-            Links open the original publisher’s site.
+            Which groups you closed and which sources you switched off or dismissed stay in this
+            browser only; you can clear them any time from <strong className="text-white">Your
+            account</strong>. If you suggest a source, what you type is sent to me as a message and
+            isn’t kept in the app. Links open the original publisher’s site.
           </p>
         </div>
 
