@@ -131,6 +131,63 @@ const schema = a.schema({
     // generated update resolver's `attributeExists` key condition means a missing/
     // wrong id fails instead of creating a second row. Seeding stays trusted/operator-only.
     .authorization((allow) => [allow.group('Admin').to(['update'])]),
+  // Observation Window (epic F9). These four models are shared across users: one set of
+  // collected feeds, readable by every signed-in user and written only by feed-collector
+  // through direct IAM/DynamoDB access. There is deliberately no browser write path, and no
+  // per-user data in any of them.
+  Feed: a
+    .model({
+      name: a.string().required(),
+      group: a.string().required(),
+      url: a.string().required(),
+      // Position in the starter list. Source order is the ranking until stakes exist (S2.8).
+      sortOrder: a.integer().required(),
+      lastFetchedAt: a.datetime(),
+      lastStatus: a.string(),
+      lastError: a.string(),
+    })
+    .authorization((allow) => [allow.authenticated().to(['read'])]),
+  // One row per story, kept 30 days (FEED_ITEM_RETENTION_DAYS) by DynamoDB TTL on `expiresAt`,
+  // enabled in backend.ts. `id` is a hash of the canonical link, so the same story from two
+  // feeds, or from two runs, is one row listing every feed that carried it. The client lists
+  // the whole table and filters by time itself: the data is small and shared by everyone.
+  FeedItem: a
+    .model({
+      title: a.string(),
+      link: a.string().required(),
+      summary: a.string(),
+      publishedAt: a.datetime().required(),
+      // True when the feed gave no date and publishedAt is the fetch time instead.
+      publishedAtEstimated: a.boolean(),
+      sources: a.string().array().required(),
+      fetchedAt: a.datetime(),
+      expiresAt: a.integer(),
+    })
+    .authorization((allow) => [allow.authenticated().to(['read'])]),
+  // Items per source per day, kept after the items expire so baselines and expected-event checks
+  // work past 30 days (epic S9.9). Holds no text and nothing tied to a user.
+  FeedDailyCount: a
+    .model({
+      feedId: a.string().required(),
+      day: a.string().required(),
+      count: a.integer(),
+    })
+    .identifier(['feedId', 'day'])
+    .authorization((allow) => [allow.authenticated().to(['read'])]),
+  // One row per collector run, so the Window can show a stretch where nothing ran as a gap
+  // instead of mistaking it for a quiet day (epic S9.7). Kept 60 days by TTL.
+  CollectorRun: a
+    .model({
+      startedAt: a.datetime().required(),
+      finishedAt: a.datetime(),
+      feedsOk: a.integer(),
+      feedsTotal: a.integer(),
+      added: a.integer(),
+      // Per-feed outcome, stored as JSON text. Preserve the typeof-string parse guard where read.
+      results: a.json(),
+      expiresAt: a.integer(),
+    })
+    .authorization((allow) => [allow.authenticated().to(['read'])]),
   checkInviteKey: a
     .query()
     .arguments({ code: a.string().required() })

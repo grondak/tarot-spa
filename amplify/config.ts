@@ -9,6 +9,13 @@ export const DAILY_LIMIT_MAX = 100;
 export const MIN_MONTHLY_BUDGET_USD = COST_ESTIMATE_USD;
 export const MAX_MONTHLY_BUDGET_USD = 30;
 
+// Observation Window: how long a collected feed item is kept (epic S9.8) and how long
+// the collector's per-run log is kept. Both are enforced by DynamoDB TTL on `expiresAt`.
+// Items are news, not personal content; the daily per-source counts that outlive them
+// hold no text (S9.9).
+export const FEED_ITEM_RETENTION_DAYS = 30;
+export const COLLECTOR_RUN_RETENTION_DAYS = 60;
+
 // How long a Session row (a user's typed context plus the full generated
 // guide) is kept before DynamoDB TTL auto-deletes it.
 export const SESSION_RETENTION_DAYS = 1;

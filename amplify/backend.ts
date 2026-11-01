@@ -31,6 +31,7 @@ import { adminMetrics } from './functions/admin-metrics/resource';
 import { apiKeyAlert } from './functions/api-key-alert/resource';
 import { budgetAlert } from './functions/budget-alert/resource';
 import { checkInviteKey } from './functions/check-invite-key/resource';
+import { feedCollector } from './functions/feed-collector/resource';
 import { inviteKeyMint } from './functions/invite-key-mint/resource';
 import { inviteKeyRevoke } from './functions/invite-key-revoke/resource';
 import { orientationGuide } from './functions/orientation-guide/resource';
@@ -73,6 +74,7 @@ const backend = defineBackend({
   apiKeyAlert,
   budgetAlert,
   checkInviteKey,
+  feedCollector,
   inviteKeyMint,
   inviteKeyRevoke,
   orientationAlert,
@@ -111,6 +113,10 @@ const metricsTable = backend.data.resources.tables.Metrics;
 const monthlySpendTable = backend.data.resources.tables.MonthlySpend;
 const questionLogTable = backend.data.resources.tables.QuestionLog;
 const sessionTable = backend.data.resources.tables.Session;
+const feedTable = backend.data.resources.tables.Feed;
+const feedItemTable = backend.data.resources.tables.FeedItem;
+const feedDailyCountTable = backend.data.resources.tables.FeedDailyCount;
+const collectorRunTable = backend.data.resources.tables.CollectorRun;
 
 // Session rows carry a user's own words plus the full generated guide, so they're
 // auto-deleted via DynamoDB TTL rather than kept indefinitely (see SESSION_RETENTION_DAYS).
@@ -121,12 +127,24 @@ backend.data.resources.cfnResources.amplifyDynamoDbTables.Session.timeToLiveAttr
   attributeName: 'expiresAt',
   enabled: true,
 };
+// Observation Window: collected items (FEED_ITEM_RETENTION_DAYS) and the collector's run log
+// (COLLECTOR_RUN_RETENTION_DAYS) expire by TTL on `expiresAt`, set at write time. Same
+// wrapper as Session above. Nothing here holds personal content.
+backend.data.resources.cfnResources.amplifyDynamoDbTables.FeedItem.timeToLiveAttribute = {
+  attributeName: 'expiresAt',
+  enabled: true,
+};
+backend.data.resources.cfnResources.amplifyDynamoDbTables.CollectorRun.timeToLiveAttribute = {
+  attributeName: 'expiresAt',
+  enabled: true,
+};
 const redemptionLambda = backend.postConfirmation.resources.lambda;
 const adminLogsLambda = backend.adminLogs.resources.lambda;
 const adminMetricsLambda = backend.adminMetrics.resources.lambda;
 const apiKeyAlertLambda = backend.apiKeyAlert.resources.lambda;
 const budgetAlertLambda = backend.budgetAlert.resources.lambda;
 const checkInviteKeyLambda = backend.checkInviteKey.resources.lambda;
+const feedCollectorLambda = backend.feedCollector.resources.lambda;
 const inviteKeyMintLambda = backend.inviteKeyMint.resources.lambda;
 const inviteKeyRevokeLambda = backend.inviteKeyRevoke.resources.lambda;
 const orientationGuideLambda = backend.orientationGuide.resources.lambda;
@@ -547,6 +565,59 @@ const sessionScrubSchedule = new Rule(
   { schedule: Schedule.rate(Duration.minutes(15)) },
 );
 sessionScrubSchedule.addTarget(new LambdaFunctionTarget(sessionScrubberLambda));
+
+// Observation Window collector: fetches the starter feeds hourly (epic S9.1, S9.2).
+// Least privilege: a new item is written together with its daily count in one transaction
+// (PutItem + UpdateItem on two tables), existing items get a source appended, each feed row
+// records its last status, and each run writes one log row. It reads nothing.
+feedTable.grant(feedCollectorLambda, 'dynamodb:UpdateItem');
+feedItemTable.grant(feedCollectorLambda, 'dynamodb:PutItem', 'dynamodb:UpdateItem');
+feedDailyCountTable.grant(feedCollectorLambda, 'dynamodb:UpdateItem');
+collectorRunTable.grant(feedCollectorLambda, 'dynamodb:PutItem');
+backend.feedCollector.addEnvironment('FEED_TABLE_NAME', feedTable.tableName);
+backend.feedCollector.addEnvironment('FEED_ITEM_TABLE_NAME', feedItemTable.tableName);
+backend.feedCollector.addEnvironment('FEED_DAILY_COUNT_TABLE_NAME', feedDailyCountTable.tableName);
+backend.feedCollector.addEnvironment('COLLECTOR_RUN_TABLE_NAME', collectorRunTable.tableName);
+const feedCollectorSchedule = new Rule(
+  operationalStack,
+  'FeedCollectorSchedule',
+  { schedule: Schedule.rate(Duration.hours(1)) },
+);
+feedCollectorSchedule.addTarget(new LambdaFunctionTarget(feedCollectorLambda));
+// The collector fails its own invocation when most feeds fail (a network or provider problem),
+// and the run is already logged by then. Page on that, same topic as the other operational alarms.
+const feedCollectorErrorAlarm = new Alarm(
+  operationalStack,
+  'FeedCollectorLambdaErrorAlarm',
+  {
+    metric: feedCollectorLambda.metricErrors({
+      period: Duration.hours(1),
+      statistic: 'Sum',
+    }),
+    threshold: 1,
+    evaluationPeriods: 1,
+    comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+    treatMissingData: TreatMissingData.NOT_BREACHING,
+  },
+);
+feedCollectorErrorAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
+// The inverse failure: the schedule stops invoking the collector at all, which produces no
+// errors. History cannot be backfilled, so three silent hours is worth a page.
+const feedCollectorMissedInvocationAlarm = new Alarm(
+  operationalStack,
+  'FeedCollectorMissedInvocationAlarm',
+  {
+    metric: feedCollectorLambda.metricInvocations({
+      period: Duration.hours(3),
+      statistic: 'Sum',
+    }),
+    threshold: 1,
+    evaluationPeriods: 1,
+    comparisonOperator: ComparisonOperator.LESS_THAN_THRESHOLD,
+    treatMissingData: TreatMissingData.BREACHING,
+  },
+);
+feedCollectorMissedInvocationAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
 
 dailyUsageTable.grantReadData(usageCounterLambda);
 configTable.grantReadData(usageCounterLambda);
