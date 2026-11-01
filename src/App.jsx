@@ -13,6 +13,8 @@ import GrantInviteKey from './components/GrantInviteKey';
 import PublicLanding from './components/PublicLanding';
 import OrientationGuideResults from './components/OrientationGuideResults';
 import SavedReadings from './components/SavedReadings';
+import AppSwitcher from './components/AppSwitcher';
+import ObservationWindow from './components/ObservationWindow';
 import { getMyAccount } from './utils/account';
 import { isAdmin } from './utils/adminAuth';
 import {
@@ -99,6 +101,9 @@ export default function App() {
   // Back is then always exactly one click from wherever you are back to your
   // Guide/SpreadView/ContextEntry, never revealing a stale screen underneath.
   const [overlayScreen, setOverlayScreen] = useState(null);
+  // Which of the site's two apps is showing. Switching never touches the other
+  // app's state, so a Guide in progress or on screen survives a visit to Observe.
+  const [activeApp, setActiveApp] = useState('orient');
   const [authRefreshRevision, setAuthRefreshRevision] = useState(0);
   const [userId, setUserId] = useState(null);
   const [guideResult, setGuideResult] = useState(null);
@@ -215,6 +220,7 @@ export default function App() {
             setGuideResult(null);
             setIsAdminUser(false);
             setOverlayScreen(null);
+            setActiveApp('orient');
           }
         }
       }
@@ -631,6 +637,7 @@ export default function App() {
     setGuideResult(null);
     setIsAdminUser(false);
     setOverlayScreen(null);
+    setActiveApp('orient');
   }
 
   function handleSignedIn() {
@@ -707,8 +714,18 @@ export default function App() {
         onShowHowItWorks={() => setOverlayScreen('howItWorks')}
         onShowSavedReadings={() => setOverlayScreen('saved')}
         onSignedOut={handleSignedOut}
-        showReturnToGuide={Boolean(guideResult) && overlayScreen !== null}
-        onReturnToGuide={() => setOverlayScreen(null)}
+        showReturnToGuide={Boolean(guideResult) && (overlayScreen !== null || activeApp !== 'orient')}
+        onReturnToGuide={() => {
+          setOverlayScreen(null);
+          setActiveApp('orient');
+        }}
+      />
+      <AppSwitcher
+        current={activeApp}
+        onSelect={(app) => {
+          setOverlayScreen(null);
+          setActiveApp(app);
+        }}
       />
       {overlayScreen === 'howItWorks' ? (
         <HowItWorks onBack={() => setOverlayScreen(null)} />
@@ -718,6 +735,8 @@ export default function App() {
         <SavedReadings userId={userId} onBack={() => setOverlayScreen(null)} />
       ) : overlayScreen === 'admin' ? (
         <AdminDashboard onBack={() => setOverlayScreen(null)} />
+      ) : activeApp === 'observe' ? (
+        <ObservationWindow />
       ) : guideResult ? (
         <OrientationGuideResults
           result={guideResult}

@@ -355,6 +355,59 @@ describe('App authenticated sign-out round trip', () => {
     expect(await screen.findByRole('heading', { name: 'Your Orientation Guide', level: 1 })).toBeVisible();
   });
 
+  it('switches between Orient and Observe, keeping a completed Guide for the way back', async () => {
+    localStorage.setItem(
+      'tarotSpaActiveOrientationSession',
+      '12345678-1234-4234-9234-123456789012',
+    );
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Your Orientation Guide', level: 1 })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Orient' })).toHaveAttribute('aria-current', 'page');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Observe' }));
+    expect(screen.getByRole('heading', { name: 'Observation Window' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Observe' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('heading', { name: 'Your Orientation Guide', level: 1 })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Orient' }));
+    expect(screen.getByRole('heading', { name: 'Your Orientation Guide', level: 1 })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Observe' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Your Guide is ready' }));
+    expect(screen.getByRole('heading', { name: 'Your Orientation Guide', level: 1 })).toBeVisible();
+  });
+
+  it('opens a header screen over Observe and returns to Observe on Back', async () => {
+    render(<App />);
+
+    expect(await screen.findByText('Your account')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Observe' }));
+    fireEvent.click(screen.getByRole('button', { name: 'How it works' }));
+    expect(await screen.findByRole('heading', { name: 'How it works' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('heading', { name: 'Observation Window' })).toBeVisible();
+  });
+
+  it('returns to Orient after a sign-out and a fresh sign-in', async () => {
+    render(<App />);
+
+    expect(await screen.findByText('Your account')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Observe' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Log Out' }));
+    expect(await screen.findByRole('button', { name: 'I have an Invite Key' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log In' }));
+    expect(await screen.findByRole('heading', { name: 'Log in' })).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'tony@example.com' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
+
+    expect(await screen.findByRole('heading', { name: 'Help Me Orient' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Orient' })).toHaveAttribute('aria-current', 'page');
+  });
+
   it('never renders the Admin Dashboard control for a non-admin account', async () => {
     render(<App />);
 
