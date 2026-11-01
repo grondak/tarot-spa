@@ -29,6 +29,11 @@ vi.mock('aws-amplify/auth', () => ({
 }));
 
 vi.mock('./utils/account', () => ({ getMyAccount: vi.fn() }));
+// Observe's own behaviour is covered in ObservationWindow.test.jsx; here it only needs to render.
+vi.mock('./utils/observation/data', () => ({
+  loadObservationData: vi.fn(() => Promise.resolve({ feeds: [], items: [], runs: [] })),
+  widenSearchTerm: vi.fn(() => Promise.resolve({ synonyms: [], broader: [] })),
+}));
 vi.mock('./utils/adminLogs', () => ({ getAdminLogs: vi.fn() }));
 vi.mock('./utils/adminMetrics', () => ({ getAdminMetrics: vi.fn() }));
 vi.mock('./utils/adminConfig', () => ({ updateAdminConfig: vi.fn() }));
@@ -366,7 +371,7 @@ describe('App authenticated sign-out round trip', () => {
     expect(screen.getByRole('button', { name: 'Orient' })).toHaveAttribute('aria-current', 'page');
 
     fireEvent.click(screen.getByRole('button', { name: 'Observe' }));
-    expect(screen.getByRole('heading', { name: 'Observation Window' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Observation Window' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Observe' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByRole('heading', { name: 'Your Orientation Guide', level: 1 })).not.toBeInTheDocument();
 
@@ -387,7 +392,7 @@ describe('App authenticated sign-out round trip', () => {
     expect(await screen.findByRole('heading', { name: 'How it works' })).toBeVisible();
 
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
-    expect(screen.getByRole('heading', { name: 'Observation Window' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Observation Window' })).toBeVisible();
   });
 
   it('returns to Orient after a sign-out and a fresh sign-in', async () => {

@@ -37,3 +37,49 @@ body {
     box-shadow: none !important;
   }
 }
+
+/* Observation Window: the label column is shared by every lane, the axis and the slider, so the
+   slider's thumb centre reaches both ends of the time axis (it sits half a thumb inside each). */
+.ow-root {
+  --ow-label: 170px;
+}
+@media (max-width: 640px) {
+  .ow-root {
+    --ow-label: 90px;
+  }
+}
+.ow-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  height: 20px;
+  margin-left: calc(var(--ow-label) - 7px);
+  width: calc(100% - var(--ow-label) + 14px);
+  background: transparent;
+}
+.ow-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  background: #1e2939;
+  border-radius: 2px;
+}
+.ow-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border: 0;
+  border-radius: 50%;
+  background: #818cf8;
+}
+.ow-slider::-moz-range-track {
+  height: 4px;
+  background: #1e2939;
+  border-radius: 2px;
+}
+.ow-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: #818cf8;
+}
