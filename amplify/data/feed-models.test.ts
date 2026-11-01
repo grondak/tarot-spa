@@ -60,4 +60,11 @@ describe('Observation Window backend wiring', () => {
     expect(backendSource).toContain("feedCollectorErrorAlarm.addAlarmAction(new SnsAction(workerFailureTopic));");
     expect(backendSource).toContain("feedCollectorMissedInvocationAlarm.addAlarmAction(new SnsAction(workerFailureTopic));");
   });
+
+  it('alarms when widen-search errors, and gives it no table access', () => {
+    expect(backendSource).toContain('WidenSearchLambdaErrorAlarm');
+    expect(backendSource).toMatch(/widenSearchErrorAlarm\.addAlarmAction\(new SnsAction\(workerFailureTopic\)\)/);
+    expect(backendSource).not.toMatch(/grant[A-Za-z]*\([^)]*widenSearchLambda/);
+    expect(backendSource).not.toMatch(/Table\.grant\(widenSearchLambda/);
+  });
 });

@@ -147,6 +147,7 @@ const apiKeyAlertLambda = backend.apiKeyAlert.resources.lambda;
 const budgetAlertLambda = backend.budgetAlert.resources.lambda;
 const checkInviteKeyLambda = backend.checkInviteKey.resources.lambda;
 const feedCollectorLambda = backend.feedCollector.resources.lambda;
+const widenSearchLambda = backend.widenSearch.resources.lambda;
 const inviteKeyMintLambda = backend.inviteKeyMint.resources.lambda;
 const inviteKeyRevokeLambda = backend.inviteKeyRevoke.resources.lambda;
 const orientationGuideLambda = backend.orientationGuide.resources.lambda;
@@ -621,6 +622,25 @@ const feedCollectorMissedInvocationAlarm = new Alarm(
 );
 feedCollectorMissedInvocationAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
 
+// widen-search is a pure lookup in a bundled table: it needs no grants and touches no data, so the
+// only way it fails is a bug or a bad deploy. The page falls back to exact matches when a lookup
+// fails, so users see nothing, which is why a failure has to page someone instead.
+const widenSearchErrorAlarm = new Alarm(
+  operationalStack,
+  'WidenSearchLambdaErrorAlarm',
+  {
+    metric: widenSearchLambda.metricErrors({
+      period: Duration.hours(1),
+      statistic: 'Sum',
+    }),
+    threshold: 1,
+    evaluationPeriods: 1,
+    comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+    treatMissingData: TreatMissingData.NOT_BREACHING,
+  },
+);
+widenSearchErrorAlarm.addAlarmAction(new SnsAction(workerFailureTopic));
+
 dailyUsageTable.grantReadData(usageCounterLambda);
 configTable.grantReadData(usageCounterLambda);
 backend.usageCounter.addEnvironment('DAILY_USAGE_TABLE_NAME', dailyUsageTable.tableName);
@@ -731,6 +751,11 @@ new StringParameter(dataStack, 'FeedDailyCountTableNameParam', {
 new StringParameter(dataStack, 'CollectorRunTableNameParam', {
   parameterName: `${ssmPrefix}/collector-run-table-name`,
   stringValue: collectorRunTable.tableName,
+});
+// So scripts/smoke-observation.mjs can invoke the lookup without guessing a generated function name.
+new StringParameter(dataStack, 'WidenSearchFunctionNameParam', {
+  parameterName: `${ssmPrefix}/widen-search-function-name`,
+  stringValue: widenSearchLambda.functionName,
 });
 
 // The Lambda gets the SSM *paths* (plain strings) and resolves the names at cold start.
