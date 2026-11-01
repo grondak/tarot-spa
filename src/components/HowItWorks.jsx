@@ -81,6 +81,17 @@ export default function HowItWorks({ onBack = () => {} }) {
           </a>
         </div>
 
+        <div className="mx-auto mt-6 max-w-2xl space-y-6 text-gray-300">
+          <p>
+            <strong className="text-white">The Observation Window</strong> is the Observe step of
+            the loop: a timeline of news from public RSS feeds I chose — business, war, tech,
+            telecom, AI — that you can scrub back through to see what was in the news around any
+            hour. Once a day it also shows one item from a pool of sources outside those interests,
+            labelled as such, so your view doesn’t close in on itself. It shows what happened near
+            each moment. It doesn’t say what causes what, and it never tells you what to do.
+          </p>
+        </div>
+
         <div className="mx-auto mt-6 max-w-2xl space-y-6 border-t border-gray-800 pt-6 text-gray-300">
           <p>
             <strong className="text-white">Data retention:</strong> what you type and the Guide
@@ -96,6 +107,20 @@ export default function HowItWorks({ onBack = () => {} }) {
             day. You know the phrase, “if the service is free, you’re the product”? You don’t
             want to be our product. Eventually this will cost $12/year — a buck a month. Not too
             shabby.
+          </p>
+        </div>
+
+        <div className="mx-auto mt-6 max-w-2xl space-y-6 text-gray-300">
+          <p>
+            <strong className="text-white">Observation Window data:</strong> the news is collected
+            every hour into one store that everyone shares, and each story is deleted after 30
+            days. After that only a count of stories per source per day is kept, never any text.
+            Nothing about you is stored on the server — no reading history, searches or clicks.
+            Your daily outside-interest pick is worked out in your browser from your account and
+            the date. A word you search is sent on its own to look up synonyms and isn’t saved.
+            Which groups you closed and which sources you dismissed stay in this browser only; you
+            can clear them any time from <strong className="text-white">Your account</strong>.
+            Links open the original publisher’s site.
           </p>
         </div>
 

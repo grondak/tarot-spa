@@ -3,36 +3,20 @@ import { stemmer } from 'stemmer';
 import ObservationCards from './ObservationCards';
 import ObservationTimeline from './ObservationTimeline';
 import { loadObservationData, widenSearchTerm } from '../utils/observation/data';
+import {
+  COLLAPSED_KEY, DISMISSED_KEY, clearObservationPreferences, readSet, writeSet,
+} from '../utils/observation/preferences';
 import { LEVEL_NAMES, MIN_CARDS, parseSearch } from '../utils/observation/search';
 import { HOUR, buildModel, formatTime } from '../utils/observation/timeline';
 import {
   WINDOW_OPTIONS, computeView, expandableTerms, searchCountText,
 } from '../utils/observation/view';
 
-const COLLAPSED_KEY = 'owCollapsedGroups';
-// Dismissed outside-interest sources are remembered in this browser only (epic S2.4 assumption).
-const DISMISSED_KEY = 'owDismissedSources';
 const CARD_COUNTS = [3, 6, 12, 24];
 const PLAY_STEP_MS = 80;
 
 const buttonClass = 'rounded-md border border-gray-800 bg-gray-900 px-2.5 py-1 text-sm text-white hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-40';
 const accentButtonClass = `${buttonClass} !border-indigo-400 !text-indigo-300`;
-
-function readSet(key) {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(key) ?? '[]'));
-  } catch {
-    return new Set();
-  }
-}
-
-function writeSet(key, values) {
-  try {
-    localStorage.setItem(key, JSON.stringify([...values]));
-  } catch {
-    // Storage unavailable: the choice just does not survive a reload.
-  }
-}
 
 const readCollapsed = () => readSet(COLLAPSED_KEY);
 const writeCollapsed = (collapsed) => writeSet(COLLAPSED_KEY, collapsed);
@@ -57,6 +41,7 @@ export default function ObservationWindow({
   const [blocked, setBlocked] = useState(() => new Set());
   const [playing, setPlaying] = useState(false);
   const [dismissed, setDismissed] = useState(() => readSet(DISMISSED_KEY));
+  const [forgotten, setForgotten] = useState(false);
   const asked = useRef(new Set());
   const mounted = useRef(false);
 
@@ -151,6 +136,13 @@ export default function ObservationWindow({
   const restoreSources = () => {
     writeSet(DISMISSED_KEY, []);
     setDismissed(new Set());
+  };
+
+  const forgetChoices = () => {
+    clearObservationPreferences();
+    setCollapsed(new Set());
+    setDismissed(new Set());
+    setForgotten(true);
   };
 
   useEffect(() => {
@@ -334,6 +326,18 @@ export default function ObservationWindow({
         )}
 
         <ObservationCards model={model} view={view} search={search} onDismiss={dismissSource} />
+
+        <footer className="mt-8 border-t border-gray-800 pt-4 text-sm text-gray-400">
+          <p>
+            The news here is shared by everyone and kept 30 days. Nothing about what you look at is
+            stored on our servers. The only things remembered are your open and closed groups and any
+            sources you dismissed, and only in this browser.
+          </p>
+          <button type="button" className={`mt-2 ${buttonClass}`} onClick={forgetChoices}>
+            Forget my choices on this page
+          </button>
+          {forgotten && <span role="status" className="ml-3">Forgotten. This browser remembers nothing about this page now.</span>}
+        </footer>
       </div>
     </main>
   );

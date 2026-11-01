@@ -11,10 +11,21 @@ describe('HowItWorks', () => {
     expect(screen.getByText(/OODA loop/)).toBeVisible();
     expect(screen.getByText(/Data retention:/)).toBeVisible();
     expect(screen.getByText(/Cost:/)).toBeVisible();
+    expect(screen.getByText(/Observation Window data:/)).toBeVisible();
     expect(screen.getByText(/Getting in:/)).toBeVisible();
 
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it('explains the Observation Window and what it stores', () => {
+    render(<HowItWorks />);
+
+    expect(screen.getByText(/Observe step of/)).toBeVisible();
+    const data = screen.getByText(/Observation Window data:/).closest('p');
+    expect(data).toHaveTextContent('deleted after 30 days');
+    expect(data).toHaveTextContent('Nothing about you is stored on the server');
+    expect(data).toHaveTextContent('stay in this browser only');
   });
 
   it('draws three live cards and can redraw them', () => {

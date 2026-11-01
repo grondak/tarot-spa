@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getMyAccount } from '../utils/account';
+import { clearObservationPreferences } from '../utils/observation/preferences';
 
 const buttonClass = 'rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500';
 
@@ -10,11 +11,13 @@ const GENERATION_LABELS = {
 
 export default function AccountScreen({
   getMyAccountFn = getMyAccount,
+  clearPreferencesFn = clearObservationPreferences,
   onBack = () => {},
 }) {
   const [loadStatus, setLoadStatus] = useState('loading');
   const [account, setAccount] = useState(null);
   const [requestId, setRequestId] = useState(0);
+  const [forgetStatus, setForgetStatus] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -94,6 +97,29 @@ export default function AccountScreen({
             <dd className="mt-1 text-gray-400">{inviteKeyStatus}</dd>
           </div>
         </dl>
+        <section className="mt-8" aria-labelledby="observe-data-heading">
+          <h2 id="observe-data-heading" className="text-sm font-semibold text-gray-300">Observation Window data</h2>
+          <p className="mt-1 text-gray-400">
+            Nothing about what you look at in the Observation Window is stored on our servers, so
+            there is no history to delete there. This browser remembers which groups you closed and
+            which outside-interest sources you dismissed. Clear that here, or from the Window itself.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className={buttonClass}
+              onClick={() => setForgetStatus(clearPreferencesFn() ? 'cleared' : 'failed')}
+            >
+              Clear what this browser remembers
+            </button>
+            {forgetStatus === 'cleared' && (
+              <span role="status" className="text-sm text-gray-400">Cleared.</span>
+            )}
+            {forgetStatus === 'failed' && (
+              <span role="alert" className="text-sm text-red-400">This browser wouldn’t let us clear it.</span>
+            )}
+          </div>
+        </section>
         <button type="button" onClick={onBack} className={`mt-8 ${buttonClass}`}>
           Back
         </button>

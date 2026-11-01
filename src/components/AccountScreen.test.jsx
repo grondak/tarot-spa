@@ -62,4 +62,42 @@ describe('AccountScreen', () => {
       'At this time, second generation accounts may not mint keys to invite others. We’re testing who’s sharing the app. Thanks for your understanding.',
     )).toBeVisible();
   });
+
+  describe('Observation Window data', () => {
+    const account = () => Promise.resolve({ generation: 'FirstGen', onwardKeyGenerated: true });
+
+    it('says there is no server-side history and clears what this browser remembers', async () => {
+      const clearPreferencesFn = vi.fn().mockReturnValue(true);
+      render(<AccountScreen getMyAccountFn={account} clearPreferencesFn={clearPreferencesFn} />);
+
+      expect(await screen.findByText(/Nothing about what you look at in the Observation Window is stored on our servers/)).toBeVisible();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Clear what this browser remembers' }));
+
+      expect(clearPreferencesFn).toHaveBeenCalledOnce();
+      expect(screen.getByRole('status')).toHaveTextContent('Cleared.');
+    });
+
+    it('says so when the browser will not let it clear', async () => {
+      render(<AccountScreen getMyAccountFn={account} clearPreferencesFn={() => false} />);
+
+      await screen.findByText('First generation');
+      fireEvent.click(screen.getByRole('button', { name: 'Clear what this browser remembers' }));
+
+      expect(screen.getByRole('alert')).toHaveTextContent('wouldn’t let us clear it');
+    });
+
+    it('really removes the remembered choices by default', async () => {
+      localStorage.setItem('owCollapsedGroups', '["war"]');
+      localStorage.setItem('owDismissedSources', '["nature"]');
+      render(<AccountScreen getMyAccountFn={account} />);
+
+      await screen.findByText('First generation');
+      fireEvent.click(screen.getByRole('button', { name: 'Clear what this browser remembers' }));
+
+      expect(localStorage.getItem('owCollapsedGroups')).toBeNull();
+      expect(localStorage.getItem('owDismissedSources')).toBeNull();
+    });
+  });
 });

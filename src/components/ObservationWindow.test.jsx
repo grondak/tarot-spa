@@ -392,3 +392,29 @@ describe('ObservationWindow outside-interest picks', () => {
     expect(screen.queryByTestId('group-outside your interests')).not.toBeInTheDocument();
   });
 });
+
+describe('ObservationWindow forgetting', () => {
+  it('forgets collapsed groups and dismissed sources on request', async () => {
+    localStorage.setItem('owCollapsedGroups', JSON.stringify(['telecom']));
+    localStorage.setItem('owDismissedSources', JSON.stringify(['nature']));
+    await renderWindow({
+      loadFn: vi.fn().mockResolvedValue({ feeds: [...feedRows, ...poolFeedRows], items: [...itemRows, ...poolItemRows], runs: runRows }),
+      userId: 'user-1',
+    });
+    expect(screen.queryByTestId('lane-lr')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restore 1 dismissed source' })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Forget my choices on this page' }));
+
+    expect(screen.getByTestId('lane-lr')).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Restore .* dismissed/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Forgotten.');
+    expect(localStorage.getItem('owCollapsedGroups')).toBeNull();
+    expect(localStorage.getItem('owDismissedSources')).toBeNull();
+  });
+
+  it('tells the user what is and is not stored', async () => {
+    await renderWindow();
+    expect(screen.getByText(/Nothing about what you look at is stored on our servers/)).toBeVisible();
+  });
+});
