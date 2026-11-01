@@ -5,7 +5,7 @@ import {
   GetCommand,
   PutCommand,
 } from '@aws-sdk/lib-dynamodb';
-import { SPREADS } from '../../../src/utils/deck';
+import { SPREADS, decodeDraw } from '../../../src/utils/deck';
 import { SESSION_RETENTION_DAYS } from '../../config';
 import { effectiveStatus, isErrorNamed } from '../usage-counter/reservation';
 
@@ -15,6 +15,7 @@ type StartOrientationGuideEvent = {
     requestId?: string;
     context?: string;
     spreadKey?: string;
+    drawCode?: string | null;
   } | null;
 };
 
@@ -36,6 +37,7 @@ type ExistingSession = {
   owner?: string;
   context?: string;
   spreadKey?: string;
+  drawCode?: string;
   status?: string;
 };
 
@@ -82,6 +84,10 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
       throw new Error(`context must be ${MAX_CONTEXT_CHARACTERS} characters or fewer`);
     }
     if (!Object.hasOwn(SPREADS, spreadKey)) throw new Error('invalid spreadKey');
+    const drawCode = event.arguments?.drawCode ?? undefined;
+    if (drawCode !== undefined && decodeDraw(drawCode)?.spreadKey !== spreadKey) {
+      throw new Error('invalid drawCode');
+    }
     if (!UUID_PATTERN.test(requestId)) throw new Error('invalid requestId');
     if (!deps.tableNames.session || !deps.workerFunctionArn) {
       throw new Error('start-orientation-guide configuration is missing');
@@ -99,6 +105,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
           owner: accountId,
           spreadKey,
           context,
+          ...(drawCode !== undefined && { drawCode }),
           status: 'PENDING',
           createdAt: timestamp,
           updatedAt: timestamp,
@@ -120,6 +127,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
         existing?.owner !== accountId
         || existing.context !== context
         || existing.spreadKey !== spreadKey
+        || existing.drawCode !== drawCode
       ) {
         throw new Error('IDEMPOTENCY_CONFLICT');
       }

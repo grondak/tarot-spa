@@ -165,6 +165,9 @@ const schema = a.schema({
       requestId: a.string().required(),
       context: a.string().required(),
       spreadKey: a.string().required(),
+      // Optional encodeDraw() code: the cards the user already saw and chose.
+      // Absent, the worker draws server-side as before.
+      drawCode: a.string(),
     })
     .returns(a.json())
     .authorization((allow) => [allow.authenticated()])

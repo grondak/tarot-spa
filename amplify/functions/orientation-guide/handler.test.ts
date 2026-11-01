@@ -12,6 +12,7 @@ import {
   createStepBodies,
   MAX_TAVILY_QUERY_CHARACTERS,
 } from './handler';
+import { decodeDraw } from '../../../src/utils/deck';
 
 const SESSION_ID = '12345678-1234-4234-9234-123456789012';
 const baseCard = {
@@ -340,6 +341,33 @@ describe('durable orientation-guide lifecycle', () => {
       'persist-result',
       'judge-dispatch',
     ]);
+  });
+
+  it("uses the user's chosen draw instead of drawing server-side", async () => {
+    const deps = dependencies();
+    deps.state.session.spreadKey = 'three';
+    deps.state.session.drawCode = 'three:001120731';
+
+    const { execution } = await run(deps);
+
+    expect(execution.getStatus()).toBe('SUCCEEDED');
+    expect(deps.drawCards).not.toHaveBeenCalled();
+    const decoded = decodeDraw('three:001120731');
+    expect(deps.state.session.cards).toEqual(decoded!.cards.map(({ name, inverted }, index) => ({
+      name,
+      inverted,
+      position: ['Context', 'Challenge', 'Opportunity'][index],
+    })));
+  });
+
+  it.each(['single:000', 'garbage'])('rejects a Session drawCode that does not match its spread (%s)', async (drawCode) => {
+    const deps = dependencies();
+
+    await expect(createStepBodies(deps).draw({
+      id: SESSION_ID,
+      spreadKey: 'three',
+      drawCode,
+    })).rejects.toThrow('invalid Session drawCode');
   });
 
   it('completes successfully even when the Metrics counter write fails', async () => {

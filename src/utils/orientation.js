@@ -64,12 +64,13 @@ export async function getOrientationStatus() {
   return typeof data === 'string' ? JSON.parse(data) : data;
 }
 
-export async function startOrientationGuide(requestId, context, spreadKey) {
+export async function startOrientationGuide(requestId, context, spreadKey, drawCode) {
   const client = generateClient();
   const { data, errors } = await client.mutations.startOrientationGuide({
     requestId,
     context,
     spreadKey,
+    drawCode,
   });
   if (errors?.length) throw new Error(errors[0].message);
   return typeof data === 'string' ? JSON.parse(data) : data;

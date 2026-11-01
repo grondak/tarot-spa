@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import OrnamentalDivider from './OrnamentalDivider';
 import SpreadSelector from './SpreadSelector';
+import CardDisplay from './CardDisplay';
+import { gridClass } from './SpreadView';
+import { SPREADS, shuffleAndDraw, encodeDraw } from '../utils/deck';
 
 const CONTEXT_HINT = 'Tell me about your upcoming decision, and what you know or think you know about the situation.';
 const SAMPLE_SEEDS = [
@@ -21,6 +24,10 @@ const GENERATION_ERROR = 'Something went wrong generating your Guide — nothing
 const MONTHLY_ERROR = "Everyone's shared monthly Guide budget is spent — Orientation Guides return when the month rolls over. Quick Draw is always free.";
 const STATUS_UNKNOWN = 'Your Guide is taking longer than expected. We kept this request so you can check it again; usage may already have been reserved.';
 
+function drawFor(key) {
+  return key ? shuffleAndDraw(SPREADS[key].positions.length) : [];
+}
+
 export default function ContextEntry({
   rateLimited = false,
   initialContext = '',
@@ -34,14 +41,20 @@ export default function ContextEntry({
 }) {
   const [context, setContext] = useState(initialContext);
   const [spreadKey, setSpreadKey] = useState(initialSpreadKey);
+  const [cards, setCards] = useState(() => drawFor(initialSpreadKey));
   const [mode, setMode] = useState('orient');
   const statusUnknown = orientError?.includes('GENERATION_STATUS_UNKNOWN') === true;
 
   function handleSubmit(event) {
     event.preventDefault();
     if (orientBusy || statusUnknown) return;
-    if (!context.trim() || !spreadKey) return;
-    onOrient(context.trim(), spreadKey);
+    if (!context.trim() || !spreadKey || cards.length === 0) return;
+    onOrient(context.trim(), spreadKey, encodeDraw(spreadKey, cards));
+  }
+
+  function handleSelectSpread(key) {
+    setSpreadKey(key);
+    setCards(drawFor(key));
   }
 
   if (!orientBusy && !orientError && (rateLimited || mode === 'quickdraw')) {
@@ -118,11 +131,38 @@ export default function ContextEntry({
                 embedded
                 selectedKey={spreadKey}
                 showLoadDraw={false}
-                onSelect={setSpreadKey}
+                onSelect={handleSelectSpread}
                 onLoadCode={() => false}
               />
             </div>
           </div>
+          {spreadKey && cards.length > 0 && (
+            <div className="mt-8">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Your draw</p>
+                <button
+                  type="button"
+                  onClick={() => setCards(drawFor(spreadKey))}
+                  disabled={orientBusy}
+                  className="rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Redraw
+                </button>
+              </div>
+              <p className="mt-2 text-sm text-gray-500">
+                Redraw as often as you like, then ask for your Guide with these cards. The ones you didn't want are often the useful ones.
+              </p>
+              <div className={`mt-4 grid gap-6 ${gridClass(cards.length)}`}>
+                {cards.map((card, i) => (
+                  <CardDisplay
+                    key={`${card.name}-${i}`}
+                    card={card}
+                    position={SPREADS[spreadKey].positions[i]}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
           <div className="mt-8 flex justify-center">
             <button
               type="submit"

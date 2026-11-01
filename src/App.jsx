@@ -489,7 +489,7 @@ export default function App() {
     };
   }, [authState, cancelOrientationDelays, resumeActiveOrientationSession]);
 
-  async function handleOrient(context, selectedSpreadKey) {
+  async function handleOrient(context, selectedSpreadKey, drawCode) {
     if (orientationSubmitting.current || getActiveOrientationSession()) return;
     clearOrientationRedrawContext();
     orientationSubmitting.current = true;
@@ -524,7 +524,7 @@ export default function App() {
     }
 
     const start = await runUntilDeadline(
-      startOrientationGuide(requestId, context, selectedSpreadKey),
+      startOrientationGuide(requestId, context, selectedSpreadKey, drawCode),
       deadline,
     );
     if (orientationFlowId.current !== flowId || start.kind === 'cancelled') return;
@@ -577,7 +577,7 @@ export default function App() {
       }
       if (existingSession.status === 'PENDING') {
         const retry = await runUntilDeadline(
-          startOrientationGuide(requestId, context, selectedSpreadKey),
+          startOrientationGuide(requestId, context, selectedSpreadKey, drawCode),
           deadline,
         );
         if (orientationFlowId.current !== flowId || retry.kind === 'cancelled') return;

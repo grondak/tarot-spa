@@ -11,7 +11,7 @@ import {
   retryPresets,
   withDurableExecution,
 } from '@aws/durable-execution-sdk-js';
-import { SPREADS, shuffleAndDraw } from '../../../src/utils/deck';
+import { SPREADS, decodeDraw, shuffleAndDraw } from '../../../src/utils/deck';
 import { COST_ESTIMATE_USD } from '../../config';
 import {
   effectiveStatus,
@@ -53,6 +53,7 @@ type SessionRecord = {
   owner?: string;
   context?: string;
   spreadKey?: string;
+  drawCode?: string;
   status?: string;
   createdAt?: string;
 };
@@ -274,7 +275,12 @@ export function createStepBodies(deps: HandlerDependencies = defaultDependencies
     const spreadKey = session.spreadKey ?? '';
     if (!Object.hasOwn(SPREADS, spreadKey)) throw new Error('invalid Session spreadKey');
     const spread = SPREADS[spreadKey as keyof typeof SPREADS];
-    return deps.drawCards(spread.positions.length)
+    // The user may have chosen their own draw before asking for the Guide.
+    const chosen = session.drawCode === undefined ? null : decodeDraw(session.drawCode);
+    if (session.drawCode !== undefined && chosen?.spreadKey !== spreadKey) {
+      throw new Error('invalid Session drawCode');
+    }
+    return (chosen?.cards ?? deps.drawCards(spread.positions.length))
       .map((card, index) => ({ ...card, position: spread.positions[index] }));
   }
 

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ContextEntry from './ContextEntry';
-import { SPREADS } from '../utils/deck';
+import { SPREADS, decodeDraw } from '../utils/deck';
 
 const HINT = 'Tell me about your upcoming decision, and what you know or think you know about the situation.';
 const RATE_LIMIT_NOTE = "You're tapped out on Orientation Guides for today — but the cards themselves are always free and unlimited. Draw away, no LLM, no limit. Your Orient-o-meter refills tomorrow.";
@@ -39,6 +39,15 @@ function orientButton() {
 
 function spreadButton(key) {
   return screen.getByRole('button', { name: new RegExp(SPREADS[key].label) });
+}
+
+function shownCardNames() {
+  return screen.getAllByRole('img').map((img) => img.getAttribute('alt'));
+}
+
+function submittedCardNames() {
+  const [, , drawCode] = onOrient.mock.calls[0];
+  return decodeDraw(drawCode).cards.map((card) => card.name);
 }
 
 describe('ContextEntry canonical state', () => {
@@ -85,7 +94,35 @@ describe('ContextEntry canonical state', () => {
     expect(cta).toBeEnabled();
     fireEvent.click(cta);
     expect(onOrient).toHaveBeenCalledTimes(1);
-    expect(onOrient).toHaveBeenCalledWith('A real decision.', 'decision');
+    expect(onOrient).toHaveBeenCalledWith('A real decision.', 'decision', expect.stringMatching(/^decision:/));
+  });
+
+  it('shows the draw as soon as a spread is chosen and carries it into the submit', () => {
+    renderEntry();
+
+    expect(screen.queryByText('Your draw')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'A real decision.' } });
+    fireEvent.click(spreadButton('decision'));
+    expect(screen.getByText('Your draw')).toBeVisible();
+    expect(shownCardNames()).toHaveLength(4);
+
+    fireEvent.click(orientButton());
+    expect(submittedCardNames()).toEqual(shownCardNames());
+  });
+
+  it('redraws without submitting and submits the draw on screen', () => {
+    renderEntry();
+
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'A real decision.' } });
+    fireEvent.click(spreadButton('single'));
+    for (let i = 0; i < 3; i += 1) {
+      fireEvent.click(screen.getByRole('button', { name: 'Redraw' }));
+    }
+    expect(onOrient).not.toHaveBeenCalled();
+    expect(shownCardNames()).toHaveLength(1);
+
+    fireEvent.click(orientButton());
+    expect(submittedCardNames()).toEqual(shownCardNames());
   });
 
   it('blocks a programmatic form submit while Context is whitespace-only', () => {

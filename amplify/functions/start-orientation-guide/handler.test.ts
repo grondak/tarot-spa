@@ -96,6 +96,51 @@ describe('start-orientation-guide handler', () => {
     expect(deps.lambda.send).not.toHaveBeenCalled();
   });
 
+  it('stores a valid drawCode on the Session', async () => {
+    const deps = dependencies();
+
+    await createHandler(deps)({
+      ...event,
+      arguments: { ...event.arguments, drawCode: 'single:120' },
+    });
+
+    expect((deps.dynamo.send.mock.calls[0][0] as { input: { Item: unknown } }).input.Item)
+      .toMatchObject({ spreadKey: 'single', drawCode: 'single:120' });
+  });
+
+  it.each(['three:001120731', 'garbage', 'single:990'])('rejects an invalid or mismatched drawCode (%s)', async (drawCode) => {
+    const deps = dependencies();
+
+    await expect(createHandler(deps)({
+      ...event,
+      arguments: { ...event.arguments, drawCode },
+    })).rejects.toThrow('invalid drawCode');
+
+    expect(deps.dynamo.send).not.toHaveBeenCalled();
+    expect(deps.lambda.send).not.toHaveBeenCalled();
+  });
+
+  it('rejects a retry that changes the drawCode', async () => {
+    const deps = dependencies();
+    deps.dynamo.send
+      .mockRejectedValueOnce(conditionalFailure())
+      .mockResolvedValueOnce({
+        Item: {
+          id: REQUEST_ID,
+          owner: 'account-1',
+          context: event.arguments.context,
+          spreadKey: 'single',
+          drawCode: 'single:120',
+          status: 'PENDING',
+        },
+      });
+
+    await expect(createHandler(deps)({
+      ...event,
+      arguments: { ...event.arguments, drawCode: 'single:121' },
+    })).rejects.toThrow('IDEMPOTENCY_CONFLICT');
+  });
+
   it('accepts Context at the exact 10,000-character boundary', async () => {
     const deps = dependencies();
     const boundaryEvent = {

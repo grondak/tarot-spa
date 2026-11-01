@@ -490,6 +490,7 @@ describe('App authenticated sign-out round trip', () => {
       '12345678-1234-4234-9234-123456789012',
       'A consequential choice.',
       'decision',
+      expect.stringMatching(/^decision:/),
     );
     expect(localStorage.getItem('tarotSpaActiveOrientationSession')).toBe(
       '12345678-1234-4234-9234-123456789012',
@@ -679,16 +680,20 @@ describe('App authenticated sign-out round trip', () => {
 
     expect(screen.getByText('Healed orphan Session.')).toBeVisible();
     expect(startOrientationGuide).toHaveBeenCalledTimes(2);
+    const [, , , firstDrawCode] = startOrientationGuide.mock.calls[0];
+    expect(firstDrawCode).toMatch(/^decision:/);
     expect(startOrientationGuide.mock.calls).toEqual([
       [
         '12345678-1234-4234-9234-123456789012',
         'A decision.',
         'decision',
+        firstDrawCode,
       ],
       [
         '12345678-1234-4234-9234-123456789012',
         'A decision.',
         'decision',
+        firstDrawCode,
       ],
     ]);
   });
@@ -1254,8 +1259,8 @@ describe('App authenticated sign-out round trip', () => {
       expect(await screen.findByText('The redrawn guide.')).toBeVisible();
       expect(startOrientationGuide).toHaveBeenCalledTimes(2);
       expect(startOrientationGuide.mock.calls).toEqual([
-        [firstSessionId, 'A decision.', 'single'],
-        [secondSessionId, submittedContext, 'single'],
+        [firstSessionId, 'A decision.', 'single', expect.stringMatching(/^single:/)],
+        [secondSessionId, submittedContext, 'single', expect.stringMatching(/^single:/)],
       ]);
       expect(startOrientationGuide.mock.calls[0][0])
         .not.toBe(startOrientationGuide.mock.calls[1][0]);
