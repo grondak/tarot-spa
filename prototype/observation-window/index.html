@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Observation Window prototype</title>
+<style>
+  /* Matches the tarot app: Tailwind gray-950 page, gray-900 panels, indigo accent. */
+  :root {
+    color-scheme: dark;
+    --bg: #030712; --panel: #101828; --text: #ffffff; --muted: #99a1af; --line: #1e2939;
+    --accent: #818cf8; --band: rgba(97, 95, 255, 0.16); --gap: rgba(153, 161, 175, 0.22);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
+  header, main { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+  header { padding-top: 16px; }
+  h1 { font-size: 18px; margin: 0 0 2px; }
+  .sub { color: var(--muted); margin: 0 0 12px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 8px 0; }
+  .controls label { color: var(--muted); display: flex; gap: 6px; align-items: center; }
+  button, select { font: inherit; padding: 4px 10px; border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 6px; cursor: pointer; }
+  button.live { border-color: var(--accent); color: var(--accent); }
+  .readout { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 190px; }
+  /* The slider spans exactly the dot area: past the 170px label column (+1px timeline border), with the
+     16px thumb's half-width added on each side so the thumb's center reaches both ends of the time axis. */
+  #slider { -webkit-appearance: none; appearance: none; background: transparent; display: block; height: 20px; margin: 0 0 0 163px; width: calc(100% - 156px); }
+  #slider::-webkit-slider-runnable-track { height: 4px; background: var(--line); border-radius: 2px; }
+  #slider::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); margin-top: -6px; border: 0; }
+  #slider::-moz-range-track { height: 4px; background: var(--line); border-radius: 2px; }
+  #slider::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 0; }
+  .timeline { position: relative; margin: 8px 0 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .lane { display: grid; grid-template-columns: 170px 1fr; align-items: center; height: 24px; border-top: 1px solid var(--line); }
+  .lane:first-child { border-top: 0; }
+  .lane[hidden] { display: none; }
+  .lane.group { font-weight: 600; cursor: pointer; background: color-mix(in srgb, var(--line) 35%, transparent); }
+  .lane.group:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .lane.group small { font-weight: 400; }
+  .lane.child .name { padding-left: 22px; }
+  .chev { color: var(--muted); }
+  .lane .name { padding: 0 8px; font-size: 12px; white-space: nowrap; display: flex; align-items: center; gap: 4px; min-width: 0; }
+  .lane .name .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .lane.dim .name .label { opacity: 0.4; }
+  .solo { flex: none; padding: 0 5px; font-size: 10px; font-weight: 700; line-height: 16px; opacity: 0.35; border-radius: 4px; }
+  .lane:hover .solo, .solo:focus-visible { opacity: 1; }
+  .solo.on { opacity: 1; background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  .dot.off, .dot.in.off { opacity: 0.07; transform: none; pointer-events: none; z-index: 0; }
+  #clearSolo[hidden] { display: none; }
+  #search { font: inherit; padding: 4px 10px; width: 220px; border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 6px; }
+  #search:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .count { color: var(--muted); font-variant-numeric: tabular-nums; }
+  #expansion[hidden] { display: none; }
+  #expansion button { padding: 0 6px; font-size: 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 2px; margin: 0 4px 2px 0; padding: 1px 4px 1px 8px; border: 1px dashed var(--accent); border-radius: 12px; color: var(--text); }
+  .chip button { border: 0; background: transparent; color: var(--muted); padding: 0 4px; }
+  .chip.broader { border-style: dotted; }
+  .dot.rel { outline: 1px solid var(--text); outline-offset: 1px; }
+  .card.related { border-left-style: dashed; }
+  .card .why { margin-top: 4px; font-size: 12px; color: var(--accent); }
+  .lane .name small { color: var(--muted); }
+  .track { position: relative; height: 100%; }
+  .dot { position: absolute; top: 7px; width: 9px; height: 9px; margin-left: -4px; border-radius: 50%; opacity: 0.45; cursor: pointer; }
+  .dot.est { background: transparent !important; border: 2px solid; }
+  .dot.in { opacity: 1; transform: scale(1.35); z-index: 2; }
+  .overlay { position: absolute; top: 0; bottom: 0; left: 170px; right: 0; pointer-events: none; }
+  .band { position: absolute; top: 0; bottom: 0; background: var(--band); }
+  .gapzone { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, var(--gap) 0 4px, transparent 4px 8px); }
+  .needle { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); }
+  .tick { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--line); }
+  .axis { display: grid; grid-template-columns: 170px 1fr; font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); }
+  .axis .labels { position: relative; height: 18px; }
+  .axis .labels span { position: absolute; top: 2px; transform: translateX(-50%); white-space: nowrap; }
+  .meta { color: var(--muted); margin: 4px 0 8px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 10px 12px; }
+  .card .src { font-size: 12px; color: var(--muted); }
+  .card a { color: var(--text); font-weight: 600; text-decoration: none; }
+  .card a:hover { text-decoration: underline; }
+  .card p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  details { margin-top: 12px; }
+  details li { margin: 2px 0; }
+  .empty { color: var(--muted); padding: 24px 0; }
+  @media (max-width: 640px) {
+    .lane, .axis { grid-template-columns: 90px 1fr; }
+    .overlay { left: 90px; }
+    #slider { margin-left: 83px; width: calc(100% - 76px); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Observation Window prototype</h1>
+  <p class="sub" id="sub">Loading…</p>
+  <input id="slider" type="range" aria-label="Timeline scrubber">
+  <div class="controls">
+    <span class="readout" id="readout"></span>
+    <button id="live" class="live" type="button">Go live</button>
+    <button id="play" type="button">Play</button>
+    <button id="collapse" type="button">Collapse all</button>
+    <button id="clearSolo" class="live" type="button" hidden>Clear solo (Esc)</button>
+    <input id="search" type="search" placeholder="Search titles and text" aria-label="Search titles and text" autocomplete="off">
+    <label><input id="whole" type="checkbox"> Whole word</label>
+    <span class="count" id="searchCount"></span>
+    <button id="prevMatch" type="button" hidden aria-label="Previous match" title="Previous match (Shift+Enter in the search box)">‹</button>
+    <button id="nextMatch" type="button" hidden aria-label="Next match" title="Next match (Enter in the search box)">›</button>
+    <label>Window
+      <select id="window">
+        <option value="2">±2 hours</option>
+        <option value="6">±6 hours</option>
+        <option value="24" selected>±1 day</option>
+        <option value="96">±4 days</option>
+        <option value="168">±1 week</option>
+        <option value="360">±15 days</option>
+      </select>
+    </label>
+    <label>Cards
+      <select id="cards">
+        <option>3</option><option selected>6</option><option>12</option><option>24</option>
+      </select>
+    </label>
+  </div>
+</header>
+<main>
+  <div class="timeline" id="timeline"></div>
+  <div class="meta" id="expansion" hidden></div>
+  <div class="meta" id="meta"></div>
+  <div class="cards" id="cardList"></div>
+  <details id="rest"><summary id="restSummary"></summary><ul id="restList"></ul></details>
+</main>
+<script>
+const HOUR = 3600e3;
+const $ = (id) => document.getElementById(id);
+const state = { feeds: [], items: [], runs: [], gaps: [], start: 0, end: 0, t: 0, timer: null };
+
+const fmt = (ms) => new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+// Some feeds double-encode entities (e.g. &#39;). Decode to plain text; the result is only ever shown via textContent.
+const decode = (s) => (s && s.includes('&') ? new DOMParser().parseFromString(s, 'text/html').documentElement.textContent : s);
+
+async function load() {
+  const [feeds, items, runsText] = await Promise.all([
+    fetch('/feeds.json').then((r) => r.json()),
+    fetch('/data/items.json').then((r) => r.json()),
+    fetch('/data/runs.jsonl').then((r) => (r.ok ? r.text() : '')),
+  ]);
+  state.feeds = feeds;
+  const order = Object.fromEntries(feeds.map((f, i) => [f.id, i]));
+  state.items = Object.values(items)
+    .map((i) => ({ ...i, title: decode(i.title), summary: decode(i.summary), ms: Date.parse(i.publishedAt), lane: Math.min(...i.sources.map((s) => order[s] ?? 999)) }))
+    .filter((i) => i.lane < 999);
+  state.items.forEach((i) => { i.hay = `${i.title} ${i.summary}`.toLowerCase(); });
+  // Word stems per item, for the "widen a thin search" ladder (see the Search section).
+  state.stem = (await import('/vendor/stemmer.js')).stemmer;
+  state.stemDf = new Map();
+  state.items.forEach((i) => {
+    i.stems = new Set((i.hay.match(/[\p{L}\p{N}]+/gu) ?? []).map(state.stem));
+    i.stems.forEach((s) => state.stemDf.set(s, (state.stemDf.get(s) ?? 0) + 1));
+  });
+  state.runs = runsText.split('\n').filter(Boolean).map((l) => JSON.parse(l));
+  const now = Date.now();
+  state.end = now;
+  // The axis starts at the first dot (rounded down to the hour), so the slider's left end is the first item.
+  state.start = Math.floor(Math.min(...state.items.map((i) => i.ms)) / HOUR) * HOUR;
+  // A gap is a stretch between two collector runs longer than 2.5 hours (the job is hourly).
+  for (let i = 1; i < state.runs.length; i++) {
+    const a = Date.parse(state.runs[i - 1].finishedAt), b = Date.parse(state.runs[i].startedAt);
+    if (b - a > 2.5 * HOUR) state.gaps.push([a, b]);
+  }
+  const lastRun = state.runs.at(-1);
+  $('sub').textContent = `${state.items.length} items from ${feeds.length} sources, from ${fmt(state.start)}. Last collected ${lastRun ? fmt(Date.parse(lastRun.finishedAt)) : 'never'}. Ranking is source order.`;
+  const slider = $('slider');
+  slider.min = state.start; slider.max = state.end; slider.step = HOUR; slider.value = state.end;
+  state.t = state.end;
+  buildTimeline();
+  render();
+}
+
+const pct = (ms) => ((ms - state.start) / (state.end - state.start)) * 100;
+const hue = (laneIndex) => {
+  const groups = [...new Set(state.feeds.map((f) => f.group))];
+  return Math.round((groups.indexOf(state.feeds[laneIndex].group) * 360) / groups.length);
+};
+const color = (laneIndex) => `hsl(${hue(laneIndex)} 65% 62%)`;
+
+function buildTimeline() {
+  const tl = $('timeline');
+  tl.textContent = '';
+  state.items.forEach((i) => { i.els = []; });
+  const makeDot = (item) => {
+    const li = item.lane;
+    const dot = document.createElement('div');
+    dot.className = 'dot' + (item.publishedAtEstimated ? ' est' : '');
+    dot.style.left = pct(item.ms) + '%';
+    dot.style.background = color(li);
+    dot.style.borderColor = color(li);
+    dot.title = `${state.feeds[li].label ?? state.feeds[li].name}\n${item.title}\n${fmt(item.ms)}${item.publishedAtEstimated ? ' (date estimated)' : ''}`;
+    dot.addEventListener('click', () => setT(item.ms));
+    item.els.push(dot);
+    return dot;
+  };
+  const makeSolo = (key, what) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'solo';
+    btn.dataset.key = key;
+    btn.textContent = 'S';
+    btn.title = `Solo ${what}: dim everything else and show only its cards`;
+    btn.addEventListener('click', (e) => { e.stopPropagation(); toggleSolo(key); });
+    return btn;
+  };
+  state.groups = [];
+  state.feeds.forEach((feed, li) => {
+    let g = state.groups.find((x) => x.name === feed.group);
+    if (!g) { g = { name: feed.group, lanes: [] }; state.groups.push(g); }
+    g.lanes.push(li);
+  });
+  state.groups.forEach((g) => {
+    // Submix row: all of the group's dots together, click to open or close the group.
+    const head = document.createElement('div');
+    head.className = 'lane group';
+    head.tabIndex = 0;
+    head.setAttribute('role', 'button');
+    const hname = document.createElement('div');
+    hname.className = 'name';
+    g.chevron = document.createElement('span');
+    g.chevron.className = 'chev';
+    g.countEl = document.createElement('small');
+    const hlabel = document.createElement('span');
+    hlabel.className = 'label';
+    hlabel.append(g.chevron, g.name + ' ', g.countEl);
+    hname.append(hlabel, makeSolo('g:' + g.name, g.name));
+    head.append(hname);
+    g.head = head;
+    const htrack = document.createElement('div');
+    htrack.className = 'track';
+    state.items.filter((i) => g.lanes.includes(i.lane)).forEach((item) => htrack.append(makeDot(item)));
+    head.append(htrack);
+    const toggle = () => { setCollapsed(g.name, !state.collapsed.has(g.name)); };
+    head.addEventListener('click', toggle);
+    head.addEventListener('keydown', (e) => { if (e.target === head && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggle(); } });
+    tl.append(head);
+    g.rows = g.lanes.map((li) => {
+      const feed = state.feeds[li];
+      const lane = document.createElement('div');
+      lane.className = 'lane child';
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.title = `${feed.label ?? feed.name} (${feed.group})`;
+      const label = document.createElement('span');
+      label.className = 'label';
+      label.textContent = feed.label ?? feed.name;
+      name.append(label, makeSolo('f:' + feed.id, feed.label ?? feed.name));
+      lane.append(name);
+      const track = document.createElement('div');
+      track.className = 'track';
+      state.items.filter((i) => i.lane === li).forEach((item) => track.append(makeDot(item)));
+      lane.append(track);
+      tl.append(lane);
+      return lane;
+    });
+    applyCollapsed(g);
+  });
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  for (let d = 0; d * 24 * HOUR <= state.end - state.start; d += 5) {
+    const tick = document.createElement('div');
+    tick.className = 'tick';
+    tick.style.left = pct(state.end - d * 24 * HOUR) + '%';
+    overlay.append(tick);
+  }
+  state.gaps.forEach(([a, b]) => {
+    const g = document.createElement('div');
+    g.className = 'gapzone';
+    g.title = `Collector did not run ${fmt(a)} to ${fmt(b)}`;
+    g.style.left = pct(Math.max(a, state.start)) + '%';
+    g.style.width = Math.max(0.15, pct(b) - pct(Math.max(a, state.start))) + '%';
+    overlay.append(g);
+  });
+  const band = document.createElement('div'); band.className = 'band'; band.id = 'band';
+  const needle = document.createElement('div'); needle.className = 'needle'; needle.id = 'needle';
+  overlay.append(band, needle);
+  tl.append(overlay);
+  const axis = document.createElement('div');
+  axis.className = 'axis';
+  axis.append(document.createElement('div'));
+  const labels = document.createElement('div');
+  labels.className = 'labels';
+  for (let d = 0; d * 24 * HOUR <= state.end - state.start; d += 5) {
+    const s = document.createElement('span');
+    s.style.left = pct(state.end - d * 24 * HOUR) + '%';
+    s.textContent = d === 0 ? 'now' : new Date(state.end - d * 24 * HOUR).toLocaleDateString([], { month: 'short', day: 'numeric' });
+    labels.append(s);
+  }
+  axis.append(labels);
+  tl.append(axis);
+}
+
+const STORE_KEY = 'owCollapsedGroups';
+state.collapsed = new Set();
+try { state.collapsed = new Set(JSON.parse(localStorage.getItem(STORE_KEY) ?? '[]')); } catch { /* storage unavailable: start expanded */ }
+
+function applyCollapsed(g) {
+  const closed = state.collapsed.has(g.name);
+  g.chevron.textContent = closed ? '▸ ' : '▾ ';
+  g.rows.forEach((row) => { row.hidden = closed; });
+}
+
+function setCollapsed(name, closed) {
+  if (closed) state.collapsed.add(name); else state.collapsed.delete(name);
+  try { localStorage.setItem(STORE_KEY, JSON.stringify([...state.collapsed])); } catch { /* ignore */ }
+  state.groups.forEach(applyCollapsed);
+  $('collapse').textContent = state.collapsed.size === state.groups.length ? 'Expand all' : 'Collapse all';
+}
+
+// ---- Solo ----------------------------------------------------------------
+// Like a DAW track. With any solo active, everything not soloed dims and drops out of the cards.
+state.solo = new Set();
+const inSolo = (item) => {
+  if (!state.solo.size) return true;
+  const feed = state.feeds[item.lane];
+  return state.solo.has('g:' + feed.group) || state.solo.has('f:' + feed.id);
+};
+function toggleSolo(key) {
+  if (state.solo.has(key)) state.solo.delete(key); else state.solo.add(key);
+  render();
+}
+function clearSolo() {
+  state.solo.clear();
+  render();
+}
+
+// ---- Search --------------------------------------------------------------
+// Every word typed must appear in the title or the stored summary text. Anything else dims, like solo.
+// "Whole word" matches a term only when letters or digits don't touch it, so "ai" skips "said" and "chain".
+state.terms = [];
+state.termRes = [];
+state.whole = false;
+const escapeRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const matches = (item) => (state.whole
+  ? state.termRes.every((re) => re.test(item.hay))
+  : state.terms.every((t) => item.hay.includes(t)));
+
+// Widening ladder. When the current window has fewer than MIN_CARDS exact matches, the search is widened
+// one rung at a time until it has enough, or the rungs run out:
+//   1 word forms (tariffs ~ tariff)   2 + synonyms (tariff ~ duty)   3 + broader terms (tariff ~ tax)
+// Synonyms and broader terms come from WordNet via /api/expand, and only count if they appear in your stored
+// news and are not so common (over MAX_GENERIC_DF of items) that they would match everything.
+const MIN_CARDS = 3;
+const MAX_GENERIC_DF = 0.08;
+const LEVEL_NAMES = ['', 'word forms', 'word forms and synonyms', 'word forms, synonyms and broader terms'];
+state.level = 0;
+state.alts = [];
+state.expansions = new Map(); // typed term -> { synonyms, broader }
+state.blocked = new Set();    // expansion words the user removed
+
+const informative = (stem) => {
+  const df = state.stemDf.get(stem) ?? 0;
+  return df > 0 && df / state.items.length <= MAX_GENERIC_DF;
+};
+// Everything one typed term can stand for at a given level: [{ stem, word, of, kind }]
+function alternatives(term, level) {
+  const alts = [{ stem: state.stem(term), word: term, of: term, kind: 'form' }];
+  const seen = new Set([alts[0].stem]);
+  const ex = state.expansions.get(term) ?? { synonyms: [], broader: [] };
+  const add = (words, kind) => words.forEach((word) => {
+    const stem = state.stem(word);
+    if (seen.has(stem) || state.blocked.has(word) || !informative(stem)) return;
+    seen.add(stem);
+    alts.push({ stem, word, of: term, kind });
+  });
+  if (level >= 2) add(ex.synonyms, 'synonym');
+  if (level >= 3) add(ex.broader, 'broader');
+  return alts;
+}
+function setLevel(level) {
+  state.level = level;
+  state.alts = level ? state.terms.map((t) => alternatives(t, level)) : [];
+}
+const matchesWidened = (item) => state.alts.every((group) => group.some((a) => item.stems.has(a.stem)));
+// An item is lit when it matches the search (exactly, or at the current widening level) and is not hidden by solo.
+const litMatch = (item) => matches(item) || (state.level > 0 && matchesWidened(item));
+const focused = (item) => litMatch(item) && inSolo(item);
+const isRelated = (item) => state.level > 0 && !matches(item);
+
+function chooseLevel(allInWin) {
+  setLevel(0);
+  if (!state.terms.length) return;
+  if (allInWin.filter((i) => matches(i) && inSolo(i)).length >= MIN_CARDS) return;
+  for (let level = 1; level <= 3; level++) {
+    setLevel(level);
+    if (allInWin.filter(focused).length >= MIN_CARDS) return;
+  }
+}
+// Why a related item is lit, e.g. “duty” (synonym of “tariff”).
+function relatedReason(item) {
+  const how = { form: 'a form of', synonym: 'synonym of', broader: 'broader than' };
+  return state.alts.map((group) => group.find((a) => item.stems.has(a.stem)))
+    .filter(Boolean)
+    .map((a) => (a.kind === 'form' ? `matched a form of “${a.of}”` : `“${a.word}” (${how[a.kind]} “${a.of}”)`))
+    .join(', ');
+}
+function fetchExpansions() {
+  state.terms.filter((t) => t.length >= 3 && /^[a-z]+$/.test(t) && !state.expansions.has(t)).forEach((t) => {
+    state.expansions.set(t, { synonyms: [], broader: [] }); // placeholder so it is only asked once
+    fetch(`/api/expand?term=${encodeURIComponent(t)}`)
+      .then((r) => r.json())
+      .then((ex) => { state.expansions.set(t, ex); if (state.terms.includes(t)) render(); })
+      .catch(() => {});
+  });
+}
+function applySearch() {
+  state.terms = $('search').value.toLowerCase().split(/\s+/).filter(Boolean);
+  state.termRes = state.terms.map((t) => new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(t)}(?![\\p{L}\\p{N}])`, 'u'));
+  state.whole = $('whole').checked;
+  fetchExpansions();
+  render();
+}
+// Prev/next jump to the nearest lit match before or after the needle.
+const prevHit = (hits) => hits.reduce((best, i) => (i.ms < state.t && (!best || i.ms > best.ms) ? i : best), null);
+const nextHit = (hits) => hits.reduce((best, i) => (i.ms > state.t && (!best || i.ms < best.ms) ? i : best), null);
+const matchCount = (n) => `${n} match${n === 1 ? '' : 'es'}`;
+
+function searchCountText(v) {
+  if (!v.searching) return '';
+  let text = `${matchCount(v.totalMatches)} in all`;
+  if (v.soloing && v.totalMatches > 0) text += v.hits.length ? `, ${v.hits.length} in the soloed rows` : ', none in the soloed rows';
+  if (v.level > 0) text += ` · ${v.related} related here`;
+  return text;
+}
+
+// Why the cards area is empty, most specific reason first.
+function emptyMessage(v) {
+  if (v.searching && v.totalMatches === 0) {
+    const hint = state.whole ? ' as a whole word. Try turning off Whole word, or a different word.' : '. Try a different word.';
+    return `No stored item contains "${$('search').value.trim()}"${hint}`;
+  }
+  if (v.noneInSolo) {
+    const verb = v.totalMatches === 1 ? 'is' : 'are';
+    const them = v.totalMatches === 1 ? 'it' : 'them';
+    return `Nothing in the soloed rows matches your search anywhere in the history. ${matchCount(v.totalMatches)} ${verb} in other rows. Clear solo to see ${them}.`;
+  }
+  const others = `${v.hidden} other item${v.hidden === 1 ? '' : 's'}`;
+  if (v.filters) return `Nothing matches in this window (${others} hidden by ${v.filters}). Clear it, or keep scrubbing.`;
+  return 'Nothing in this window. Widen the window or keep scrubbing.';
+}
+
+// ---- View ----------------------------------------------------------------
+function setT(ms) {
+  state.t = Math.min(state.end, Math.max(state.start, ms));
+  $('slider').value = state.t;
+  render();
+}
+
+// Everything render needs, worked out once from the scrubber, window, solo and search.
+function computeView() {
+  const half = Number($('window').value) * HOUR;
+  const lo = state.t - half, hi = state.t + half;
+  const allInWin = state.items.filter((i) => i.ms >= lo && i.ms <= hi).sort((a, b) => a.lane - b.lane || b.ms - a.ms);
+  chooseLevel(allInWin); // sets state.level, which `focused` reads
+  // Exact matches rank before related ones; the sort is stable, so source order holds within each group.
+  const inWin = allInWin.filter(focused).sort((a, b) => Number(isRelated(a)) - Number(isRelated(b)));
+  const soloing = state.solo.size > 0;
+  const searching = state.terms.length > 0;
+  const matched = searching ? state.items.filter(matches) : [];
+  const hits = matched.filter(inSolo);
+  return {
+    live: state.t >= state.end - HOUR / 2,
+    lo, hi, allInWin, inWin, soloing, searching, hits,
+    filters: [soloing && 'solo', searching && 'search'].filter(Boolean).join(' and '),
+    level: state.level,
+    related: inWin.filter(isRelated).length,
+    chips: state.level >= 2 ? state.alts.flat().filter((a) => a.kind !== 'form') : [],
+    matchLanes: new Set((searching ? state.items.filter(litMatch) : []).map((i) => i.lane)),
+    totalMatches: matched.length,
+    hidden: allInWin.length - inWin.length,
+    noneInSolo: searching && soloing && matched.length > 0 && hits.length === 0,
+  };
+}
+
+function renderScrubber(v) {
+  $('readout').textContent = v.live ? 'Live' : fmt(state.t);
+  $('needle').style.left = pct(state.t) + '%';
+  const bandLo = Math.max(v.lo, state.start), bandHi = Math.min(v.hi, state.end);
+  $('band').style.left = pct(bandLo) + '%';
+  $('band').style.width = (pct(bandHi) - pct(bandLo)) + '%';
+  state.items.forEach((i) => i.els.forEach((el) => {
+    el.classList.toggle('in', i.ms >= v.lo && i.ms <= v.hi);
+    el.classList.toggle('off', !focused(i));
+    el.classList.toggle('rel', focused(i) && isRelated(i));
+  }));
+}
+
+// The "widened" line: says the search was widened, which terms were added, and lets the user remove any.
+function renderExpansion(v) {
+  const box = $('expansion');
+  box.textContent = '';
+  box.hidden = v.level === 0;
+  if (v.level === 0) return;
+  box.append(`Fewer than ${MIN_CARDS} exact matches in this window, so the search widened to ${LEVEL_NAMES[v.level]}. `);
+  const seen = new Set();
+  v.chips.filter((a) => !seen.has(a.word) && seen.add(a.word)).forEach((a) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip ' + a.kind;
+    chip.title = `${a.kind === 'synonym' ? 'Synonym' : 'Broader term'} of “${a.of}”, from WordNet`;
+    chip.append(a.word + ' ');
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.textContent = '✕';
+    x.setAttribute('aria-label', `Stop searching “${a.word}”`);
+    x.addEventListener('click', () => { state.blocked.add(a.word); render(); });
+    chip.append(x);
+    box.append(chip);
+  });
+  if (v.level >= 2 && !v.chips.length) box.append('No related terms found in your stored news. ');
+  if (state.blocked.size) {
+    const restore = document.createElement('button');
+    restore.type = 'button';
+    restore.textContent = 'Restore removed terms';
+    restore.addEventListener('click', () => { state.blocked.clear(); render(); });
+    box.append(restore);
+  }
+}
+
+function renderSearchControls(v) {
+  $('searchCount').textContent = searchCountText(v);
+  state.prevHit = prevHit(v.hits);
+  state.nextHit = nextHit(v.hits);
+  $('prevMatch').hidden = !v.searching;
+  $('nextMatch').hidden = !v.searching;
+  $('prevMatch').disabled = !state.prevHit;
+  $('nextMatch').disabled = !state.nextHit;
+}
+
+// A row is dim when solo excludes it, or when a search is active and nothing in it matches.
+function renderGroup(v, g) {
+  const n = v.inWin.filter((i) => g.lanes.includes(i.lane)).length;
+  g.countEl.textContent = n ? `(${n})` : '';
+  const groupLit = state.solo.has('g:' + g.name);
+  const feedLit = (li) => state.solo.has('f:' + state.feeds[li].id);
+  const soloDim = (li) => v.soloing && !groupLit && !feedLit(li);
+  g.head.classList.toggle('dim', (v.soloing && !groupLit && !g.lanes.some(feedLit)) || (v.searching && !g.lanes.some((li) => v.matchLanes.has(li))));
+  g.rows.forEach((row, idx) => {
+    const li = g.lanes[idx];
+    row.classList.toggle('dim', soloDim(li) || (v.searching && !v.matchLanes.has(li)));
+  });
+}
+
+function renderRows(v) {
+  document.querySelectorAll('.solo').forEach((b) => b.classList.toggle('on', state.solo.has(b.dataset.key)));
+  $('clearSolo').hidden = !v.soloing;
+  state.groups.forEach((g) => renderGroup(v, g));
+}
+
+function metaText(v) {
+  if (!v.inWin.length) return '';
+  const lanes = new Set(v.inWin.map((i) => i.lane)).size;
+  const shown = Math.min(Number($('cards').value), v.inWin.length);
+  const span = $('window').selectedOptions[0].text.replace('±', '');
+  const tail = v.filters
+    ? ` ${v.hidden} other item${v.hidden === 1 ? '' : 's'} hidden by ${v.filters}.`
+    : ' Co-occurrence is not a link.';
+  return `${v.inWin.length} items across ${lanes} source${lanes === 1 ? '' : 's'} within ±${span} of ${v.live ? 'now' : fmt(state.t)}. Showing the top ${shown} by source order.${tail}`;
+}
+
+const titleLink = (item) => {
+  const a = document.createElement('a');
+  a.textContent = item.title || item.link;
+  a.href = item.link; a.target = '_blank'; a.rel = 'noopener noreferrer';
+  return a;
+};
+
+function cardEl(item) {
+  const feed = state.feeds[item.lane];
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.style.borderLeftColor = color(item.lane);
+  const src = document.createElement('div');
+  src.className = 'src';
+  src.textContent = `${feed.name} · ${fmt(item.ms)}${item.publishedAtEstimated ? ' (date estimated)' : ''}`;
+  card.append(src, titleLink(item));
+  if (isRelated(item)) {
+    card.classList.add('related');
+    const why = document.createElement('div');
+    why.className = 'why';
+    why.textContent = 'Related, not exact: ' + relatedReason(item);
+    card.append(why);
+  }
+  if (item.summary) {
+    const p = document.createElement('p');
+    p.textContent = item.summary.slice(0, 220);
+    card.append(p);
+  }
+  return card;
+}
+
+function renderCards(v) {
+  const list = $('cardList');
+  list.textContent = '';
+  if (!v.inWin.length) {
+    const e = document.createElement('div');
+    e.className = 'empty';
+    e.textContent = emptyMessage(v);
+    list.append(e);
+  }
+  v.inWin.slice(0, Number($('cards').value)).forEach((item) => list.append(cardEl(item)));
+}
+
+function renderRest(v) {
+  const rest = v.inWin.slice(Number($('cards').value));
+  $('rest').hidden = rest.length === 0;
+  $('restSummary').textContent = `+${rest.length} more in this window at lower rank`;
+  const ul = $('restList');
+  ul.textContent = '';
+  rest.forEach((item) => {
+    const li = document.createElement('li');
+    li.append(`${state.feeds[item.lane].name} · ${fmt(item.ms)} · `, titleLink(item));
+    ul.append(li);
+  });
+}
+
+function render() {
+  const v = computeView();
+  renderScrubber(v);
+  renderSearchControls(v);
+  renderRows(v);
+  renderExpansion(v);
+  $('meta').textContent = metaText(v);
+  renderCards(v);
+  renderRest(v);
+}
+
+$('slider').addEventListener('input', (e) => { stop(); setT(Number(e.target.value)); });
+$('live').addEventListener('click', () => { stop(); setT(state.end); });
+$('collapse').addEventListener('click', () => {
+  const closeAll = state.collapsed.size < state.groups.length;
+  state.groups.forEach((g) => { if (closeAll) state.collapsed.add(g.name); else state.collapsed.delete(g.name); });
+  setCollapsed(state.groups[0].name, closeAll);
+});
+$('clearSolo').addEventListener('click', clearSolo);
+$('search').addEventListener('input', applySearch);
+$('whole').addEventListener('change', applySearch);
+const jump = (hit) => { if (hit) { stop(); setT(hit.ms); } };
+$('prevMatch').addEventListener('click', () => jump(state.prevHit));
+$('nextMatch').addEventListener('click', () => jump(state.nextHit));
+$('search').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); jump(e.shiftKey ? state.prevHit : state.nextHit); return; }
+  if (e.key !== 'Escape' || !e.target.value) return;
+  e.stopPropagation(); // clear the search first; a second Esc clears solo
+  e.target.value = '';
+  applySearch();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && state.solo.size) clearSolo(); });
+$('window').addEventListener('change', render);
+$('cards').addEventListener('change', render);
+function stop() { clearInterval(state.timer); state.timer = null; $('play').textContent = 'Play'; }
+$('play').addEventListener('click', () => {
+  if (state.timer) return stop();
+  if (state.t >= state.end - HOUR) setT(state.start);
+  $('play').textContent = 'Pause';
+  state.timer = setInterval(() => {
+    if (state.t >= state.end) return stop();
+    setT(state.t + HOUR);
+  }, 80);
+});
+load().catch((e) => { $('sub').textContent = 'Could not load data: ' + e.message + '. Run npm run collect first.'; });
+</script>
+</body>
+</html>
