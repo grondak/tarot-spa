@@ -2,6 +2,10 @@
 // (epic S2.8): earlier feeds rank first in the cards, and a group's position is the
 // position of its first feed. The collector upserts these into the Feed table on every
 // run, so editing this list and deploying is how the list changes.
+//
+// Fierce Network and RCR Wireless were dropped on 2026-10-31: both answer HTTP 403 to requests from
+// AWS (they work from a home connection), so the cloud collector could not read them. Mobile World
+// Live and Broadband Breakfast replaced them, after a test run showed AWS can fetch both.
 
 export type FeedDefinition = {
   id: string;
@@ -25,8 +29,8 @@ export const STARTER_FEEDS: readonly FeedDefinition[] = [
   { id: 'fortune', group: 'big-company successes', name: 'Fortune', url: 'https://fortune.com/feed/' },
   { id: 'forbes-business', group: 'big-company successes', name: 'Forbes Business', url: 'https://www.forbes.com/business/feed/' },
   { id: 'light-reading', group: 'telecom', name: 'Light Reading', url: 'https://www.lightreading.com/rss.xml' },
-  { id: 'fierce-network', group: 'telecom', name: 'Fierce Network', url: 'https://www.fierce-network.com/rss/xml' },
-  { id: 'rcr-wireless', group: 'telecom', name: 'RCR Wireless', url: 'https://www.rcrwireless.com/feed' },
+  { id: 'mobile-world-live', group: 'telecom', name: 'Mobile World Live', url: 'https://www.mobileworldlive.com/feed/' },
+  { id: 'broadband-breakfast', group: 'telecom', name: 'Broadband Breakfast', url: 'https://broadbandbreakfast.com/feed/' },
   { id: 'huggingface-blog', group: 'ai development', name: 'Hugging Face blog', url: 'https://huggingface.co/blog/feed.xml' },
   { id: 'import-ai', group: 'ai development', name: 'Import AI', url: 'https://importai.substack.com/feed' },
   { id: 'openai-news', group: 'ai development', name: 'OpenAI news', url: 'https://openai.com/news/rss.xml' },
