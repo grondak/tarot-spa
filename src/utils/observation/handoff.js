@@ -30,3 +30,10 @@ export function toSuppliedEvent({ title, content, url, published_date: published
     ...(publishedDate ? { published_date: publishedDate } : {}),
   };
 }
+
+// The open case, in the user's own words, as the start of the reading's Context (S8.2).
+export function caseContext({ title, hypothesis }) {
+  const lines = [`The decision I'm weighing: ${title}`];
+  if (hypothesis?.trim()) lines.push(`My hypothesis: ${hypothesis.trim()}`);
+  return lines.join('\n');
+}

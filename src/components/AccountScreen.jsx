@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getMyAccount } from '../utils/account';
+import { deleteAllCases } from '../utils/observation/cases';
 import { clearObservationPreferences } from '../utils/observation/preferences';
 
 const buttonClass = 'rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500';
@@ -12,12 +13,14 @@ const GENERATION_LABELS = {
 export default function AccountScreen({
   getMyAccountFn = getMyAccount,
   clearPreferencesFn = clearObservationPreferences,
+  deleteAllCasesFn = deleteAllCases,
   onBack = () => {},
 }) {
   const [loadStatus, setLoadStatus] = useState('loading');
   const [account, setAccount] = useState(null);
   const [requestId, setRequestId] = useState(0);
   const [forgetStatus, setForgetStatus] = useState(null);
+  const [casesStatus, setCasesStatus] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -100,10 +103,44 @@ export default function AccountScreen({
         <section className="mt-8" aria-labelledby="observe-data-heading">
           <h2 id="observe-data-heading" className="text-sm font-semibold text-gray-300">Observation Window data</h2>
           <p className="mt-1 text-gray-400">
-            Nothing about what you look at in the Observation Window is stored on our servers, so
-            there is no history to delete there. This browser remembers which groups you closed and
-            which sources you switched off or dismissed. Clear that here, or from the Window itself.
+            Nothing about what you look at in the Observation Window is stored on our servers,
+            except your cases: the decisions and hypotheses you wrote, and the times you opened,
+            handed off and closed them. Only you can see them, and they stay until you delete them.
+            This browser also remembers which groups you closed and which sources you switched off
+            or dismissed. Clear that here, or from the Window itself.
           </p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            {casesStatus === 'confirming' ? (
+              <>
+                <button
+                  type="button"
+                  className={buttonClass}
+                  onClick={() => {
+                    setCasesStatus('deleting');
+                    deleteAllCasesFn().then(() => setCasesStatus('deleted')).catch(() => setCasesStatus('failed'));
+                  }}
+                >
+                  Yes, delete every case I wrote
+                </button>
+                <button type="button" className={buttonClass} onClick={() => setCasesStatus(null)}>Keep them</button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className={buttonClass}
+                disabled={casesStatus === 'deleting'}
+                onClick={() => setCasesStatus('confirming')}
+              >
+                Delete all my cases
+              </button>
+            )}
+            {casesStatus === 'deleted' && (
+              <span role="status" className="text-sm text-gray-400">Deleted. Every case and its times are gone.</span>
+            )}
+            {casesStatus === 'failed' && (
+              <span role="alert" className="text-sm text-red-400">Some cases couldn’t be deleted. Try again.</span>
+            )}
+          </div>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <button
               type="button"

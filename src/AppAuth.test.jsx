@@ -13,6 +13,7 @@ import { getAdminLogs } from './utils/adminLogs';
 import { getAdminMetrics } from './utils/adminMetrics';
 import { updateAdminConfig } from './utils/adminConfig';
 import { loadObservationData } from './utils/observation/data';
+import { loadCases } from './utils/observation/cases';
 import {
   getSession,
   getOrientationStatus,
@@ -34,6 +35,11 @@ vi.mock('./utils/account', () => ({ getMyAccount: vi.fn() }));
 vi.mock('./utils/observation/data', () => ({
   loadObservationData: vi.fn(() => Promise.resolve({ feeds: [], items: [], runs: [] })),
   widenSearchTerm: vi.fn(() => Promise.resolve({ synonyms: [], broader: [] })),
+}));
+vi.mock('./utils/observation/cases', async (importOriginal) => ({
+  ...(await importOriginal()),
+  loadCases: vi.fn(() => Promise.resolve({ cases: [], events: [] })),
+  recordHandoff: vi.fn(() => Promise.resolve()),
 }));
 vi.mock('./utils/adminLogs', () => ({ getAdminLogs: vi.fn() }));
 vi.mock('./utils/adminMetrics', () => ({ getAdminMetrics: vi.fn() }));
@@ -425,6 +431,30 @@ describe('App authenticated sign-out round trip', () => {
         published_date: expect.any(String),
       }],
     );
+  });
+
+  it('starts the Context with the open case, in the user\'s words, when handing off', async () => {
+    const hoursAgo = (h) => new Date(Date.now() - h * 3600e3).toISOString();
+    loadObservationData.mockResolvedValueOnce({
+      feeds: [{ id: 'bbc', name: 'BBC', group: 'world', sortOrder: 0, lastFetchedAt: hoursAgo(0.5) }],
+      items: [{ id: 'a', title: 'Tariffs rise', link: 'https://example.com/a', summary: 'x', publishedAt: hoursAgo(2), sources: ['bbc'] }],
+      runs: [{ startedAt: hoursAgo(1), finishedAt: hoursAgo(0.9) }],
+    });
+    loadCases.mockResolvedValueOnce({
+      cases: [{ id: 'c1', title: 'Plant a patch?', hypothesis: 'Demand outruns supply', status: 'OPEN' }],
+      events: [{ caseId: 'c1', kind: 'OPENED', at: hoursAgo(48) }],
+    });
+    render(<App />);
+
+    expect(await screen.findByText('Your account')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Observe' }));
+    await screen.findByLabelText('My hypothesis');
+    fireEvent.click(await screen.findByRole('button', { name: 'Orient on this moment' }));
+
+    expect(screen.getByLabelText('Context')).toHaveValue(
+      "The decision I'm weighing: Plant a patch?\nMy hypothesis: Demand outruns supply",
+    );
+    expect(screen.getByRole('heading', { name: 'From the Observation Window' })).toBeVisible();
   });
 
   it('opens a header screen over Observe and returns to Observe on Back', async () => {

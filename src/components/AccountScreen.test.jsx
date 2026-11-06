@@ -70,13 +70,40 @@ describe('AccountScreen', () => {
       const clearPreferencesFn = vi.fn().mockReturnValue(true);
       render(<AccountScreen getMyAccountFn={account} clearPreferencesFn={clearPreferencesFn} />);
 
-      expect(await screen.findByText(/Nothing about what you look at in the Observation Window is stored on our servers/)).toBeVisible();
+      expect(await screen.findByText(/Nothing about what you look at in the Observation Window is stored on our servers, except your cases/)).toBeVisible();
       expect(screen.queryByRole('status')).not.toBeInTheDocument();
 
       fireEvent.click(screen.getByRole('button', { name: 'Clear what this browser remembers' }));
 
       expect(clearPreferencesFn).toHaveBeenCalledOnce();
       expect(screen.getByRole('status')).toHaveTextContent('Cleared.');
+    });
+
+    it('deletes every case only after a second click, and reports it', async () => {
+      const deleteAllCasesFn = vi.fn().mockResolvedValue();
+      render(<AccountScreen getMyAccountFn={account} deleteAllCasesFn={deleteAllCasesFn} />);
+      await screen.findByText('First generation');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete all my cases' }));
+      expect(deleteAllCasesFn).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Yes, delete every case I wrote' }));
+
+      expect(deleteAllCasesFn).toHaveBeenCalledOnce();
+      expect(await screen.findByRole('status')).toHaveTextContent('Every case and its times are gone');
+    });
+
+    it('can back out of deleting all cases, and says when deleting fails', async () => {
+      const deleteAllCasesFn = vi.fn().mockRejectedValue(new Error('offline'));
+      render(<AccountScreen getMyAccountFn={account} deleteAllCasesFn={deleteAllCasesFn} />);
+      await screen.findByText('First generation');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete all my cases' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Keep them' }));
+      expect(deleteAllCasesFn).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete all my cases' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Yes, delete every case I wrote' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('couldn’t be deleted');
     });
 
     it('says so when the browser will not let it clear', async () => {

@@ -24,7 +24,8 @@ describe('HowItWorks', () => {
     expect(screen.getByText(/Observe step of/)).toBeVisible();
     const data = screen.getByText(/Observation Window data:/).closest('p');
     expect(data).toHaveTextContent('deleted after 30 days');
-    expect(data).toHaveTextContent('Nothing about you is stored on the server');
+    expect(data).toHaveTextContent('What you look at isn’t stored on the server');
+    expect(data).toHaveTextContent('The one exception is your cases');
     expect(data).toHaveTextContent('stay in this browser only');
   });
 

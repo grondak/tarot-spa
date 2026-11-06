@@ -801,7 +801,7 @@ Open questions:
 - [ ] Paid-search cap (deferred on purpose): pick a monthly number after a month of real use. Build the cap mechanism regardless.
 - [ ] Rule-based stakes (S5.1): which rules exactly? The starting idea is to match words from the user's case and hypothesis against each item, but how those words are chosen and weighted is for the start of Release 2.
 - [ ] Signatures from the tarot (S6.3): how do the cards' patterns turn into signals that can be matched against news items? To groom at the start of Release 3.
-- [ ] Case deletion (S4.8): when a user deletes a case, do its cycle timestamps (S8.4) stay for the measurement, or go too?
+- [ ] Case deletion (S4.8): when a user deletes a case, do its cycle timestamps (S8.4) stay for the measurement, or go too? Built as "go too" (2026-11-05), the privacy-safest default; the user hasn't decided.
 
 Groomed 2026-10-31: S1.4 to S1.8, S2.1, S2.6 to S2.9, and S4.7. The first group was groomed against how the prototype behaves, and the rest from decisions made while grooming. Nothing is left without scenarios.
 

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { stemmer } from 'stemmer';
 import ObservationCards from './ObservationCards';
+import ObservationCases from './ObservationCases';
 import ObservationSources from './ObservationSources';
 import ObservationTimeline from './ObservationTimeline';
+import { defaultCasesApi, useCases } from '../utils/observation/useCases';
 import { observedEvents } from '../utils/observation/handoff';
 import { loadObservationData, widenSearchTerm } from '../utils/observation/data';
 import {
@@ -28,6 +30,7 @@ export default function ObservationWindow({
   suggestFn,
   onOrient,
   orientBlocked = false,
+  casesApi = defaultCasesApi,
   loadFn = loadObservationData,
   widenFn = widenSearchTerm,
   nowFn = Date.now,
@@ -48,6 +51,7 @@ export default function ObservationWindow({
   const [dismissed, setDismissed] = useState(() => readSet(DISMISSED_KEY));
   const [disabled, setDisabled] = useState(() => readSet(DISABLED_KEY));
   const [forgotten, setForgotten] = useState(false);
+  const cases = useCases(casesApi);
   const asked = useRef(new Set());
   const mounted = useRef(false);
 
@@ -254,6 +258,8 @@ export default function ObservationWindow({
           {' '}Last collected {lastRun ? formatTime(lastRun) : 'never'}. Ranking is source order.
         </p>
 
+        <ObservationCases cases={cases} />
+
         <input
           type="range"
           className="ow-slider"
@@ -357,14 +363,20 @@ export default function ObservationWindow({
           search={search}
           onDismiss={dismissSource}
           orientBlocked={orientBlocked}
-          onOrient={onOrient && ((items) => onOrient(observedEvents(model, items)))}
+          onOrient={onOrient && ((items) => {
+            const { activeCase } = cases;
+            if (activeCase) cases.handedOff(activeCase.id);
+            onOrient(observedEvents(model, items), activeCase);
+          })}
         />
 
         <footer className="mt-8 border-t border-gray-800 pt-4 text-sm text-gray-400">
           <p>
-            The news here is shared by everyone and kept 30 days. Nothing about what you look at is
-            stored on our servers. The only things remembered are your open and closed groups, the
-            sources you switched off and the ones you dismissed, and only in this browser.
+            The news here is shared by everyone and kept 30 days. Your cases, with the hypotheses you
+            wrote, are stored on our servers, visible only to you, until you delete them, along with the
+            times you opened, handed off and closed them. Nothing else about what you look at is stored
+            on our servers. The only other things remembered are your open and closed groups, the sources
+            you switched off and the ones you dismissed, and only in this browser.
           </p>
           <button type="button" className={`mt-2 ${buttonClass}`} onClick={forgetChoices}>
             Forget my choices on this page

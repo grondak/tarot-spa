@@ -16,7 +16,8 @@ All ten packages below are built and live on `main` (commit `fffe538`), checked 
 | F3 Timing correlation | S3.1–S3.4 | Everything within an adjustable window shown together, overflow counted ("+N more"), "Co-occurrence is not a link" |
 | F9 Collection (enabler) | S9.1, S9.3, S9.4, S9.7–S9.9 | Hourly cloud collector, one shared de-duplicated store, 30-day expiry, daily per-source counts kept, collector gaps shown as hatching |
 | Privacy | (not a story) | "How it works" copy, an Account section and an on-page footer saying what is and isn't stored, and buttons that clear what the browser remembers |
-| F8 Handoff to Orient (Release 2, first part) | S8.1, S8.2 (partly), S8.5 | **Orient on this moment** sends the cards on screen (up to 12) to Orient as Current Events, listed apart from the Context box with a remove button on each. The server stores them on the Session and the Guide skips its Tavily search when they are present; without them it works as before. Seen working on staging 2026-11-05. **Not built:** the case and hypothesis travelling as Context (needs F4), cycle time (S8.3, S8.4) |
+| F8 Handoff to Orient (Release 2, first part) | S8.1, S8.2 (partly), S8.5 | **Orient on this moment** sends the cards on screen (up to 12) to Orient as Current Events, listed apart from the Context box with a remove button on each. The server stores them on the Session and the Guide skips its Tavily search when they are present; without them it works as before. Seen working on staging 2026-11-05. The open case and hypothesis go along as the start of the Context (S8.2). **Not built:** nothing more of F8 |
+| F4 Cases (first part) | S4.1, S4.2, S4.7, S4.8, S8.3, S8.4 | Open a case with your own words (nothing filled in for you), edit the hypothesis, switch between open cases, close and reopen (asks nothing), delete one or all. Cases and their timestamps live in two owner-only tables (`Case`, `CycleEvent`); the timestamps table holds only case id, what happened and when. The case shows "N days to orient / to decide". The "How it works", Account and page-footer copy now say cases are stored. **Not built:** tags and stance (S4.3, S4.4), the evidence tally (S4.5), the rival hypothesis (S4.6) |
 | Operations | | Alarms for the collector (errors, silence) and for widen-search; `npm run smoke-observation`; history import script; playbook notes |
 
 ### Not built yet, from the first release's own list
@@ -28,7 +29,7 @@ All ten packages below are built and live on `main` (commit `fffe538`), checked 
 
 ### Next, in the epic's order
 
-1. **Release 2.** The handoff itself is built (see Shipped). Next: cycle time (S8.3, S8.4, timestamps only), then F4 cases and hypotheses, then F5 stakes, baselines and absences. The case and hypothesis joining the handoff as Context (S8.2) comes with F4.
+1. **Release 2.** The handoff itself is built (see Shipped). The first slice of F4 and the cycle time are built too. Next: tags, the tally and the rival hypothesis (S4.3 to S4.6), then F5 stakes, baselines and absences.
 2. **Release 3.** F6 entities, pattern signatures, source trust and a map; F7 field notes and others' journals.
 3. **User-added sources.** S2.1 proper (paste an address), S2.8 and S2.9 need a per-user list of sources, which changes the privacy promise that nothing about a user is stored. Worth doing only if people keep asking through the suggestion box.
 
@@ -38,7 +39,7 @@ All ten packages below are built and live on `main` (commit `fffe538`), checked 
 - **Nov 21 self-test.** Pass criterion in `prototype/observation-window/README.md`: name one moment the window changed what you'd do.
 - **Laptop collector.** Still running hourly from this worktree. It is now the only source for Fierce Network and RCR Wireless, which AWS can't fetch. Stop it (README has the commands) once the cloud history is enough.
 - **Sandboxes.** `observation` keeps collecting hourly (`npx ampx sandbox delete --identifier observation` when done). The original `tonyreynolds` sandbox is stuck in UPDATE_FAILED and can't be rolled back; redeploying under a new identifier replaced it.
-- **Epic open questions still open:** the paid-search cap (decide after a month of use), how rule-based stakes work, how the tarot's patterns become matchable signals, and case deletion against cycle timestamps.
+- **Epic open questions still open:** the paid-search cap (decide after a month of use), how rule-based stakes work, and how the tarot's patterns become matchable signals. Case deletion against cycle timestamps is answered for now by a default: deleting a case deletes its timestamps too (the page says so). Revisit if you'd rather keep timestamps for the measurement.
 
 ---
 

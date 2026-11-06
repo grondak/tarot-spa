@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_HANDOFF_ITEMS, observedEvents, toSuppliedEvent } from './handoff';
+import { MAX_HANDOFF_ITEMS, caseContext, observedEvents, toSuppliedEvent } from './handoff';
 import { formatTime } from './timeline';
 
 const model = { feeds: [{ name: 'Strawberry Weekly' }, { name: 'Dairy Wire' }] };
@@ -50,5 +50,17 @@ describe('toSuppliedEvent', () => {
       source: 'S', when: 'W', title: 't', content: 'c', url: 'https://example.com', published_date: 'd',
     })).toEqual({ title: 't', content: 'c', url: 'https://example.com', published_date: 'd' });
     expect(toSuppliedEvent({ title: 't', content: 'c' })).toEqual({ title: 't', content: 'c' });
+  });
+});
+
+describe('caseContext', () => {
+  it('states the decision, then the hypothesis in the user\'s words', () => {
+    expect(caseContext({ title: 'Plant a patch?', hypothesis: ' Demand outruns supply ' }))
+      .toBe("The decision I'm weighing: Plant a patch?\nMy hypothesis: Demand outruns supply");
+  });
+
+  it('leaves the hypothesis line out when there is none', () => {
+    expect(caseContext({ title: 'Plant a patch?', hypothesis: '  ' })).toBe("The decision I'm weighing: Plant a patch?");
+    expect(caseContext({ title: 'Plant a patch?' })).toBe("The decision I'm weighing: Plant a patch?");
   });
 });

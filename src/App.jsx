@@ -13,7 +13,7 @@ import GrantInviteKey from './components/GrantInviteKey';
 import PublicLanding from './components/PublicLanding';
 import OrientationGuideResults from './components/OrientationGuideResults';
 import SavedReadings from './components/SavedReadings';
-import { toSuppliedEvent } from './utils/observation/handoff';
+import { caseContext, toSuppliedEvent } from './utils/observation/handoff';
 import AppSwitcher from './components/AppSwitcher';
 import ObservationWindow from './components/ObservationWindow';
 import { getMyAccount } from './utils/account';
@@ -680,11 +680,12 @@ export default function App() {
   }
 
   // Observe hands Orient the cards it showed; they ground the Guide in place of its own news search.
-  function handleOrientOnMoment(events) {
+  function handleOrientOnMoment(events, openCase = null) {
     setSpreadKey(null);
     setCards([]);
     setOrientError(null);
     setOrientObserved(events);
+    if (openCase) setOrientContext(caseContext(openCase));
     setOrientSpreadKey(null);
     setOrientRecoveryRevision((n) => n + 1);
     setActiveApp('orient');

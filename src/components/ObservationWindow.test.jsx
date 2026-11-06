@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ObservationWindow from './ObservationWindow';
 import { HOUR } from '../utils/observation/timeline';
+import { fakeCasesApi } from '../utils/observation/fakeCasesApi';
 import {
   NOW, feedRows, hoursAgo, itemRow, itemRows, poolFeedRows, poolItemRows, runRows,
 } from '../utils/observation/fixtures';
@@ -13,6 +14,7 @@ async function renderWindow(overrides = {}) {
     loadFn: vi.fn().mockResolvedValue(data),
     widenFn: vi.fn().mockResolvedValue({ synonyms: [], broader: [] }),
     nowFn: () => NOW,
+    casesApi: fakeCasesApi(),
     ...overrides,
   };
   render(<ObservationWindow {...props} />);
@@ -415,7 +417,7 @@ describe('ObservationWindow forgetting', () => {
 
   it('tells the user what is and is not stored', async () => {
     await renderWindow();
-    expect(screen.getByText(/Nothing about what you look at is stored on our servers/)).toBeVisible();
+    expect(screen.getByText(/Your cases, with the hypotheses you wrote, are stored on our servers, visible only to you, until you delete them/)).toBeVisible();
   });
 });
 
@@ -500,5 +502,54 @@ describe('ObservationWindow handoff to Orient', () => {
     expect(screen.getByText(/Finish or redraw it in Orient first/)).toBeVisible();
     fireEvent.click(button);
     expect(onOrient).not.toHaveBeenCalled();
+  });
+});
+
+describe('ObservationWindow cases and the handoff', () => {
+  const openCase = { id: 'c1', title: 'Plant a patch?', hypothesis: 'Demand outruns supply', status: 'OPEN' };
+
+  it('hands the open case to Orient and records the handoff against it', async () => {
+    const onOrient = vi.fn();
+    const casesApi = fakeCasesApi({ cases: [openCase], events: [{ caseId: 'c1', kind: 'OPENED', at: hoursAgo(48) }] });
+    await renderWindow({ onOrient, casesApi });
+    await screen.findByLabelText('My hypothesis');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Orient on this moment' }));
+
+    expect(casesApi.recordHandoff).toHaveBeenCalledWith('c1');
+    expect(onOrient).toHaveBeenCalledWith(expect.any(Array), openCase);
+    await waitFor(() => expect(screen.getByText(/handed to Orient/)).toBeVisible());
+  });
+
+  it('hands over no case, and records nothing, when none is open', async () => {
+    const onOrient = vi.fn();
+    const casesApi = fakeCasesApi();
+    await renderWindow({ onOrient, casesApi });
+    await screen.findByLabelText('The decision I’m weighing');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Orient on this moment' }));
+
+    expect(casesApi.recordHandoff).not.toHaveBeenCalled();
+    expect(onOrient).toHaveBeenCalledWith(expect.any(Array), null);
+  });
+
+  it('still hands off when the timestamp cannot be recorded', async () => {
+    const onOrient = vi.fn();
+    const casesApi = fakeCasesApi({ cases: [openCase] });
+    casesApi.recordHandoff.mockRejectedValue(new Error('offline'));
+    await renderWindow({ onOrient, casesApi });
+    await screen.findByLabelText('My hypothesis');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Orient on this moment' }));
+
+    expect(onOrient).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps showing the news when the cases will not load', async () => {
+    const casesApi = fakeCasesApi();
+    casesApi.loadCases.mockRejectedValue(new Error('offline'));
+    await renderWindow({ casesApi });
+    expect(await screen.findByText(/Your cases couldn’t load/)).toBeVisible();
+    expect(cards().length).toBeGreaterThan(0);
   });
 });

@@ -195,6 +195,27 @@ const schema = a.schema({
       expiresAt: a.integer(),
     })
     .authorization((allow) => [allow.authenticated().to(['read'])]),
+  // A decision the user is weighing, in their own words (epic F4). Kept until they delete it,
+  // not for 30 days like news (S4.8). Owner-only; the `owner` field is read/delete-only so a
+  // client can't create or move a case under someone else's account.
+  Case: a
+    .model({
+      title: a.string().required(),
+      hypothesis: a.string(),
+      status: a.enum(['OPEN', 'CLOSED']),
+      owner: a.string().authorization((allow) => [allow.owner().identityClaim('sub').to(['read', 'delete'])]),
+    })
+    .authorization((allow) => [allow.owner().identityClaim('sub')]),
+  // When a case was opened, handed to Orient, closed or reopened, and nothing else (S8.4): the
+  // case id and a time, never any of the user's words. Owner-only, same locked `owner`.
+  CycleEvent: a
+    .model({
+      caseId: a.string().required(),
+      kind: a.enum(['OPENED', 'HANDED_OFF', 'CLOSED', 'REOPENED']),
+      at: a.datetime().required(),
+      owner: a.string().authorization((allow) => [allow.owner().identityClaim('sub').to(['read', 'delete'])]),
+    })
+    .authorization((allow) => [allow.owner().identityClaim('sub')]),
   checkInviteKey: a
     .query()
     .arguments({ code: a.string().required() })

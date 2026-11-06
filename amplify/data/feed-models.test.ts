@@ -68,3 +68,23 @@ describe('Observation Window backend wiring', () => {
     expect(backendSource).not.toMatch(/Table\.grant\(widenSearchLambda/);
   });
 });
+
+describe('Observation Window case models', () => {
+  for (const name of ['Case', 'CycleEvent']) {
+    it(`${name} is owner-only, with the owner field read and delete only`, () => {
+      const block = modelBlock(name);
+
+      expect(block).toContain(".authorization((allow) => [allow.owner().identityClaim('sub')])");
+      expect(block).toContain("owner: a.string().authorization((allow) => [allow.owner().identityClaim('sub').to(['read', 'delete'])])");
+      expect(block).not.toMatch(/allow\.authenticated|allow\.publicApiKey|allow\.guest|allow\.group/);
+    });
+  }
+
+  it('CycleEvent holds a case id, a kind and a time, and none of the user\'s words', () => {
+    const block = modelBlock('CycleEvent');
+
+    expect(block).toMatch(/caseId: a\.string\(\)\.required\(\)/);
+    expect(block).toMatch(/at: a\.datetime\(\)\.required\(\)/);
+    expect(block).not.toMatch(/title|hypothesis|context|summary|content|note/i);
+  });
+});
