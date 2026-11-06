@@ -70,7 +70,7 @@ function OpenForm({ cases, hasOpen }) {
   );
 }
 
-function ActiveCase({ cases, item }) {
+function ActiveCase({ cases, item, tally, tallyAt }) {
   const [hypothesis, setHypothesis] = useState(item.hypothesis);
   const [confirming, setConfirming] = useState(false);
   const dirty = hypothesis !== item.hypothesis;
@@ -88,6 +88,14 @@ function ActiveCase({ cases, item }) {
         />
       </label>
       <CycleLine events={cases.events} status={item.status} id={item.id} />
+      {tally && (
+        <p className="text-xs text-gray-400" data-testid="tally">
+          Evidence up to {tallyAt}: <strong className="text-gray-200">{tally.supports}</strong> support
+          {' · '}<strong className="text-gray-200">{tally.against}</strong> cut against
+          {tally.unsorted > 0 && <> · {tally.unsorted} that look relevant, not sorted yet</>}.
+          {' '}Counts only; the Window doesn’t say whether your hypothesis is true.
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -113,7 +121,7 @@ function ActiveCase({ cases, item }) {
   );
 }
 
-export default function ObservationCases({ cases }) {
+export default function ObservationCases({ cases, tally = null, tallyAt = 'now' }) {
   const [confirmAll, setConfirmAll] = useState(false);
   const { status, openCases, closedCases, activeCase } = cases;
   const total = openCases.length + closedCases.length;
@@ -138,7 +146,7 @@ export default function ObservationCases({ cases }) {
               </select>
             </label>
           )}
-          {activeCase && <ActiveCase key={activeCase.id} cases={cases} item={activeCase} />}
+          {activeCase && <ActiveCase key={activeCase.id} cases={cases} item={activeCase} tally={tally} tallyAt={tallyAt} />}
           <OpenForm cases={cases} hasOpen={Boolean(activeCase)} />
           {closedCases.length > 0 && (
             <details className="text-sm text-gray-300">

@@ -104,8 +104,8 @@ export default function AccountScreen({
           <h2 id="observe-data-heading" className="text-sm font-semibold text-gray-300">Observation Window data</h2>
           <p className="mt-1 text-gray-400">
             Nothing about what you look at in the Observation Window is stored on our servers,
-            except your cases: the decisions and hypotheses you wrote, and the times you opened,
-            handed off and closed them. Only you can see them, and they stay until you delete them.
+            except your cases: the decisions and hypotheses you wrote, the times you opened,
+            handed off and closed them, and which items you tagged. Only you can see them, and they stay until you delete them.
             This browser also remembers which groups you closed and which sources you switched off
             or dismissed. Clear that here, or from the Window itself.
           </p>
@@ -135,7 +135,7 @@ export default function AccountScreen({
               </button>
             )}
             {casesStatus === 'deleted' && (
-              <span role="status" className="text-sm text-gray-400">Deleted. Every case and its times are gone.</span>
+              <span role="status" className="text-sm text-gray-400">Deleted. Every case, its times and its tags are gone.</span>
             )}
             {casesStatus === 'failed' && (
               <span role="alert" className="text-sm text-red-400">Some cases couldn’t be deleted. Try again.</span>

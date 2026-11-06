@@ -89,7 +89,7 @@ describe('AccountScreen', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Yes, delete every case I wrote' }));
 
       expect(deleteAllCasesFn).toHaveBeenCalledOnce();
-      expect(await screen.findByRole('status')).toHaveTextContent('Every case and its times are gone');
+      expect(await screen.findByRole('status')).toHaveTextContent('Every case, its times and its tags are gone');
     });
 
     it('can back out of deleting all cases, and says when deleting fails', async () => {

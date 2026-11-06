@@ -24,6 +24,7 @@ async function listAll(model, options = {}) {
 
 const pick = ({ id, title, hypothesis, status }) => ({ id, title, hypothesis: hypothesis ?? '', status });
 const pickEvent = ({ id, caseId, kind, at }) => ({ id, caseId, kind, at });
+const pickTag = ({ caseId, itemId, itemAt, stance }) => ({ caseId, itemId, itemAt, stance });
 
 async function recordEvent(client, caseId, kind) {
   check(await client.models.CycleEvent.create({ caseId, kind, at: new Date().toISOString() }));
@@ -31,8 +32,10 @@ async function recordEvent(client, caseId, kind) {
 
 export async function loadCases() {
   const client = generateClient();
-  const [cases, events] = await Promise.all([listAll(client.models.Case), listAll(client.models.CycleEvent)]);
-  return { cases: cases.map(pick), events: events.map(pickEvent) };
+  const [cases, events, tags] = await Promise.all([
+    listAll(client.models.Case), listAll(client.models.CycleEvent), listAll(client.models.CaseTag),
+  ]);
+  return { cases: cases.map(pick), events: events.map(pickEvent), tags: tags.map(pickTag) };
 }
 
 export async function openCase({ title, hypothesis }) {
@@ -54,22 +57,40 @@ export async function setCaseStatus(id, status) {
   return updated;
 }
 
+// The user's stance on one item for one case. `exists` says whether a tag is already stored for it.
+export async function setTag({ caseId, itemId, itemAt, stance }, exists) {
+  const client = generateClient();
+  const input = { caseId, itemId, itemAt, stance };
+  return pickTag(check(await (exists ? client.models.CaseTag.update(input) : client.models.CaseTag.create(input))));
+}
+
+export async function clearTag(caseId, itemId) {
+  check(await generateClient().models.CaseTag.delete({ caseId, itemId }));
+}
+
 export async function recordHandoff(caseId) {
   await recordEvent(generateClient(), caseId, 'HANDED_OFF');
 }
 
-// A deleted case takes its timestamps with it (default pending the S4.8 / S8.4 open question).
+// A deleted case takes its timestamps and tags with it (default pending the S4.8 / S8.4 open question).
 export async function deleteCase(id) {
   const client = generateClient();
-  const events = await listAll(client.models.CycleEvent, { filter: { caseId: { eq: id } } });
+  const [events, tags] = await Promise.all([
+    listAll(client.models.CycleEvent, { filter: { caseId: { eq: id } } }),
+    listAll(client.models.CaseTag, { filter: { caseId: { eq: id } } }),
+  ]);
   await Promise.all(events.map((event) => client.models.CycleEvent.delete({ id: event.id }).then(check)));
+  await Promise.all(tags.map((tag) => client.models.CaseTag.delete({ caseId: tag.caseId, itemId: tag.itemId }).then(check)));
   check(await client.models.Case.delete({ id }));
 }
 
 export async function deleteAllCases() {
   const client = generateClient();
-  const [cases, events] = await Promise.all([listAll(client.models.Case), listAll(client.models.CycleEvent)]);
+  const [cases, events, tags] = await Promise.all([
+    listAll(client.models.Case), listAll(client.models.CycleEvent), listAll(client.models.CaseTag),
+  ]);
   await Promise.all(events.map((event) => client.models.CycleEvent.delete({ id: event.id }).then(check)));
+  await Promise.all(tags.map((tag) => client.models.CaseTag.delete({ caseId: tag.caseId, itemId: tag.itemId }).then(check)));
   await Promise.all(cases.map((one) => client.models.Case.delete({ id: one.id }).then(check)));
 }
 

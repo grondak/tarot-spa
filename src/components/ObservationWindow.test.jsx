@@ -553,3 +553,112 @@ describe('ObservationWindow cases and the handoff', () => {
     expect(cards().length).toBeGreaterThan(0);
   });
 });
+
+describe('ObservationWindow tagging evidence for a case', () => {
+  const openCase = { id: 'c1', title: 'Tariffs on steel imports', hypothesis: 'A duty raises costs', status: 'OPEN' };
+  const cardFor = (title) => cards().find((card) => within(card).queryByText(title));
+  const tariffRow = itemRows.find((row) => row.title === 'Tariffs rise on steel');
+  const ceasefireRow = itemRows.find((row) => row.title === 'Ceasefire talks resume');
+  const tally = () => screen.getByTestId('tally').textContent;
+
+  async function withCase(overrides = {}) {
+    const casesApi = fakeCasesApi({
+      cases: [openCase],
+      events: [{ caseId: 'c1', kind: 'OPENED', at: hoursAgo(48) }],
+      ...overrides,
+    });
+    await renderWindow({ casesApi });
+    await screen.findByTestId('tally');
+    return casesApi;
+  }
+
+  it('proposes cards that look relevant, with the words that matched, and takes no side', async () => {
+    await withCase();
+    const relevant = cardFor('Tariffs rise on steel');
+    expect(relevant).toHaveTextContent('Looks relevant to your case');
+    expect(relevant).toHaveTextContent('(proposed)');
+    expect(relevant).toHaveTextContent(/Matches: .*tariffs.*steel/);
+    expect(relevant).not.toHaveTextContent('Set by you');
+    expect(cardFor('Ceasefire talks resume')).toHaveTextContent('Tag for your case:');
+    expect(within(cardFor('Ceasefire talks resume')).queryByRole('button', { name: 'Not relevant' })).toBeNull();
+  });
+
+  it('records the stance the user sets, shows it as set by them, and counts it', async () => {
+    const casesApi = await withCase();
+    expect(tally()).toContain('0 support · 0 cut against');
+
+    fireEvent.click(within(cardFor('Tariffs rise on steel')).getByRole('button', { name: 'Supports' }));
+
+    await waitFor(() => expect(cardFor('Tariffs rise on steel')).toHaveTextContent('Supports your hypothesis. Set by you.'));
+    expect(casesApi.setTag).toHaveBeenCalledWith(
+      { caseId: 'c1', itemId: tariffRow.id, itemAt: tariffRow.publishedAt, stance: 'SUPPORTS' },
+      false,
+    );
+    expect(tally()).toContain('1 support · 0 cut against');
+  });
+
+  it('lets the user flip a stance and clear it, falling back to the proposal', async () => {
+    const casesApi = await withCase();
+    const title = 'Tariffs rise on steel';
+    fireEvent.click(within(cardFor(title)).getByRole('button', { name: 'Supports' }));
+    await waitFor(() => expect(cardFor(title)).toHaveTextContent('Set by you'));
+
+    fireEvent.click(within(cardFor(title)).getByRole('button', { name: 'Change to Cuts against' }));
+    await waitFor(() => expect(cardFor(title)).toHaveTextContent('Cuts against your hypothesis. Set by you.'));
+    expect(casesApi.setTag).toHaveBeenLastCalledWith(expect.objectContaining({ stance: 'CUTS_AGAINST' }), true);
+    expect(tally()).toContain('0 support · 1 cut against');
+
+    fireEvent.click(within(cardFor(title)).getByRole('button', { name: 'Clear' }));
+    await waitFor(() => expect(cardFor(title)).toHaveTextContent('(proposed)'));
+    expect(casesApi.clearTag).toHaveBeenCalledWith('c1', tariffRow.id);
+    expect(tally()).toContain('0 support · 0 cut against');
+  });
+
+  it('lets the user dismiss a proposal and tag a card nothing proposed', async () => {
+    await withCase();
+    fireEvent.click(within(cardFor('Tariffs rise on steel')).getByRole('button', { name: 'Not relevant' }));
+    await waitFor(() => expect(cardFor('Tariffs rise on steel')).toHaveTextContent('Marked not relevant. Set by you.'));
+    expect(tally()).toContain('0 support · 0 cut against');
+
+    fireEvent.click(within(cardFor('Ceasefire talks resume')).getByRole('button', { name: 'Cuts against' }));
+    await waitFor(() => expect(tally()).toContain('0 support · 1 cut against'));
+  });
+
+  it('counts evidence only up to where the scrubber is, and never gives a verdict', async () => {
+    await withCase({
+      tags: [
+        { caseId: 'c1', itemId: tariffRow.id, itemAt: tariffRow.publishedAt, stance: 'SUPPORTS' },
+        { caseId: 'c1', itemId: ceasefireRow.id, itemAt: ceasefireRow.publishedAt, stance: 'CUTS_AGAINST' },
+      ],
+    });
+    expect(tally()).toContain('Evidence up to now: 1 support · 1 cut against');
+    expect(tally()).toContain('Counts only');
+    expect(tally()).not.toMatch(/\btrue\b.*\bproven|confirmed|refuted/);
+
+    fireEvent.change(slider(), { target: { value: String(NOW - 10 * HOUR) } });
+    expect(tally()).toContain('0 support · 0 cut against');
+  });
+
+  it('shows how many relevant cards are still unsorted', async () => {
+    await withCase();
+    expect(tally()).toMatch(/\d+ that look relevant, not sorted yet/);
+    fireEvent.click(within(cardFor('Tariffs rise on steel')).getByRole('button', { name: 'Supports' }));
+    await waitFor(() => expect(tally()).toContain('1 support'));
+  });
+
+  it('stops shaping the view when the case is closed, and says so when a tag will not save', async () => {
+    const closed = fakeCasesApi({ cases: [{ ...openCase, status: 'CLOSED' }], events: [{ caseId: 'c1', kind: 'OPENED', at: hoursAgo(48) }] });
+    await renderWindow({ casesApi: closed });
+    await screen.findByText('1 closed case');
+    expect(screen.queryByText('Looks relevant to your case')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Supports' })).toBeNull();
+  });
+
+  it('says so, and changes nothing, when a stance will not save', async () => {
+    const casesApi = await withCase();
+    casesApi.setTag.mockRejectedValueOnce(new Error('offline'));
+    fireEvent.click(within(cardFor('Tariffs rise on steel')).getByRole('button', { name: 'Supports' }));
+    expect(await screen.findByText(/That didn’t save/)).toBeVisible();
+    expect(cardFor('Tariffs rise on steel')).not.toHaveTextContent('Set by you');
+  });
+});

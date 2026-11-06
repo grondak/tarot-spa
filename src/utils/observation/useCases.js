@@ -5,7 +5,7 @@ export const defaultCasesApi = realApi;
 
 // The user's cases and cycle timestamps. A failed action leaves the list as it was and says so.
 export function useCases(api = defaultCasesApi) {
-  const [state, setState] = useState({ status: 'loading', cases: [], events: [] });
+  const [state, setState] = useState({ status: 'loading', cases: [], events: [], tags: [] });
   const [activeId, setActiveId] = useState(null);
   const [failed, setFailed] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -17,16 +17,16 @@ export function useCases(api = defaultCasesApi) {
     let active = true;
     api.loadCases()
       .then((data) => {
-        if (active) setState({ status: 'ready', ...data });
+        if (active) setState({ status: 'ready', cases: data.cases, events: data.events, tags: data.tags ?? [] });
       })
       .catch(() => {
-        if (active) setState({ status: 'error', cases: [], events: [] });
+        if (active) setState({ status: 'error', cases: [], events: [], tags: [] });
       });
     return () => { active = false; };
   }, [api, revision]);
 
   const reload = () => {
-    setState({ status: 'loading', cases: [], events: [] });
+    setState({ status: 'loading', cases: [], events: [], tags: [] });
     setRevision((n) => n + 1);
   };
 
@@ -66,6 +66,7 @@ export function useCases(api = defaultCasesApi) {
     closedCases,
     activeCase,
     events: state.events,
+    tags: state.tags,
     reload,
     select: setActiveId,
     open: (input) => attempt(async () => {
@@ -88,12 +89,27 @@ export function useCases(api = defaultCasesApi) {
     remove: (id) => attempt(async () => {
       await api.deleteCase(id);
       setState((s) => ({
-        ...s, cases: s.cases.filter((c) => c.id !== id), events: s.events.filter((e) => e.caseId !== id),
+        ...s,
+        cases: s.cases.filter((c) => c.id !== id),
+        events: s.events.filter((e) => e.caseId !== id),
+        tags: s.tags.filter((t) => t.caseId !== id),
       }));
     }),
     removeAll: () => attempt(async () => {
       await api.deleteAllCases();
-      setState((s) => ({ ...s, cases: [], events: [] }));
+      setState((s) => ({ ...s, cases: [], events: [], tags: [] }));
+    }),
+    tagItem: (caseId, item, stance) => attempt(async () => {
+      const exists = state.tags.some((t) => t.caseId === caseId && t.itemId === item.id);
+      const saved = await api.setTag({ caseId, itemId: item.id, itemAt: new Date(item.ms).toISOString(), stance }, exists);
+      setState((s) => ({
+        ...s,
+        tags: [...s.tags.filter((t) => !(t.caseId === caseId && t.itemId === item.id)), saved],
+      }));
+    }),
+    untagItem: (caseId, itemId) => attempt(async () => {
+      await api.clearTag(caseId, itemId);
+      setState((s) => ({ ...s, tags: s.tags.filter((t) => !(t.caseId === caseId && t.itemId === itemId)) }));
     }),
     // Best effort: measuring the cycle never stands in the way of the handoff itself.
     handedOff: (id) => {

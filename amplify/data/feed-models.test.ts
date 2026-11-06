@@ -70,7 +70,7 @@ describe('Observation Window backend wiring', () => {
 });
 
 describe('Observation Window case models', () => {
-  for (const name of ['Case', 'CycleEvent']) {
+  for (const name of ['Case', 'CycleEvent', 'CaseTag']) {
     it(`${name} is owner-only, with the owner field read and delete only`, () => {
       const block = modelBlock(name);
 
@@ -86,5 +86,16 @@ describe('Observation Window case models', () => {
     expect(block).toMatch(/caseId: a\.string\(\)\.required\(\)/);
     expect(block).toMatch(/at: a\.datetime\(\)\.required\(\)/);
     expect(block).not.toMatch(/title|hypothesis|context|summary|content|note/i);
+  });
+});
+
+describe('Observation Window case tags', () => {
+  it('CaseTag is keyed by case and item, and holds ids, a time and a stance only', () => {
+    const block = modelBlock('CaseTag');
+
+    expect(block).toContain(".identifier(['caseId', 'itemId'])");
+    expect(block).toMatch(/itemAt: a\.datetime\(\)\.required\(\)/);
+    expect(block).toMatch(/stance: a\.enum\(\['SUPPORTS', 'CUTS_AGAINST', 'NOT_RELEVANT'\]\)/);
+    expect(block).not.toMatch(/title|hypothesis|context|summary|content|note|reason/i);
   });
 });

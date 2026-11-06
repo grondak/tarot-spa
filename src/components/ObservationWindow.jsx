@@ -6,6 +6,7 @@ import ObservationSources from './ObservationSources';
 import ObservationTimeline from './ObservationTimeline';
 import { defaultCasesApi, useCases } from '../utils/observation/useCases';
 import { observedEvents } from '../utils/observation/handoff';
+import { caseKeywords, relevantItems, tallyUpTo } from '../utils/observation/relevance';
 import { loadObservationData, widenSearchTerm } from '../utils/observation/data';
 import {
   COLLAPSED_KEY, DISABLED_KEY, DISMISSED_KEY, clearObservationPreferences, readSet, writeSet,
@@ -112,6 +113,27 @@ export default function ObservationWindow({
   const view = useMemo(() => (model
     ? computeView(model, { t, windowHours, cardCount, solo, search, stem: stemmer, expansions, blocked })
     : null), [model, t, windowHours, cardCount, solo, search, expansions, blocked]);
+
+  // Items that look relevant to the open case, from the user's own words in it. Proposals only.
+  const activeCase = cases.activeCase;
+  const caseTagMap = useMemo(
+    () => new Map(cases.tags.filter((tag) => tag.caseId === activeCase?.id).map((tag) => [tag.itemId, tag])),
+    [cases.tags, activeCase?.id],
+  );
+  const caseMatches = useMemo(() => {
+    if (!model || !activeCase) return new Map();
+    return relevantItems(model.items, caseKeywords(`${activeCase.title} ${activeCase.hypothesis}`, { stem: stemmer, model }));
+  }, [model, activeCase?.id, activeCase?.title, activeCase?.hypothesis]); // eslint-disable-line react-hooks/exhaustive-deps
+  const tally = useMemo(
+    () => (model && activeCase ? tallyUpTo(t, { tags: caseTagMap, matches: caseMatches, items: model.items }) : null),
+    [model, activeCase, t, caseTagMap, caseMatches],
+  );
+  const tagging = activeCase ? {
+    relevant: caseMatches,
+    tags: caseTagMap,
+    onTag: (item, stance) => cases.tagItem(activeCase.id, item, stance),
+    onUntag: (item) => cases.untagItem(activeCase.id, item.id),
+  } : null;
 
   const scrubTo = useCallback((ms) => {
     setPlaying(false);
@@ -258,7 +280,7 @@ export default function ObservationWindow({
           {' '}Last collected {lastRun ? formatTime(lastRun) : 'never'}. Ranking is source order.
         </p>
 
-        <ObservationCases cases={cases} />
+        <ObservationCases cases={cases} tally={tally} tallyAt={view.live ? 'now' : formatTime(t)} />
 
         <input
           type="range"
@@ -363,8 +385,8 @@ export default function ObservationWindow({
           search={search}
           onDismiss={dismissSource}
           orientBlocked={orientBlocked}
+          tagging={tagging}
           onOrient={onOrient && ((items) => {
-            const { activeCase } = cases;
             if (activeCase) cases.handedOff(activeCase.id);
             onOrient(observedEvents(model, items), activeCase);
           })}
@@ -374,7 +396,7 @@ export default function ObservationWindow({
           <p>
             The news here is shared by everyone and kept 30 days. Your cases, with the hypotheses you
             wrote, are stored on our servers, visible only to you, until you delete them, along with the
-            times you opened, handed off and closed them. Nothing else about what you look at is stored
+            times you opened, handed off and closed them and which items you tagged. Nothing else about what you look at is stored
             on our servers. The only other things remembered are your open and closed groups, the sources
             you switched off and the ones you dismissed, and only in this browser.
           </p>

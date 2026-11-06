@@ -38,7 +38,7 @@ vi.mock('./utils/observation/data', () => ({
 }));
 vi.mock('./utils/observation/cases', async (importOriginal) => ({
   ...(await importOriginal()),
-  loadCases: vi.fn(() => Promise.resolve({ cases: [], events: [] })),
+  loadCases: vi.fn(() => Promise.resolve({ cases: [], events: [], tags: [] })),
   recordHandoff: vi.fn(() => Promise.resolve()),
 }));
 vi.mock('./utils/adminLogs', () => ({ getAdminLogs: vi.fn() }));

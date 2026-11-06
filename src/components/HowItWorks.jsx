@@ -117,8 +117,9 @@ export default function HowItWorks({ onBack = () => {} }) {
             days. After that only a count of stories per source per day is kept, never any text.
             What you look at isn’t stored on the server — no reading history, searches or clicks.
             The one exception is your cases: the decisions and hypotheses you choose to write, and
-            the times you opened, handed off and closed each. They’re visible only to you and kept
-            until you delete them; deleting a case deletes its times too.
+            the times you opened, handed off and closed each, and which items you tagged as supporting
+            or cutting against it. They’re visible only to you and kept until you delete them;
+            deleting a case deletes its times and tags too.
             Your daily outside-interest pick is worked out in your browser from your account and
             the date. A word you search is sent on its own to look up synonyms and isn’t saved.
             Which groups you closed and which sources you switched off or dismissed stay in this

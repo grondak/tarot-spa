@@ -448,7 +448,7 @@ The user opens a case, which is a decision they're weighing, and writes the hypo
 
 **S4.2 — Write my own hypothesis.** As a user, I want to state my hunch in my own words, so the system tests my thinking rather than inventing it.
 
-**S4.3 — Proposed stance with a reason.** As a user, I want each relevant item tagged "supports" or "cuts against" with a one-line reason, so I can see why the tag was applied. Proposals come from simple rules: words from my case and hypothesis are matched against the item, and the matched words are the reason. (Decided 2026-10-31.)
+**S4.3 — Proposed stance with a reason.** (Built 2026-11-05 as a proposed *relevance* with the matched words as the reason; supports or cuts against is set by the user, because word matching cannot tell direction.) As a user, I want each relevant item tagged "supports" or "cuts against" with a one-line reason, so I can see why the tag was applied. Proposals come from simple rules: words from my case and hypothesis are matched against the item, and the matched words are the reason. (Decided 2026-10-31.)
 
 **S4.4 — Override a tag.** As a user, I want to flip or clear any tag, so my judgment wins over the machine's.
 

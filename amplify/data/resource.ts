@@ -216,6 +216,21 @@ const schema = a.schema({
       owner: a.string().authorization((allow) => [allow.owner().identityClaim('sub').to(['read', 'delete'])]),
     })
     .authorization((allow) => [allow.owner().identityClaim('sub')]),
+  // The stance a user set on one news item for one case (S4.4). The proposal that an item looks
+  // relevant is worked out in the browser from the user's own words and is never stored; only what
+  // the user decides is. `itemAt` is when the item was published, so the tally can say how the
+  // evidence built up over time after the item itself has expired. Holds no words from the item or
+  // the user. Owner-only, same locked `owner`.
+  CaseTag: a
+    .model({
+      caseId: a.string().required(),
+      itemId: a.string().required(),
+      itemAt: a.datetime().required(),
+      stance: a.enum(['SUPPORTS', 'CUTS_AGAINST', 'NOT_RELEVANT']),
+      owner: a.string().authorization((allow) => [allow.owner().identityClaim('sub').to(['read', 'delete'])]),
+    })
+    .identifier(['caseId', 'itemId'])
+    .authorization((allow) => [allow.owner().identityClaim('sub')]),
   checkInviteKey: a
     .query()
     .arguments({ code: a.string().required() })

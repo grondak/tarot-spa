@@ -12,7 +12,47 @@ function TitleLink({ item }) {
   );
 }
 
-function Card({ item, model, view, onDismiss }) {
+const STANCE_LABEL = {
+  SUPPORTS: 'Supports your hypothesis',
+  CUTS_AGAINST: 'Cuts against your hypothesis',
+  NOT_RELEVANT: 'Marked not relevant',
+};
+const tagButton = 'rounded border border-gray-700 px-1.5 py-0.5 text-xs text-gray-200 hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500';
+
+// What the user can say about one card for the open case. The Window only proposes that a card
+// looks relevant, with the words that matched; supports or cuts against is always the user's call.
+function CaseTagRow({ item, tagging }) {
+  const tag = tagging.tags.get(item.id);
+  const words = tagging.relevant.get(item.id);
+  if (tag) {
+    const flipTo = tag.stance === 'SUPPORTS' ? 'CUTS_AGAINST' : 'SUPPORTS';
+    return (
+      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-emerald-300">
+        <span><strong>{STANCE_LABEL[tag.stance]}.</strong> Set by you.</span>
+        {tag.stance !== 'NOT_RELEVANT' && (
+          <button type="button" className={tagButton} onClick={() => tagging.onTag(item, flipTo)}>
+            Change to {flipTo === 'SUPPORTS' ? 'Supports' : 'Cuts against'}
+          </button>
+        )}
+        <button type="button" className={tagButton} onClick={() => tagging.onUntag(item)}>Clear</button>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+      <span>
+        {words
+          ? <><strong className="text-indigo-300">Looks relevant to your case</strong> (proposed). Matches: {words.slice(0, 4).join(', ')}.</>
+          : 'Tag for your case:'}
+      </span>
+      <button type="button" className={tagButton} onClick={() => tagging.onTag(item, 'SUPPORTS')}>Supports</button>
+      <button type="button" className={tagButton} onClick={() => tagging.onTag(item, 'CUTS_AGAINST')}>Cuts against</button>
+      {words && <button type="button" className={tagButton} onClick={() => tagging.onTag(item, 'NOT_RELEVANT')}>Not relevant</button>}
+    </div>
+  );
+}
+
+function Card({ item, model, view, onDismiss, tagging }) {
   const feed = model.feeds[item.lane];
   const related = view.isRelated(item);
   return (
@@ -40,11 +80,12 @@ function Card({ item, model, view, onDismiss }) {
         <div className="mt-1 text-xs text-indigo-300">Related, not exact: {relatedReason(item, view.alts)}</div>
       )}
       {item.summary && <p className="mt-1 text-[13px] text-gray-400">{item.summary.slice(0, 220)}</p>}
+      {tagging && <CaseTagRow item={item} tagging={tagging} />}
     </article>
   );
 }
 
-export default function ObservationCards({ model, view, search, onDismiss, onOrient, orientBlocked = false }) {
+export default function ObservationCards({ model, view, search, onDismiss, onOrient, orientBlocked = false, tagging = null }) {
   const shown = view.inWin.slice(0, view.cardCount);
   const rest = view.inWin.slice(view.cardCount);
   return (
@@ -68,7 +109,7 @@ export default function ObservationCards({ model, view, search, onDismiss, onOri
       </div>
       {view.inWin.length === 0 && <p className="py-6 text-gray-400">{emptyMessage(view, search)}</p>}
       <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
-        {shown.map((item) => <Card key={item.id} item={item} model={model} view={view} onDismiss={onDismiss} />)}
+        {shown.map((item) => <Card key={item.id} item={item} model={model} view={view} onDismiss={onDismiss} tagging={tagging} />)}
       </div>
       {rest.length > 0 && (
         <details className="mt-3 text-sm text-gray-300">
