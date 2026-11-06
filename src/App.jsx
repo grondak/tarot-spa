@@ -670,6 +670,17 @@ export default function App() {
     setGuideResult(null);
   }
 
+  // Observe hands Orient a "What I observed" block as the start of its Context.
+  function handleOrientOnMoment(context) {
+    setSpreadKey(null);
+    setCards([]);
+    setOrientError(null);
+    setOrientContext(context);
+    setOrientSpreadKey(null);
+    setOrientRecoveryRevision((n) => n + 1);
+    setActiveApp('orient');
+  }
+
   function handleRedrawFresh() {
     handleRedraw(false);
   }
@@ -736,7 +747,11 @@ export default function App() {
       ) : overlayScreen === 'admin' ? (
         <AdminDashboard onBack={() => setOverlayScreen(null)} />
       ) : activeApp === 'observe' ? (
-        <ObservationWindow userId={userId} />
+        <ObservationWindow
+          userId={userId}
+          onOrient={handleOrientOnMoment}
+          orientBlocked={orientBusy || Boolean(guideResult)}
+        />
       ) : guideResult ? (
         <OrientationGuideResults
           result={guideResult}

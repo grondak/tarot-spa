@@ -3,6 +3,7 @@ import { stemmer } from 'stemmer';
 import ObservationCards from './ObservationCards';
 import ObservationSources from './ObservationSources';
 import ObservationTimeline from './ObservationTimeline';
+import { observedContext } from '../utils/observation/handoff';
 import { loadObservationData, widenSearchTerm } from '../utils/observation/data';
 import {
   COLLAPSED_KEY, DISABLED_KEY, DISMISSED_KEY, clearObservationPreferences, readSet, writeSet,
@@ -25,6 +26,8 @@ const writeCollapsed = (collapsed) => writeSet(COLLAPSED_KEY, collapsed);
 export default function ObservationWindow({
   userId = null,
   suggestFn,
+  onOrient,
+  orientBlocked = false,
   loadFn = loadObservationData,
   widenFn = widenSearchTerm,
   nowFn = Date.now,
@@ -348,7 +351,14 @@ export default function ObservationWindow({
           </div>
         )}
 
-        <ObservationCards model={model} view={view} search={search} onDismiss={dismissSource} />
+        <ObservationCards
+          model={model}
+          view={view}
+          search={search}
+          onDismiss={dismissSource}
+          orientBlocked={orientBlocked}
+          onOrient={onOrient && ((items) => onOrient(observedContext(model, items, { t: view.live ? null : t })))}
+        />
 
         <footer className="mt-8 border-t border-gray-800 pt-4 text-sm text-gray-400">
           <p>

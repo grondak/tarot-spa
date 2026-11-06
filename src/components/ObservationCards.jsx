@@ -44,12 +44,25 @@ function Card({ item, model, view, onDismiss }) {
   );
 }
 
-export default function ObservationCards({ model, view, search, onDismiss }) {
+export default function ObservationCards({ model, view, search, onDismiss, onOrient, orientBlocked = false }) {
   const shown = view.inWin.slice(0, view.cardCount);
   const rest = view.inWin.slice(view.cardCount);
   return (
     <>
-      <p className="my-2 text-sm text-gray-400">{metaText(view)}</p>
+      <div className="my-2 flex flex-wrap items-center gap-3">
+        <p className="text-sm text-gray-400">{metaText(view)}</p>
+        {onOrient && shown.length > 0 && (
+          <button
+            type="button"
+            disabled={orientBlocked}
+            title={orientBlocked ? 'Finish or redraw your current Guide first' : 'Send these cards to Orient as your Context'}
+            onClick={() => onOrient(shown)}
+            className="rounded-md border border-indigo-400 bg-gray-900 px-2.5 py-1 text-sm text-indigo-300 hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-40"
+          >
+            Orient on this moment
+          </button>
+        )}
+      </div>
       {view.inWin.length === 0 && <p className="py-6 text-gray-400">{emptyMessage(view, search)}</p>}
       <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
         {shown.map((item) => <Card key={item.id} item={item} model={model} view={view} onDismiss={onDismiss} />)}

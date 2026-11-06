@@ -471,3 +471,30 @@ describe('ObservationWindow switching sources off', () => {
     expect(localStorage.getItem('owDisabledSources')).toBeNull();
   });
 });
+
+describe('ObservationWindow handoff to Orient', () => {
+  it('has no button unless the page was given somewhere to send the cards', async () => {
+    await renderWindow();
+    expect(screen.queryByRole('button', { name: 'Orient on this moment' })).toBeNull();
+  });
+
+  it('sends the cards on screen as a "What I observed" block', async () => {
+    const onOrient = vi.fn();
+    await renderWindow({ onOrient });
+    const titles = cardTitles();
+    fireEvent.click(screen.getByRole('button', { name: 'Orient on this moment' }));
+    expect(onOrient).toHaveBeenCalledTimes(1);
+    const text = onOrient.mock.calls[0][0];
+    expect(text).toContain('What I observed in the Observation Window (now):');
+    for (const title of titles) expect(text).toContain(title);
+  });
+
+  it('is disabled while a Guide is in the way', async () => {
+    const onOrient = vi.fn();
+    await renderWindow({ onOrient, orientBlocked: true });
+    const button = screen.getByRole('button', { name: 'Orient on this moment' });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(onOrient).not.toHaveBeenCalled();
+  });
+});
