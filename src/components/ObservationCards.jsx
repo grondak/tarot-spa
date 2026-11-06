@@ -55,12 +55,15 @@ export default function ObservationCards({ model, view, search, onDismiss, onOri
           <button
             type="button"
             disabled={orientBlocked}
-            title={orientBlocked ? 'Finish or redraw your current Guide first' : 'Send these cards to Orient as your Context'}
+            title="Send these cards to Orient as your Context"
             onClick={() => onOrient(shown)}
             className="rounded-md border border-indigo-400 bg-gray-900 px-2.5 py-1 text-sm text-indigo-300 hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-40"
           >
             Orient on this moment
           </button>
+        )}
+        {onOrient && shown.length > 0 && orientBlocked && (
+          <p className="text-sm text-gray-400">A Guide is in progress or on screen. Finish or redraw it in Orient first.</p>
         )}
       </div>
       {view.inWin.length === 0 && <p className="py-6 text-gray-400">{emptyMessage(view, search)}</p>}

@@ -494,6 +494,7 @@ describe('ObservationWindow handoff to Orient', () => {
     await renderWindow({ onOrient, orientBlocked: true });
     const button = screen.getByRole('button', { name: 'Orient on this moment' });
     expect(button).toBeDisabled();
+    expect(screen.getByText(/Finish or redraw it in Orient first/)).toBeVisible();
     fireEvent.click(button);
     expect(onOrient).not.toHaveBeenCalled();
   });
