@@ -64,13 +64,15 @@ export async function getOrientationStatus() {
   return typeof data === 'string' ? JSON.parse(data) : data;
 }
 
-export async function startOrientationGuide(requestId, context, spreadKey, drawCode) {
+// `currentEvents` is optional: events the Observation Window supplied, which replace the Guide's own news search.
+export async function startOrientationGuide(requestId, context, spreadKey, drawCode, currentEvents) {
   const client = generateClient();
   const { data, errors } = await client.mutations.startOrientationGuide({
     requestId,
     context,
     spreadKey,
     drawCode,
+    ...(currentEvents?.length ? { currentEvents: JSON.stringify(currentEvents) } : {}),
   });
   if (errors?.length) throw new Error(errors[0].message);
   return typeof data === 'string' ? JSON.parse(data) : data;

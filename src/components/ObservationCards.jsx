@@ -55,7 +55,7 @@ export default function ObservationCards({ model, view, search, onDismiss, onOri
           <button
             type="button"
             disabled={orientBlocked}
-            title="Send these cards to Orient as your Context"
+            title="Send these cards to Orient as Current Events"
             onClick={() => onOrient(shown)}
             className="rounded-md border border-indigo-400 bg-gray-900 px-2.5 py-1 text-sm text-indigo-300 hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-40"
           >

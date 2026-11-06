@@ -232,6 +232,9 @@ const schema = a.schema({
       // Optional encodeDraw() code: the cards the user already saw and chose.
       // Absent, the worker draws server-side as before.
       drawCode: a.string(),
+      // Optional JSON list of Current Events the Observation Window supplies. When present the
+      // worker skips its own Tavily search and grounds the Guide in these instead.
+      currentEvents: a.json(),
     })
     .returns(a.json())
     .authorization((allow) => [allow.authenticated()])

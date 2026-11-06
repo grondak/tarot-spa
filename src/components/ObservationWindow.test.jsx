@@ -478,15 +478,18 @@ describe('ObservationWindow handoff to Orient', () => {
     expect(screen.queryByRole('button', { name: 'Orient on this moment' })).toBeNull();
   });
 
-  it('sends the cards on screen as a "What I observed" block', async () => {
+  it('sends the cards on screen as Current Events', async () => {
     const onOrient = vi.fn();
     await renderWindow({ onOrient });
     const titles = cardTitles();
     fireEvent.click(screen.getByRole('button', { name: 'Orient on this moment' }));
     expect(onOrient).toHaveBeenCalledTimes(1);
-    const text = onOrient.mock.calls[0][0];
-    expect(text).toContain('What I observed in the Observation Window (now):');
-    for (const title of titles) expect(text).toContain(title);
+    const events = onOrient.mock.calls[0][0];
+    expect(events.map((event) => event.title)).toEqual(titles);
+    for (const event of events) {
+      expect(event.content).toBeTruthy();
+      expect(event.source).toBeTruthy();
+    }
   });
 
   it('is disabled while a Guide is in the way', async () => {

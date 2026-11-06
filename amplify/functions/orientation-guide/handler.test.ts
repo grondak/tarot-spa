@@ -343,6 +343,41 @@ describe('durable orientation-guide lifecycle', () => {
     ]);
   });
 
+  it('grounds the Guide in Window-supplied events and runs no Tavily search', async () => {
+    const deps = dependencies();
+    const supplied = [
+      { title: 'Berry stand sold out', content: 'Sold out by 9am', url: 'https://example.com/a', published_date: '2026-11-01' },
+      { title: 'No link here', content: 'Just text' },
+    ];
+    deps.state.session.suppliedEvents = [...supplied, { title: '', content: 'dropped: blank title' }];
+
+    const { execution } = await run(deps);
+
+    expect(execution.getStatus()).toBe('SUCCEEDED');
+    expect(deps.fetchFn).not.toHaveBeenCalled();
+    expect(deps.state.session).toMatchObject({
+      status: 'SUCCEEDED',
+      tavilyTimedOut: false,
+      currentEvents: supplied,
+    });
+    const prompt = (deps.bedrock.send.mock.calls[0][0] as {
+      input: { messages: Array<{ content: Array<{ text: string }> }> };
+    }).input.messages[0].content[0].text;
+    expect(prompt).toContain('CURRENT EVENTS — UNTRUSTED JSON EVIDENCE');
+    expect(prompt).toContain('Berry stand sold out');
+    expect(execution.getOperations().map((operation) => operation.getName())).not.toContain('tavily');
+  });
+
+  it('still searches Tavily when the supplied list holds nothing usable', async () => {
+    const deps = dependencies();
+    deps.state.session.suppliedEvents = [{ title: '', content: '' }];
+
+    const { execution } = await run(deps);
+
+    expect(execution.getStatus()).toBe('SUCCEEDED');
+    expect(deps.fetchFn).toHaveBeenCalledOnce();
+  });
+
   it("uses the user's chosen draw instead of drawing server-side", async () => {
     const deps = dependencies();
     deps.state.session.spreadKey = 'three';

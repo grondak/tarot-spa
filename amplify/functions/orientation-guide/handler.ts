@@ -54,6 +54,8 @@ type SessionRecord = {
   context?: string;
   spreadKey?: string;
   drawCode?: string;
+  // Current Events the Observation Window supplied; when present they replace the Tavily search.
+  suppliedEvents?: unknown;
   status?: string;
   createdAt?: string;
 };
@@ -284,6 +286,16 @@ export function createStepBodies(deps: HandlerDependencies = defaultDependencies
       .map((card, index) => ({ ...card, position: spread.positions[index] }));
   }
 
+  function suppliedCurrentEvents(session: SessionRecord): CurrentEvent[] {
+    if (!Array.isArray(session.suppliedEvents)) return [];
+    return session.suppliedEvents.filter(isCurrentEvent).map((item) => ({
+      title: item.title,
+      content: item.content,
+      ...(typeof item.url === 'string' ? { url: item.url } : {}),
+      ...(typeof item.published_date === 'string' ? { published_date: item.published_date } : {}),
+    }));
+  }
+
   async function searchCurrentEvents(cards: PositionedCard[]) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), TAVILY_TIMEOUT_MS);
@@ -497,6 +509,7 @@ export function createStepBodies(deps: HandlerDependencies = defaultDependencies
     captureTimestamp,
     reserve,
     draw,
+    suppliedCurrentEvents,
     searchCurrentEvents,
     generateGuide,
     persistResult,
@@ -578,11 +591,14 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
         () => steps.draw(session),
         { retryStrategy: retryPresets.noRetry },
       );
-      grounding = await context.step(
-        'tavily',
-        () => steps.searchCurrentEvents(cards),
-        { retryStrategy: retryPresets.noRetry },
-      );
+      const supplied = steps.suppliedCurrentEvents(session);
+      grounding = supplied.length > 0
+        ? { currentEvents: supplied, tavilyTimedOut: false }
+        : await context.step(
+          'tavily',
+          () => steps.searchCurrentEvents(cards),
+          { retryStrategy: retryPresets.noRetry },
+        );
       guide = await context.step(
         'bedrock',
         () => steps.generateGuide(

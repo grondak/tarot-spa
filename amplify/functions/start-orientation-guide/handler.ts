@@ -16,6 +16,8 @@ type StartOrientationGuideEvent = {
     context?: string;
     spreadKey?: string;
     drawCode?: string | null;
+    // Optional AWSJSON list of Current Events from the Observation Window.
+    currentEvents?: unknown;
   } | null;
 };
 
@@ -38,11 +40,62 @@ type ExistingSession = {
   context?: string;
   spreadKey?: string;
   drawCode?: string;
+  suppliedEvents?: unknown[];
   status?: string;
 };
 
 const MAX_CONTEXT_CHARACTERS = 10_000;
+export const MAX_SUPPLIED_EVENTS = 12;
+const MAX_EVENT_TITLE = 200;
+const MAX_EVENT_CONTENT = 600;
+const MAX_EVENT_URL = 2048;
+const MAX_EVENT_DATE = 40;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isHttpUrl(value: string) {
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}
+
+// Returns undefined when no events were supplied, so the worker keeps its own Tavily search.
+// Over-long text is trimmed; a wrong shape, too many items or a non-http link is rejected.
+export function parseSuppliedEvents(raw: unknown) {
+  if (raw === undefined || raw === null) return undefined;
+  let value = raw;
+  if (typeof raw === 'string') {
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      throw new Error('invalid currentEvents');
+    }
+  }
+  if (!Array.isArray(value)) throw new Error('invalid currentEvents');
+  if (value.length === 0) return undefined;
+  if (value.length > MAX_SUPPLIED_EVENTS) {
+    throw new Error(`currentEvents must be ${MAX_SUPPLIED_EVENTS} items or fewer`);
+  }
+  return value.map((item) => {
+    if (typeof item !== 'object' || item === null) throw new Error('invalid currentEvents');
+    const { title, content, url, published_date: publishedDate } = item as Record<string, unknown>;
+    if (typeof title !== 'string' || !title.trim()) throw new Error('invalid currentEvents');
+    if (typeof content !== 'string' || !content.trim()) throw new Error('invalid currentEvents');
+    if (url !== undefined && (typeof url !== 'string' || url.length > MAX_EVENT_URL || !isHttpUrl(url))) {
+      throw new Error('invalid currentEvents');
+    }
+    if (publishedDate !== undefined && typeof publishedDate !== 'string') {
+      throw new Error('invalid currentEvents');
+    }
+    return {
+      title: title.trim().slice(0, MAX_EVENT_TITLE),
+      content: content.trim().slice(0, MAX_EVENT_CONTENT),
+      ...(url !== undefined && { url }),
+      ...(publishedDate !== undefined && { published_date: publishedDate.slice(0, MAX_EVENT_DATE) }),
+    };
+  });
+}
 
 const defaultDependencies: HandlerDependencies = {
   dynamo: DynamoDBDocumentClient.from(new DynamoDBClient({})),
@@ -88,6 +141,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
     if (drawCode !== undefined && decodeDraw(drawCode)?.spreadKey !== spreadKey) {
       throw new Error('invalid drawCode');
     }
+    const suppliedEvents = parseSuppliedEvents(event.arguments?.currentEvents);
     if (!UUID_PATTERN.test(requestId)) throw new Error('invalid requestId');
     if (!deps.tableNames.session || !deps.workerFunctionArn) {
       throw new Error('start-orientation-guide configuration is missing');
@@ -106,6 +160,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
           spreadKey,
           context,
           ...(drawCode !== undefined && { drawCode }),
+          ...(suppliedEvents !== undefined && { suppliedEvents }),
           status: 'PENDING',
           createdAt: timestamp,
           updatedAt: timestamp,
@@ -128,6 +183,7 @@ export function createHandler(deps: HandlerDependencies = defaultDependencies) {
         || existing.context !== context
         || existing.spreadKey !== spreadKey
         || existing.drawCode !== drawCode
+        || JSON.stringify(existing.suppliedEvents) !== JSON.stringify(suppliedEvents)
       ) {
         throw new Error('IDEMPOTENCY_CONFLICT');
       }

@@ -141,6 +141,90 @@ describe('start-orientation-guide handler', () => {
     })).rejects.toThrow('IDEMPOTENCY_CONFLICT');
   });
 
+  describe('supplied Current Events', () => {
+    const item = { title: 'Berry stand sold out', content: 'Market berry stand sold out by 9am', url: 'https://example.com/a', published_date: '2026-11-01' };
+    const withEvents = (currentEvents: unknown) => ({ ...event, arguments: { ...event.arguments, currentEvents } });
+    const storedItem = (deps: ReturnType<typeof dependencies>) => (deps.dynamo.send.mock.calls[0][0] as { input: { Item: Record<string, unknown> } }).input.Item;
+
+    it('stores them on the Session, accepting a JSON string or a list', async () => {
+      for (const value of [JSON.stringify([item]), [item]]) {
+        const deps = dependencies();
+        await createHandler(deps)(withEvents(value));
+        expect(storedItem(deps).suppliedEvents).toEqual([item]);
+      }
+    });
+
+    it('stores nothing when none, or an empty list, are supplied', async () => {
+      for (const value of [undefined, null, '[]', []]) {
+        const deps = dependencies();
+        await createHandler(deps)(withEvents(value));
+        expect(storedItem(deps)).not.toHaveProperty('suppliedEvents');
+      }
+    });
+
+    it('trims long text and an item over the limit is rejected, not cut', async () => {
+      const deps = dependencies();
+      await createHandler(deps)(withEvents([{ title: 'T'.repeat(500), content: 'C'.repeat(2000) }]));
+      const [stored] = storedItem(deps).suppliedEvents as Array<{ title: string; content: string }>;
+      expect(stored.title).toHaveLength(200);
+      expect(stored.content).toHaveLength(600);
+
+      const tooMany = Array.from({ length: 13 }, () => item);
+      await expect(createHandler(dependencies())(withEvents(tooMany))).rejects.toThrow('12 items or fewer');
+      const twelve = Array.from({ length: 12 }, () => item);
+      await expect(createHandler(dependencies())(withEvents(twelve))).resolves.toBeTruthy();
+    });
+
+    it.each([
+      ['not JSON', 'nope'],
+      ['not a list', { title: 'x', content: 'y' }],
+      ['an item that is not an object', ['x']],
+      ['a missing title', [{ content: 'y' }]],
+      ['a blank content', [{ title: 'x', content: '  ' }]],
+      ['a javascript link', [{ title: 'x', content: 'y', url: 'javascript:alert(1)' }]],
+      ['a non-string date', [{ title: 'x', content: 'y', published_date: 5 }]],
+    ])('rejects %s before writing anything', async (_label, value) => {
+      const deps = dependencies();
+      await expect(createHandler(deps)(withEvents(value))).rejects.toThrow('invalid currentEvents');
+      expect(deps.dynamo.send).not.toHaveBeenCalled();
+      expect(deps.lambda.send).not.toHaveBeenCalled();
+    });
+
+    it('rejects a retry that changes the supplied events', async () => {
+      const deps = dependencies();
+      deps.dynamo.send
+        .mockRejectedValueOnce(conditionalFailure())
+        .mockResolvedValueOnce({
+          Item: {
+            id: REQUEST_ID,
+            owner: 'account-1',
+            context: event.arguments.context,
+            spreadKey: 'single',
+            suppliedEvents: [item],
+            status: 'PENDING',
+          },
+        });
+      await expect(createHandler(deps)(withEvents([{ ...item, title: 'Different' }]))).rejects.toThrow('IDEMPOTENCY_CONFLICT');
+    });
+
+    it('accepts an identical retry', async () => {
+      const deps = dependencies();
+      deps.dynamo.send
+        .mockRejectedValueOnce(conditionalFailure())
+        .mockResolvedValueOnce({
+          Item: {
+            id: REQUEST_ID,
+            owner: 'account-1',
+            context: event.arguments.context,
+            spreadKey: 'single',
+            suppliedEvents: [item],
+            status: 'RUNNING',
+          },
+        });
+      await expect(createHandler(deps)(withEvents([item]))).resolves.toMatchObject({ sessionId: REQUEST_ID });
+    });
+  });
+
   it('accepts Context at the exact 10,000-character boundary', async () => {
     const deps = dependencies();
     const boundaryEvent = {

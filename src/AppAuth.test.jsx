@@ -12,6 +12,7 @@ import { getMyAccount } from './utils/account';
 import { getAdminLogs } from './utils/adminLogs';
 import { getAdminMetrics } from './utils/adminMetrics';
 import { updateAdminConfig } from './utils/adminConfig';
+import { loadObservationData } from './utils/observation/data';
 import {
   getSession,
   getOrientationStatus,
@@ -384,6 +385,46 @@ describe('App authenticated sign-out round trip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Observe' }));
     fireEvent.click(screen.getByRole('button', { name: 'Your Guide is ready' }));
     expect(screen.getByRole('heading', { name: 'Your Orientation Guide', level: 1 })).toBeVisible();
+  });
+
+  it('hands the cards from Observe to Orient as Current Events, not as Context text', async () => {
+    const hoursAgo = (h) => new Date(Date.now() - h * 3600e3).toISOString();
+    loadObservationData.mockResolvedValueOnce({
+      feeds: [{ id: 'bbc', name: 'BBC', group: 'world', sortOrder: 0, lastFetchedAt: hoursAgo(0.5) }],
+      items: [
+        { id: 'a', title: 'Tariffs rise', link: 'https://example.com/a', summary: 'Trade ministers met.', publishedAt: hoursAgo(2), sources: ['bbc'] },
+        { id: 'b', title: 'Weather today', link: 'https://example.com/b', summary: '', publishedAt: hoursAgo(3), sources: ['bbc'] },
+      ],
+      runs: [{ startedAt: hoursAgo(1), finishedAt: hoursAgo(0.9) }],
+    });
+    render(<App />);
+
+    expect(await screen.findByText('Your account')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Observe' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Orient on this moment' }));
+
+    expect(screen.getByRole('heading', { name: 'Help Me Orient' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'From the Observation Window' })).toBeVisible();
+    expect(screen.getByLabelText('Context')).toHaveValue('');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove “Weather today”' }));
+
+    fireEvent.change(screen.getByLabelText('Context'), { target: { value: 'Should I plant strawberries?' } });
+    fireEvent.click(screen.getByRole('button', { name: /Decision/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Help Me Orient', exact: true }));
+
+    await waitFor(() => expect(startOrientationGuide).toHaveBeenCalledTimes(1));
+    expect(startOrientationGuide).toHaveBeenCalledWith(
+      '12345678-1234-4234-9234-123456789012',
+      'Should I plant strawberries?',
+      'decision',
+      expect.stringMatching(/^decision:/),
+      [{
+        title: 'Tariffs rise',
+        content: 'Trade ministers met.',
+        url: 'https://example.com/a',
+        published_date: expect.any(String),
+      }],
+    );
   });
 
   it('opens a header screen over Observe and returns to Observe on Back', async () => {

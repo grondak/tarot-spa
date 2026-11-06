@@ -1,22 +1,32 @@
-// The "What I observed" block that Observe hands to Orient as the start of its Context.
-import { formatTime } from './timeline';
+// What Observe hands to Orient: the cards on screen, as Current Events for the Guide.
+import { formatTime, safeHref } from './timeline';
 
-const TITLE_LIMIT = 160;
+// The server accepts at most 12 (MAX_SUPPLIED_EVENTS in start-orientation-guide).
+export const MAX_HANDOFF_ITEMS = 12;
 
-const clip = (text) => (text.length > TITLE_LIMIT ? `${text.slice(0, TITLE_LIMIT - 1)}…` : text);
-
-// `items` are the cards on screen; `t` is where the scrubber sits, or null when it is live.
-export function observedContext(model, items, { t = null } = {}) {
-  const when = t === null ? 'now' : formatTime(t);
-  const lines = items.map((item) => {
-    const title = clip((item.title || item.link || 'Untitled').replace(/\s+/g, ' ').trim());
-    return `- ${model.feeds[item.lane].name}, ${formatTime(item.ms)}: ${title}`;
+// `source` and `when` are only for showing the list in Orient; toSuppliedEvent leaves them out.
+export function observedEvents(model, items) {
+  return items.slice(0, MAX_HANDOFF_ITEMS).map((item) => {
+    const title = (item.title || item.link || 'Untitled').replace(/\s+/g, ' ').trim();
+    const summary = (item.summary ?? '').replace(/\s+/g, ' ').trim();
+    const url = safeHref(item.link);
+    return {
+      source: model.feeds[item.lane].name,
+      when: formatTime(item.ms),
+      title,
+      // A card with no summary still needs content: its title stands in.
+      content: summary || title,
+      ...(url ? { url } : {}),
+      published_date: new Date(item.ms).toISOString(),
+    };
   });
-  return [
-    `What I observed in the Observation Window (${when}):`,
-    ...lines,
-    '',
-    'What I make of it, and the decision I am weighing:',
-    '',
-  ].join('\n');
+}
+
+export function toSuppliedEvent({ title, content, url, published_date: publishedDate }) {
+  return {
+    title,
+    content,
+    ...(url ? { url } : {}),
+    ...(publishedDate ? { published_date: publishedDate } : {}),
+  };
 }

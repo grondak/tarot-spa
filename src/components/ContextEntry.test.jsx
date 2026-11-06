@@ -345,3 +345,30 @@ describe('ContextEntry deliberate quick draw', () => {
     expect(screen.getByLabelText('Context')).toHaveValue('Keep me around.');
   });
 });
+
+describe('ContextEntry Observation Window items', () => {
+  const observedItems = [
+    { source: 'BBC', when: 'Nov 1, 10:00 AM', title: 'Tariffs rise', content: 'c' },
+    { source: 'Dairy Wire', when: 'Nov 1, 9:00 AM', title: 'Milk prices', content: 'c' },
+  ];
+
+  it('lists them apart from the Context, which stays the user\'s own', () => {
+    renderEntry({ observedItems });
+    expect(screen.getByRole('heading', { name: 'From the Observation Window' })).toBeVisible();
+    expect(screen.getByText('Tariffs rise')).toBeVisible();
+    expect(screen.getByText(/BBC · Nov 1/)).toBeVisible();
+    expect(screen.getByLabelText('Context')).toHaveValue('');
+  });
+
+  it('asks the page to remove one by its place in the list', () => {
+    const onRemoveObserved = vi.fn();
+    renderEntry({ observedItems, onRemoveObserved });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove “Milk prices”' }));
+    expect(onRemoveObserved).toHaveBeenCalledWith(1);
+  });
+
+  it('shows nothing when there are no items', () => {
+    renderEntry();
+    expect(screen.queryByRole('heading', { name: 'From the Observation Window' })).toBeNull();
+  });
+});

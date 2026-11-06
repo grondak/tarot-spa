@@ -32,6 +32,8 @@ export default function ContextEntry({
   rateLimited = false,
   initialContext = '',
   initialSpreadKey = null,
+  observedItems = [],
+  onRemoveObserved = () => {},
   orientBusy = false,
   orientError = null,
   onOrient = () => {},
@@ -112,6 +114,33 @@ export default function ContextEntry({
               ))}
             </div>
           </div>
+          {observedItems.length > 0 && (
+            <section aria-labelledby="observed-heading" className="mt-8 rounded-lg border border-indigo-400/40 bg-gray-900 p-4">
+              <h2 id="observed-heading" className="text-xs font-semibold uppercase tracking-widest text-indigo-300">From the Observation Window</h2>
+              <p className="mt-1 text-sm text-gray-400">
+                Your Guide will read these as Current Events, in place of its own news search. Remove any you don't want.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {observedItems.map((item, index) => (
+                  <li key={`${item.title}-${index}`} className="flex items-start justify-between gap-3 text-sm">
+                    <span>
+                      <span className="block text-xs text-gray-400">{item.source} · {item.when}</span>
+                      <span className="text-gray-200">{item.title}</span>
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Remove “${item.title}”`}
+                      disabled={orientBusy}
+                      onClick={() => onRemoveObserved(index)}
+                      className="shrink-0 rounded px-2 text-gray-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-40"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           <div className="mt-8">
             <label htmlFor="context" className="text-xs font-semibold uppercase tracking-widest text-gray-400">Context</label>
             <div className="mt-2">

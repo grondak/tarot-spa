@@ -49,6 +49,22 @@ describe('startOrientationGuide', () => {
     });
   });
 
+  it('sends supplied Current Events as JSON, and nothing when there are none', async () => {
+    client.mutations.startOrientationGuide.mockResolvedValue({ data: { sessionId: 'request-1', status: 'PENDING' } });
+    const events = [{ title: 'A', content: 'B' }];
+
+    await startOrientationGuide('request-1', 'A decision.', 'decision', undefined, events);
+    expect(client.mutations.startOrientationGuide).toHaveBeenLastCalledWith({
+      requestId: 'request-1',
+      context: 'A decision.',
+      spreadKey: 'decision',
+      currentEvents: JSON.stringify(events),
+    });
+
+    await startOrientationGuide('request-1', 'A decision.', 'decision', undefined, []);
+    expect(client.mutations.startOrientationGuide.mock.lastCall[0]).not.toHaveProperty('currentEvents');
+  });
+
   it('throws the first mutation error message', async () => {
     client.mutations.startOrientationGuide.mockResolvedValue({
       errors: [{ message: 'wrapped IDEMPOTENCY_CONFLICT response' }],

@@ -13,6 +13,7 @@ import GrantInviteKey from './components/GrantInviteKey';
 import PublicLanding from './components/PublicLanding';
 import OrientationGuideResults from './components/OrientationGuideResults';
 import SavedReadings from './components/SavedReadings';
+import { toSuppliedEvent } from './utils/observation/handoff';
 import AppSwitcher from './components/AppSwitcher';
 import ObservationWindow from './components/ObservationWindow';
 import { getMyAccount } from './utils/account';
@@ -111,6 +112,8 @@ export default function App() {
   const [orientError, setOrientError] = useState(null);
   const [orientContext, setOrientContext] = useState(getOrientationRedrawContext);
   const [orientSpreadKey, setOrientSpreadKey] = useState(null);
+  // Cards Observe handed over; they go to the Guide as Current Events, not into the Context text.
+  const [orientObserved, setOrientObserved] = useState([]);
   const [orientRecoveryRevision, setOrientRecoveryRevision] = useState(0);
   const authRequestId = useRef(0);
   const authStateRef = useRef('loading');
@@ -502,6 +505,11 @@ export default function App() {
     cancelOrientationDelays();
     const flowId = ++orientationFlowId.current;
     const deadline = Date.now() + ORIENTATION_DEADLINE_MS;
+    const suppliedEvents = orientObserved.map(toSuppliedEvent);
+    // A reading started without Window items calls the starter exactly as before.
+    const startGuide = (id) => startOrientationGuide(
+      id, context, selectedSpreadKey, drawCode, ...(suppliedEvents.length > 0 ? [suppliedEvents] : []),
+    );
     let requestId;
 
     function failGeneration() {
@@ -530,7 +538,7 @@ export default function App() {
     }
 
     const start = await runUntilDeadline(
-      startOrientationGuide(requestId, context, selectedSpreadKey, drawCode),
+      startGuide(requestId),
       deadline,
     );
     if (orientationFlowId.current !== flowId || start.kind === 'cancelled') return;
@@ -583,7 +591,7 @@ export default function App() {
       }
       if (existingSession.status === 'PENDING') {
         const retry = await runUntilDeadline(
-          startOrientationGuide(requestId, context, selectedSpreadKey, drawCode),
+          startGuide(requestId),
           deadline,
         );
         if (orientationFlowId.current !== flowId || retry.kind === 'cancelled') return;
@@ -634,6 +642,7 @@ export default function App() {
     setOrientError(null);
     setOrientContext('');
     setOrientSpreadKey(null);
+    setOrientObserved([]);
     setGuideResult(null);
     setIsAdminUser(false);
     setOverlayScreen(null);
@@ -670,12 +679,12 @@ export default function App() {
     setGuideResult(null);
   }
 
-  // Observe hands Orient a "What I observed" block as the start of its Context.
-  function handleOrientOnMoment(context) {
+  // Observe hands Orient the cards it showed; they ground the Guide in place of its own news search.
+  function handleOrientOnMoment(events) {
     setSpreadKey(null);
     setCards([]);
     setOrientError(null);
-    setOrientContext(context);
+    setOrientObserved(events);
     setOrientSpreadKey(null);
     setOrientRecoveryRevision((n) => n + 1);
     setActiveApp('orient');
@@ -773,6 +782,8 @@ export default function App() {
           rateLimited={rateLimited}
           initialContext={orientContext}
           initialSpreadKey={orientSpreadKey}
+          observedItems={orientObserved}
+          onRemoveObserved={(index) => setOrientObserved((items) => items.filter((_, i) => i !== index))}
           orientBusy={orientBusy}
           orientError={orientError}
           onOrient={handleOrient}
