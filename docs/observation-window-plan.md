@@ -16,6 +16,7 @@ All ten packages below are built and live on `main` (commit `fffe538`), checked 
 | F3 Timing correlation | S3.1–S3.4 | Everything within an adjustable window shown together, overflow counted ("+N more"), "Co-occurrence is not a link" |
 | F9 Collection (enabler) | S9.1, S9.3, S9.4, S9.7–S9.9 | Hourly cloud collector, one shared de-duplicated store, 30-day expiry, daily per-source counts kept, collector gaps shown as hatching |
 | Privacy | (not a story) | "How it works" copy, an Account section and an on-page footer saying what is and isn't stored, and buttons that clear what the browser remembers |
+| F8 Handoff to Orient (Release 2, first part) | S8.1, S8.2 (partly), S8.5 | **Orient on this moment** sends the cards on screen (up to 12) to Orient as Current Events, listed apart from the Context box with a remove button on each. The server stores them on the Session and the Guide skips its Tavily search when they are present; without them it works as before. Seen working on staging 2026-11-05. **Not built:** the case and hypothesis travelling as Context (needs F4), cycle time (S8.3, S8.4) |
 | Operations | | Alarms for the collector (errors, silence) and for widen-search; `npm run smoke-observation`; history import script; playbook notes |
 
 ### Not built yet, from the first release's own list
@@ -27,7 +28,7 @@ All ten packages below are built and live on `main` (commit `fffe538`), checked 
 
 ### Next, in the epic's order
 
-1. **Release 2.** F8 handoff to Orient (S8.1–S8.5). A first version is small: an "Add to Orient" button on cards that fills the Orient Context box with a "What I observed" block, about one session. The fuller version feeds the items into the Guide as Current Events, which needs the server to accept supplied items (S8.5) and a decision on untrusted text in the prompt. Then F4 cases and hypotheses, and F5 stakes, baselines and absences.
+1. **Release 2.** The handoff itself is built (see Shipped). Next: cycle time (S8.3, S8.4, timestamps only), then F4 cases and hypotheses, then F5 stakes, baselines and absences. The case and hypothesis joining the handoff as Context (S8.2) comes with F4.
 2. **Release 3.** F6 entities, pattern signatures, source trust and a map; F7 field notes and others' journals.
 3. **User-added sources.** S2.1 proper (paste an address), S2.8 and S2.9 need a per-user list of sources, which changes the privacy promise that nothing about a user is stored. Worth doing only if people keep asking through the suggestion box.
 
