@@ -19,7 +19,8 @@ export const WINDOW_OPTIONS = [
 export const soloKey = sourceKey;
 
 // `solo` is a Set of soloKey values; `search` comes from parseSearch.
-export function computeView(model, { t, windowHours, cardCount, solo, search, stem, expansions, blocked }) {
+// `stakes` is an optional Map of item id to stakes for the open case; items missing from it are 0.
+export function computeView(model, { t, windowHours, cardCount, solo, search, stem, expansions, blocked, stakes }) {
   const half = windowHours * HOUR;
   const lo = t - half;
   const hi = t + half;
@@ -41,9 +42,12 @@ export function computeView(model, { t, windowHours, cardCount, solo, search, st
   const isRelated = (item) => level > 0 && !matchesExact(item, search);
 
   // Outside-your-interests picks come first, or a one-a-day pick would never reach the top cards.
-  // Then exact matches rank before related ones; the sort is stable, so source order holds within each.
+  // Then exact matches rank before related ones, then higher stakes first; the sort is stable, so
+  // source order holds within each.
+  const stakesOf = (item) => stakes?.get(item.id) ?? 0;
   const inWin = allInWin.filter(isFocused).sort((a, b) => Number(b.injected) - Number(a.injected)
-    || Number(isRelated(a)) - Number(isRelated(b)));
+    || Number(isRelated(a)) - Number(isRelated(b))
+    || stakesOf(b) - stakesOf(a));
   const matched = searching ? model.items.filter((i) => matchesExact(i, search)) : [];
   const hits = matched.filter(inSolo);
   const seenWords = new Set();

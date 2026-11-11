@@ -100,6 +100,14 @@ describe('Observation Window case tags', () => {
   });
 });
 
+describe('stakes wiring', () => {
+  it('CaseTag can hold a hand-set stakes number and still no words', () => {
+    const block = modelBlock('CaseTag');
+    expect(block).toMatch(/stakes:\s*a\.integer\(\)/);
+    expect(block).not.toMatch(/title|summary|text|note/i);
+  });
+});
+
 describe('rival hypothesis wiring', () => {
   it('Case can hold a kept rival, and the owner still cannot change who owns it', () => {
     const block = modelBlock('Case');

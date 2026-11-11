@@ -62,7 +62,7 @@ export function tallyUpTo(t, { tags, matches, items }) {
     if (tag.stance === 'SUPPORTS') supports += 1;
     else if (tag.stance === 'CUTS_AGAINST') against += 1;
   }
-  const unsorted = items.filter((item) => item.ms <= t && matches.has(item.id) && !tags.has(item.id)).length;
+  const unsorted = items.filter((item) => item.ms <= t && matches.has(item.id) && !tags.get(item.id)?.stance).length;
   return { supports, against, unsorted };
 }
 
@@ -78,7 +78,42 @@ export function rivalEvidence(items, { tags, matches, limit = RIVAL_EVIDENCE_LIM
   const byNewest = (a, b) => b.ms - a.ms;
   const sorted = items.filter((item) => stanceOf[tags.get(item.id)?.stance]).sort(byNewest)
     .map((item) => toEvidence(item, stanceOf[tags.get(item.id).stance]));
-  const unsorted = items.filter((item) => matches.has(item.id) && !tags.has(item.id)).sort(byNewest)
+  const unsorted = items.filter((item) => matches.has(item.id) && !tags.get(item.id)?.stance).sort(byNewest)
     .map((item) => toEvidence(item, 'unsorted'));
   return [...sorted, ...unsorted].slice(0, limit);
+}
+
+// Stakes, 0 to 3: what an item could cost or change in the open case, so a quiet item that matters
+// can outrank a loud one that doesn't (epic S5.1). Plain rules, and the user's own rating always wins:
+//   a hand-set number                      -> that number
+//   marked not relevant                    -> 0
+//   tagged as supporting or cutting against -> 3
+//   matches a word of the case title, or three or more case words -> 2
+//   looks relevant (the same match that proposes it)              -> 1
+//   anything else -> 0
+export const MAX_STAKES = 3;
+
+export function caseTitleWords(title) {
+  return new Set((title.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).filter((w) => w.length >= 3));
+}
+
+export function stakesFor(item, { tag, matches, titleWords }) {
+  if (Number.isInteger(tag?.stakes)) return { stakes: tag.stakes, why: 'You set this.' };
+  if (tag?.stance === 'NOT_RELEVANT') return { stakes: 0, why: 'You marked it not relevant.' };
+  if (tag?.stance) return { stakes: MAX_STAKES, why: 'You tagged it for this case.' };
+  const words = matches.get(item.id);
+  if (!words) return { stakes: 0, why: '' };
+  if (words.some((w) => titleWords.has(w))) return { stakes: 2, why: 'It matches a word in your case title.' };
+  if (words.length >= 3) return { stakes: 2, why: `It matches ${words.length} of your case words.` };
+  return { stakes: 1, why: 'It looks relevant to your case.' };
+}
+
+// Item id to stakes, for the items above 0 only; everything else is 0.
+export function stakesMap(items, { tags, matches, titleWords }) {
+  const found = new Map();
+  for (const item of items) {
+    const { stakes } = stakesFor(item, { tag: tags.get(item.id), matches, titleWords });
+    if (stakes > 0) found.set(item.id, stakes);
+  }
+  return found;
 }

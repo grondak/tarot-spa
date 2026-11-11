@@ -554,6 +554,94 @@ describe('ObservationWindow cases and the handoff', () => {
   });
 });
 
+describe('ObservationWindow stakes for a case', () => {
+  const openCase = { id: 'c1', title: 'Tariffs on steel imports', hypothesis: 'A duty raises costs', status: 'OPEN' };
+  const cardFor = (title) => cards().find((card) => within(card).queryByText(title));
+  const ceasefireRow = itemRows.find((row) => row.title === 'Ceasefire talks resume');
+  const dot = (title) => document.querySelector(`[title*="${title}"]`);
+
+  async function withCase(overrides = {}) {
+    const casesApi = fakeCasesApi({
+      cases: [openCase],
+      events: [{ caseId: 'c1', kind: 'OPENED', at: hoursAgo(48) }],
+      ...overrides,
+    });
+    await renderWindow({ casesApi });
+    await screen.findByTestId('tally');
+    return casesApi;
+  }
+
+  it('rates cards by plain rules and says why', async () => {
+    await withCase();
+    expect(cardFor('Tariffs rise on steel')).toHaveTextContent('Stakes 2 of 3. It matches a word in your case title.');
+    expect(cardFor('Ceasefire talks resume')).toHaveTextContent('Stakes 0 of 3.');
+  });
+
+  it('lets the user set stakes by hand, which moves the card up and makes the marker bigger', async () => {
+    const casesApi = await withCase();
+    expect(cards()[0]).toHaveTextContent('Tariffs rise on steel');
+    expect(dot('Ceasefire talks resume').className).not.toContain('size-[13px]');
+
+    fireEvent.click(within(cardFor('Ceasefire talks resume')).getByRole('button', { name: 'Set stakes to 3' }));
+
+    await waitFor(() => expect(cardFor('Ceasefire talks resume')).toHaveTextContent('Stakes 3 of 3. You set this.'));
+    expect(casesApi.setTag).toHaveBeenCalledWith(
+      { caseId: 'c1', itemId: ceasefireRow.id, itemAt: ceasefireRow.publishedAt, stakes: 3 },
+      false,
+    );
+    expect(cards()[0]).toHaveTextContent('Ceasefire talks resume');
+    expect(dot('Ceasefire talks resume').className).toContain('size-[13px]');
+    expect(screen.getByTestId('tally').textContent).toContain('0 support · 0 cut against');
+  });
+
+  it('goes back to the rules, dropping the stored row when nothing else is on it', async () => {
+    const casesApi = await withCase();
+    fireEvent.click(within(cardFor('Ceasefire talks resume')).getByRole('button', { name: 'Set stakes to 3' }));
+    await waitFor(() => expect(cardFor('Ceasefire talks resume')).toHaveTextContent('You set this.'));
+
+    fireEvent.click(within(cardFor('Ceasefire talks resume')).getByRole('button', { name: 'Use the rules' }));
+
+    await waitFor(() => expect(cardFor('Ceasefire talks resume')).toHaveTextContent('Stakes 0 of 3.'));
+    expect(casesApi.clearTag).toHaveBeenCalledWith('c1', ceasefireRow.id);
+    expect(cards()[0]).toHaveTextContent('Tariffs rise on steel');
+  });
+
+  it('keeps the stance when stakes change, and the stakes when the stance is cleared', async () => {
+    const casesApi = await withCase();
+    const title = 'Tariffs rise on steel';
+    fireEvent.click(within(cardFor(title)).getByRole('button', { name: 'Supports' }));
+    await waitFor(() => expect(cardFor(title)).toHaveTextContent('Set by you'));
+    expect(cardFor(title)).toHaveTextContent('Stakes 3 of 3. You tagged it for this case.');
+
+    fireEvent.click(within(cardFor(title)).getByRole('button', { name: 'Set stakes to 1' }));
+    await waitFor(() => expect(cardFor(title)).toHaveTextContent('Stakes 1 of 3. You set this.'));
+    expect(casesApi.setTag).toHaveBeenLastCalledWith(expect.objectContaining({ stance: 'SUPPORTS', stakes: 1 }), true);
+    expect(screen.getByTestId('tally').textContent).toContain('1 support');
+
+    fireEvent.click(within(cardFor(title)).getByRole('button', { name: 'Clear' }));
+    await waitFor(() => expect(cardFor(title)).toHaveTextContent('(proposed)'));
+    expect(casesApi.setTag).toHaveBeenLastCalledWith(expect.objectContaining({ stance: null, stakes: 1 }), true);
+    expect(casesApi.clearTag).not.toHaveBeenCalled();
+    expect(cardFor(title)).toHaveTextContent('Stakes 1 of 3. You set this.');
+    expect(screen.getByTestId('tally').textContent).toContain('0 support');
+  });
+
+  it('shows no stakes and keeps source order when no case is open', async () => {
+    await renderWindow({ casesApi: fakeCasesApi() });
+    expect(screen.queryByRole('group', { name: 'Stakes for your case' })).toBeNull();
+    expect(cards()[0]).toHaveTextContent('Weather today');
+  });
+
+  it('reweights when the user switches cases', async () => {
+    const other = { id: 'c2', title: 'Ceasefire talks', hypothesis: 'Delegations keep meeting', status: 'OPEN' };
+    await withCase({ cases: [openCase, other] });
+    const before = cards()[0].textContent;
+    fireEvent.change(screen.getByLabelText('Working on'), { target: { value: 'c2' } });
+    await waitFor(() => expect(cards()[0].textContent).not.toBe(before));
+    expect(cards()[0]).toHaveTextContent('Ceasefire talks resume');
+  });
+});
+
 describe('ObservationWindow tagging evidence for a case', () => {
   const openCase = { id: 'c1', title: 'Tariffs on steel imports', hypothesis: 'A duty raises costs', status: 'OPEN' };
   const cardFor = (title) => cards().find((card) => within(card).queryByText(title));

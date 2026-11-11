@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { stemmer } from 'stemmer';
-import { caseKeywords, relevantItems, relevantWords, rivalEvidence, tallyUpTo } from './relevance';
+import {
+  caseKeywords, caseTitleWords, relevantItems, relevantWords, rivalEvidence, stakesFor, stakesMap, tallyUpTo,
+} from './relevance';
 
 const mk = (id, ms, text) => ({
   id, ms, stems: new Set((text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).map(stemmer)),
@@ -107,5 +109,60 @@ describe('rivalEvidence', () => {
   it('stops at the limit', () => {
     const matches = new Map(pool.map((i) => [i.id, ['x']]));
     expect(rivalEvidence(pool, { tags: new Map(), matches, limit: 2 }).map((e) => e.id)).toEqual(['e', 'd']);
+  });
+});
+
+describe('stakes', () => {
+  const titleWords = caseTitleWords('Plant a u-pick strawberry patch?');
+  const none = new Map();
+  const item = { id: 'x' };
+  const rate = (extra = {}) => stakesFor(item, { tag: undefined, matches: none, titleWords, ...extra });
+
+  it('takes the title words, ignoring very short ones', () => {
+    expect([...titleWords].sort()).toEqual(['patch', 'pick', 'plant', 'strawberry']);
+  });
+
+  it('is 0 when nothing in the case matches', () => {
+    expect(rate()).toEqual({ stakes: 0, why: '' });
+  });
+
+  it('is 1 when it only looks relevant', () => {
+    expect(rate({ matches: new Map([['x', ['supply', 'demand']]]) }).stakes).toBe(1);
+  });
+
+  it('is 2 when it matches a word of the case title, or three or more case words', () => {
+    const byTitle = rate({ matches: new Map([['x', ['supply', 'strawberry']]]) });
+    expect(byTitle.stakes).toBe(2);
+    expect(byTitle.why).toMatch(/case title/);
+    const byCount = rate({ matches: new Map([['x', ['supply', 'demand', 'price']]]) });
+    expect(byCount.stakes).toBe(2);
+    expect(byCount.why).toMatch(/3 of your case words/);
+  });
+
+  it('is 3 once the user tags it, and 0 once they call it not relevant', () => {
+    expect(rate({ tag: { stance: 'SUPPORTS' } }).stakes).toBe(3);
+    expect(rate({ tag: { stance: 'CUTS_AGAINST' } }).stakes).toBe(3);
+    expect(rate({ tag: { stance: 'NOT_RELEVANT' }, matches: new Map([['x', ['strawberry']]]) }).stakes).toBe(0);
+  });
+
+  it('always lets a hand-set number win, including 0', () => {
+    const matches = new Map([['x', ['strawberry']]]);
+    expect(rate({ tag: { stakes: 0, stance: 'SUPPORTS' }, matches })).toEqual({ stakes: 0, why: 'You set this.' });
+    expect(rate({ tag: { stakes: 3 } }).stakes).toBe(3);
+  });
+
+  it('lists only the items above 0', () => {
+    const pool = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+    const tags = new Map([['b', { stakes: 3 }], ['c', { stakes: 0 }]]);
+    const matches = new Map([['a', ['supply']], ['c', ['strawberry']]]);
+    expect(stakesMap(pool, { tags, matches, titleWords })).toEqual(new Map([['a', 1], ['b', 3]]));
+  });
+
+  it('does not treat a stakes-only tag as a stance when tallying or choosing rival evidence', () => {
+    const tags = new Map([['b', { itemAt: new Date(1000).toISOString(), stakes: 3 }]]);
+    const matches = new Map([['b', ['x']]]);
+    const pool = [{ id: 'b', ms: 1000, title: 'B', summary: '' }];
+    expect(tallyUpTo(5000, { tags, matches, items: pool })).toEqual({ supports: 0, against: 0, unsorted: 1 });
+    expect(rivalEvidence(pool, { tags, matches })[0].stance).toBe('unsorted');
   });
 });

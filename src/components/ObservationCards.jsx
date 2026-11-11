@@ -21,8 +21,32 @@ const tagButton = 'rounded border border-gray-700 px-1.5 py-0.5 text-xs text-gra
 
 // What the user can say about one card for the open case. The Window only proposes that a card
 // looks relevant, with the words that matched; supports or cuts against is always the user's call.
+// Stakes, 0 to 3, worked out by plain rules from the user's own case words; the user can set any item's.
+function StakesRow({ item, tagging }) {
+  const { stakes, why } = tagging.stakesOf(item);
+  const mine = Number.isInteger(tagging.tags.get(item.id)?.stakes);
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-gray-400" role="group" aria-label="Stakes for your case">
+      <span><strong className="text-gray-200">Stakes {stakes} of 3.</strong>{why && ` ${why}`}</span>
+      {[0, 1, 2, 3].map((n) => (
+        <button
+          key={n}
+          type="button"
+          aria-pressed={stakes === n}
+          aria-label={`Set stakes to ${n}`}
+          className={`${tagButton} ${stakes === n ? '!border-indigo-400 !text-indigo-300' : ''}`}
+          onClick={() => tagging.onRate(item, n)}
+        >
+          {n}
+        </button>
+      ))}
+      {mine && <button type="button" className={tagButton} onClick={() => tagging.onRate(item, null)}>Use the rules</button>}
+    </div>
+  );
+}
+
 function CaseTagRow({ item, tagging }) {
-  const tag = tagging.tags.get(item.id);
+  const tag = tagging.tags.get(item.id)?.stance ? tagging.tags.get(item.id) : null;
   const words = tagging.relevant.get(item.id);
   if (tag) {
     const flipTo = tag.stance === 'SUPPORTS' ? 'CUTS_AGAINST' : 'SUPPORTS';
@@ -81,6 +105,7 @@ function Card({ item, model, view, onDismiss, tagging }) {
       )}
       {item.summary && <p className="mt-1 text-[13px] text-gray-400">{item.summary.slice(0, 220)}</p>}
       {tagging && <CaseTagRow item={item} tagging={tagging} />}
+      {tagging && <StakesRow item={item} tagging={tagging} />}
     </article>
   );
 }

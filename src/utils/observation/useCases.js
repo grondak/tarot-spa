@@ -57,6 +57,28 @@ export function useCases(api = defaultCasesApi) {
   const addEvent = (caseId, kind) => setState((s) => ({
     ...s, events: [...s.events, { caseId, kind, at: new Date().toISOString() }],
   }));
+  // One stored row per case and item holds both the stance and the hand-set stakes. A change to
+  // either keeps the other; the row goes away when neither is left.
+  const saveTag = (caseId, item, patch) => attempt(async () => {
+    const existing = state.tags.find((t) => t.caseId === caseId && t.itemId === item.id);
+    const next = {
+      caseId,
+      itemId: item.id,
+      itemAt: new Date(item.ms).toISOString(),
+      ...(existing?.stance && { stance: existing.stance }),
+      ...(Number.isInteger(existing?.stakes) && { stakes: existing.stakes }),
+      ...patch,
+    };
+    const without = (s) => s.tags.filter((t) => !(t.caseId === caseId && t.itemId === item.id));
+    if (!next.stance && !Number.isInteger(next.stakes)) {
+      if (!existing) return;
+      await api.clearTag(caseId, item.id);
+      setState((s) => ({ ...s, tags: without(s) }));
+      return;
+    }
+    const saved = await api.setTag(next, Boolean(existing));
+    setState((s) => ({ ...s, tags: [...without(s), saved] }));
+  });
   const replace = (updated) => setState((s) => ({ ...s, cases: s.cases.map((c) => (c.id === updated.id ? updated : c)) }));
 
   return {
@@ -103,18 +125,10 @@ export function useCases(api = defaultCasesApi) {
       await api.deleteAllCases();
       setState((s) => ({ ...s, cases: [], events: [], tags: [] }));
     }),
-    tagItem: (caseId, item, stance) => attempt(async () => {
-      const exists = state.tags.some((t) => t.caseId === caseId && t.itemId === item.id);
-      const saved = await api.setTag({ caseId, itemId: item.id, itemAt: new Date(item.ms).toISOString(), stance }, exists);
-      setState((s) => ({
-        ...s,
-        tags: [...s.tags.filter((t) => !(t.caseId === caseId && t.itemId === item.id)), saved],
-      }));
-    }),
-    untagItem: (caseId, itemId) => attempt(async () => {
-      await api.clearTag(caseId, itemId);
-      setState((s) => ({ ...s, tags: s.tags.filter((t) => !(t.caseId === caseId && t.itemId === itemId)) }));
-    }),
+    tagItem: (caseId, item, stance) => saveTag(caseId, item, { stance }),
+    // Stakes 0 to 3 the user set by hand; null goes back to what the rules say.
+    rateItem: (caseId, item, stakes) => saveTag(caseId, item, { stakes }),
+    untagItem: (caseId, item) => saveTag(caseId, item, { stance: null }),
     // Best effort: measuring the cycle never stands in the way of the handoff itself.
     handedOff: (id) => {
       api.recordHandoff(id).then(() => {

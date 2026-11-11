@@ -6,7 +6,7 @@ import ObservationSources from './ObservationSources';
 import ObservationTimeline from './ObservationTimeline';
 import { defaultCasesApi, useCases } from '../utils/observation/useCases';
 import { observedEvents } from '../utils/observation/handoff';
-import { caseKeywords, relevantItems, rivalEvidence, tallyUpTo } from '../utils/observation/relevance';
+import { caseKeywords, caseTitleWords, relevantItems, rivalEvidence, stakesFor, stakesMap, tallyUpTo } from '../utils/observation/relevance';
 import { loadObservationData, widenSearchTerm } from '../utils/observation/data';
 import {
   COLLAPSED_KEY, DISABLED_KEY, DISMISSED_KEY, clearObservationPreferences, readSet, writeSet,
@@ -110,10 +110,6 @@ export default function ObservationWindow({
     return () => clearInterval(timer);
   }, [isPlaying, model]);
 
-  const view = useMemo(() => (model
-    ? computeView(model, { t, windowHours, cardCount, solo, search, stem: stemmer, expansions, blocked })
-    : null), [model, t, windowHours, cardCount, solo, search, expansions, blocked]);
-
   // Items that look relevant to the open case, from the user's own words in it. Proposals only.
   const activeCase = cases.activeCase;
   const caseTagMap = useMemo(
@@ -124,6 +120,14 @@ export default function ObservationWindow({
     if (!model || !activeCase) return new Map();
     return relevantItems(model.items, caseKeywords(`${activeCase.title} ${activeCase.hypothesis}`, { stem: stemmer, model }));
   }, [model, activeCase?.id, activeCase?.title, activeCase?.hypothesis]); // eslint-disable-line react-hooks/exhaustive-deps
+  const stakes = useMemo(() => (model && activeCase
+    ? stakesMap(model.items, { tags: caseTagMap, matches: caseMatches, titleWords: caseTitleWords(activeCase.title) })
+    : null), [model, activeCase?.id, activeCase?.title, caseTagMap, caseMatches]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const view = useMemo(() => (model
+    ? computeView(model, { t, windowHours, cardCount, solo, search, stem: stemmer, expansions, blocked, stakes })
+    : null), [model, t, windowHours, cardCount, solo, search, expansions, blocked, stakes]);
+
   const tally = useMemo(
     () => (model && activeCase ? tallyUpTo(t, { tags: caseTagMap, matches: caseMatches, items: model.items }) : null),
     [model, activeCase, t, caseTagMap, caseMatches],
@@ -136,7 +140,9 @@ export default function ObservationWindow({
     relevant: caseMatches,
     tags: caseTagMap,
     onTag: (item, stance) => cases.tagItem(activeCase.id, item, stance),
-    onUntag: (item) => cases.untagItem(activeCase.id, item.id),
+    onUntag: (item) => cases.untagItem(activeCase.id, item),
+    stakesOf: (item) => stakesFor(item, { tag: caseTagMap.get(item.id), matches: caseMatches, titleWords: caseTitleWords(activeCase.title) }),
+    onRate: (item, value) => cases.rateItem(activeCase.id, item, value),
   } : null;
 
   const scrubTo = useCallback((ms) => {
@@ -354,6 +360,7 @@ export default function ObservationWindow({
           onToggleCollapsed={toggleCollapsed}
           onToggleSolo={toggleSolo}
           onJump={scrubTo}
+          stakes={stakes}
         />
 
         {view.level > 0 && (
@@ -400,7 +407,7 @@ export default function ObservationWindow({
           <p>
             The news here is shared by everyone and kept 30 days. Your cases, with the hypotheses you
             wrote, are stored on our servers, visible only to you, until you delete them, along with the
-            times you opened, handed off and closed them and which items you tagged. A rival explanation sends your case words and a few items to an AI model once, and is kept only if you keep it. Nothing else about what you look at is stored
+            times you opened, handed off and closed them which items you tagged and any stakes you set. A rival explanation sends your case words and a few items to an AI model once, and is kept only if you keep it. Nothing else about what you look at is stored
             on our servers. The only other things remembered are your open and closed groups, the sources
             you switched off and the ones you dismissed, and only in this browser.
           </p>

@@ -24,7 +24,9 @@ async function listAll(model, options = {}) {
 
 const pick = ({ id, title, hypothesis, rivalHypothesis, status }) => ({ id, title, hypothesis: hypothesis ?? '', rivalHypothesis: rivalHypothesis ?? '', status });
 const pickEvent = ({ id, caseId, kind, at }) => ({ id, caseId, kind, at });
-const pickTag = ({ caseId, itemId, itemAt, stance }) => ({ caseId, itemId, itemAt, stance });
+const pickTag = ({ caseId, itemId, itemAt, stance, stakes }) => ({
+  caseId, itemId, itemAt, stance: stance ?? undefined, stakes: Number.isInteger(stakes) ? stakes : undefined,
+});
 
 async function recordEvent(client, caseId, kind) {
   check(await client.models.CycleEvent.create({ caseId, kind, at: new Date().toISOString() }));
@@ -58,9 +60,9 @@ export async function setCaseStatus(id, status) {
 }
 
 // The user's stance on one item for one case. `exists` says whether a tag is already stored for it.
-export async function setTag({ caseId, itemId, itemAt, stance }, exists) {
+export async function setTag({ caseId, itemId, itemAt, stance, stakes }, exists) {
   const client = generateClient();
-  const input = { caseId, itemId, itemAt, stance };
+  const input = { caseId, itemId, itemAt, stance, stakes };
   return pickTag(check(await (exists ? client.models.CaseTag.update(input) : client.models.CaseTag.create(input))));
 }
 

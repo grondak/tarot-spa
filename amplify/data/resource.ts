@@ -230,6 +230,8 @@ const schema = a.schema({
       itemId: a.string().required(),
       itemAt: a.datetime().required(),
       stance: a.enum(['SUPPORTS', 'CUTS_AGAINST', 'NOT_RELEVANT']),
+      // Stakes the user set by hand, 0 to 3 (S5.1). Absent means the rules decide. A number only.
+      stakes: a.integer(),
       owner: a.string().authorization((allow) => [allow.owner().identityClaim('sub').to(['read', 'delete'])]),
     })
     .identifier(['caseId', 'itemId'])

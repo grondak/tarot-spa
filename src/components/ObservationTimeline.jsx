@@ -6,9 +6,16 @@ import { soloKey } from '../utils/observation/view';
 
 const rowGrid = { gridTemplateColumns: 'var(--ow-label) 1fr' };
 
-const Dot = memo(function Dot({ left, color, title, estimated, inWindow, off, related, injected, onJump, ms }) {
+// Higher stakes in the open case draw a bigger dot (epic S5.2); 0 and 1 stay the normal size.
+const STAKES_SIZE = {
+  2: 'top-[6px] -ml-[5px] size-[11px]',
+  3: 'top-[5px] -ml-[6px] size-[13px]',
+};
+
+const Dot = memo(function Dot({ left, color, title, estimated, inWindow, off, related, injected, onJump, ms, stakes }) {
   const classes = [
-    'absolute top-[7px] -ml-1 size-[9px] cursor-pointer rounded-full',
+    'absolute cursor-pointer rounded-full',
+    STAKES_SIZE[stakes] ?? 'top-[7px] -ml-1 size-[9px]',
     estimated ? 'border-2 !bg-transparent' : '',
     off ? 'pointer-events-none z-0 opacity-[0.07]' : inWindow ? 'z-[2] scale-[1.35] opacity-100' : 'opacity-45',
     related && !off ? 'outline outline-1 outline-offset-1 outline-white' : '',
@@ -49,7 +56,7 @@ function SoloButton({ keyName, what, on, onToggle }) {
 }
 
 export default function ObservationTimeline({
-  model, view, solo, collapsed, onToggleCollapsed, onToggleSolo, onJump,
+  model, view, solo, collapsed, onToggleCollapsed, onToggleSolo, onJump, stakes = null,
 }) {
   const dotsFor = (items) => items.map((item) => (
     <Dot
@@ -62,6 +69,7 @@ export default function ObservationTimeline({
       off={!view.isFocused(item)}
       related={view.isRelated(item)}
       injected={item.injected}
+      stakes={stakes?.get(item.id) ?? 0}
       title={`${item.injected ? 'Outside your interests: ' : ''}${model.feeds[item.lane].name}\n${item.title}\n${formatTime(item.ms)}${item.estimated ? ' (date estimated)' : ''}`}
       onJump={onJump}
     />
