@@ -6,7 +6,7 @@ import ObservationSources from './ObservationSources';
 import ObservationTimeline from './ObservationTimeline';
 import { defaultCasesApi, useCases } from '../utils/observation/useCases';
 import { observedEvents } from '../utils/observation/handoff';
-import { caseKeywords, relevantItems, tallyUpTo } from '../utils/observation/relevance';
+import { caseKeywords, relevantItems, rivalEvidence, tallyUpTo } from '../utils/observation/relevance';
 import { loadObservationData, widenSearchTerm } from '../utils/observation/data';
 import {
   COLLAPSED_KEY, DISABLED_KEY, DISMISSED_KEY, clearObservationPreferences, readSet, writeSet,
@@ -127,6 +127,10 @@ export default function ObservationWindow({
   const tally = useMemo(
     () => (model && activeCase ? tallyUpTo(t, { tags: caseTagMap, matches: caseMatches, items: model.items }) : null),
     [model, activeCase, t, caseTagMap, caseMatches],
+  );
+  const evidence = useMemo(
+    () => (model && activeCase ? rivalEvidence(model.items, { tags: caseTagMap, matches: caseMatches }) : []),
+    [model, activeCase, caseTagMap, caseMatches],
   );
   const tagging = activeCase ? {
     relevant: caseMatches,
@@ -280,7 +284,7 @@ export default function ObservationWindow({
           {' '}Last collected {lastRun ? formatTime(lastRun) : 'never'}. Ranking is source order.
         </p>
 
-        <ObservationCases cases={cases} tally={tally} tallyAt={view.live ? 'now' : formatTime(t)} />
+        <ObservationCases cases={cases} tally={tally} evidence={evidence} tallyAt={view.live ? 'now' : formatTime(t)} />
 
         <input
           type="range"
@@ -396,7 +400,7 @@ export default function ObservationWindow({
           <p>
             The news here is shared by everyone and kept 30 days. Your cases, with the hypotheses you
             wrote, are stored on our servers, visible only to you, until you delete them, along with the
-            times you opened, handed off and closed them and which items you tagged. Nothing else about what you look at is stored
+            times you opened, handed off and closed them and which items you tagged. A rival explanation sends your case words and a few items to an AI model once, and is kept only if you keep it. Nothing else about what you look at is stored
             on our servers. The only other things remembered are your open and closed groups, the sources
             you switched off and the ones you dismissed, and only in this browser.
           </p>

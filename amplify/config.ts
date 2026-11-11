@@ -63,3 +63,9 @@ export function assertMonthlyBudgetCeilingHolds(awsSafetyCeilingUsd: number): vo
     );
   }
 }
+
+// Rival hypothesis (epic S4.6): a short call on a small model, capped apart from the Guide so a
+// burst of rival requests can never use up the Guide's budget. The estimate is deliberately high.
+export const RIVAL_COST_ESTIMATE_USD = 0.01;
+export const RIVAL_DAILY_LIMIT = 5;
+export const RIVAL_MONTHLY_BUDGET_USD = 2;

@@ -13,9 +13,9 @@ export function fakeCasesApi({ cases = [], events = [], tags = [] } = {}) {
       db.events.push({ caseId: made.id, kind: 'OPENED', at: now() });
       return made;
     }),
-    saveCaseText: vi.fn(async (id, { title, hypothesis }) => {
+    saveCaseText: vi.fn(async (id, { title, hypothesis, rivalHypothesis }) => {
       const found = db.cases.find((c) => c.id === id);
-      Object.assign(found, { title, hypothesis });
+      Object.assign(found, { title, hypothesis, ...(rivalHypothesis !== undefined && { rivalHypothesis }) });
       return { ...found };
     }),
     setCaseStatus: vi.fn(async (id, status) => {
@@ -31,6 +31,7 @@ export function fakeCasesApi({ cases = [], events = [], tags = [] } = {}) {
     clearTag: vi.fn(async (caseId, itemId) => {
       db.tags = db.tags.filter((t) => !(t.caseId === caseId && t.itemId === itemId));
     }),
+    suggestRival: vi.fn(async () => ({ rival: 'Imports, not demand, explain the shortage.', fits: [] })),
     recordHandoff: vi.fn(async (id) => { db.events.push({ caseId: id, kind: 'HANDED_OFF', at: now() }); }),
     deleteCase: vi.fn(async (id) => {
       db.cases = db.cases.filter((c) => c.id !== id);

@@ -65,3 +65,20 @@ export function tallyUpTo(t, { tags, matches, items }) {
   const unsorted = items.filter((item) => item.ms <= t && matches.has(item.id) && !tags.has(item.id)).length;
   return { supports, against, unsorted };
 }
+
+export const RIVAL_EVIDENCE_LIMIT = 12;
+export const RIVAL_MIN_EVIDENCE = 3;
+
+// The items to show a rival-hypothesis request: what the user sorted (supports and cuts against),
+// then items that look relevant but are unsorted, newest first, up to the limit. Items marked
+// "not relevant" are left out. Only what is already on screen for the case; stance stays the user's.
+export function rivalEvidence(items, { tags, matches, limit = RIVAL_EVIDENCE_LIMIT }) {
+  const stanceOf = { SUPPORTS: 'supports', CUTS_AGAINST: 'cuts against' };
+  const toEvidence = (item, stance) => ({ id: item.id, title: item.title, summary: item.summary ?? '', stance });
+  const byNewest = (a, b) => b.ms - a.ms;
+  const sorted = items.filter((item) => stanceOf[tags.get(item.id)?.stance]).sort(byNewest)
+    .map((item) => toEvidence(item, stanceOf[tags.get(item.id).stance]));
+  const unsorted = items.filter((item) => matches.has(item.id) && !tags.has(item.id)).sort(byNewest)
+    .map((item) => toEvidence(item, 'unsorted'));
+  return [...sorted, ...unsorted].slice(0, limit);
+}

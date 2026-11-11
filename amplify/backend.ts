@@ -41,6 +41,7 @@ import { orientationReconciler } from './functions/orientation-reconciler/resour
 import { requestAccess } from './functions/request-access/resource';
 import { sessionScrubber } from './functions/session-scrubber/resource';
 import { startOrientationGuide } from './functions/start-orientation-guide/resource';
+import { suggestRival } from './functions/suggest-rival/resource';
 import { suggestSource } from './functions/suggest-source/resource';
 import { usageCounter } from './functions/usage-counter/resource';
 import { widenSearch } from './functions/widen-search/resource';
@@ -86,6 +87,7 @@ const backend = defineBackend({
   requestAccess,
   sessionScrubber,
   startOrientationGuide,
+  suggestRival,
   suggestSource,
   usageCounter,
   widenSearch,
@@ -157,6 +159,7 @@ const orientationJudgeLambda = backend.orientationJudge.resources.lambda;
 const orientationAlertLambda = backend.orientationAlert.resources.lambda;
 const orientationReconcilerLambda = backend.orientationReconciler.resources.lambda;
 const requestAccessLambda = backend.requestAccess.resources.lambda;
+const suggestRivalLambda = backend.suggestRival.resources.lambda;
 const suggestSourceLambda = backend.suggestSource.resources.lambda;
 const sessionScrubberLambda = backend.sessionScrubber.resources.lambda;
 const startOrientationGuideLambda = backend.startOrientationGuide.resources.lambda;
@@ -688,6 +691,22 @@ orientationGuideLambda.addToRolePolicy(new PolicyStatement({
   ],
 }));
 orientationJudgeLambda.addToRolePolicy(new PolicyStatement({
+  actions: ['bedrock:InvokeModel'],
+  resources: [
+    dataStack.formatArn({
+      service: 'bedrock',
+      resource: 'inference-profile',
+      resourceName: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+    }),
+    'arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0',
+  ],
+}));
+
+// suggest-rival reserves against its own rows in the MonthlySpend table (ids `rival-month#…` and
+// `rival-day#…`), so it never touches the Guide's monthly row, and calls one small model.
+monthlySpendTable.grantReadWriteData(suggestRivalLambda);
+backend.suggestRival.addEnvironment('MONTHLY_SPEND_TABLE_NAME', monthlySpendTable.tableName);
+suggestRivalLambda.addToRolePolicy(new PolicyStatement({
   actions: ['bedrock:InvokeModel'],
   resources: [
     dataStack.formatArn({

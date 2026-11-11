@@ -14,6 +14,7 @@ import { inviteKeyMint } from '../functions/invite-key-mint/resource';
 import { inviteKeyRevoke } from '../functions/invite-key-revoke/resource';
 import { requestAccess } from '../functions/request-access/resource';
 import { startOrientationGuide } from '../functions/start-orientation-guide/resource';
+import { suggestRival } from '../functions/suggest-rival/resource';
 import { suggestSource } from '../functions/suggest-source/resource';
 import { usageCounter } from '../functions/usage-counter/resource';
 import { widenSearch } from '../functions/widen-search/resource';
@@ -202,6 +203,8 @@ const schema = a.schema({
     .model({
       title: a.string().required(),
       hypothesis: a.string(),
+      // A rival explanation the user chose to keep (S4.6). Once accepted it is the user's own text.
+      rivalHypothesis: a.string(),
       status: a.enum(['OPEN', 'CLOSED']),
       owner: a.string().authorization((allow) => [allow.owner().identityClaim('sub').to(['read', 'delete'])]),
     })
@@ -296,6 +299,18 @@ const schema = a.schema({
     .returns(a.boolean())
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(suggestSource)),
+  // One rival explanation for an open case (S4.6). Sends only the words the user already wrote
+  // and the items they chose to show it, and keeps nothing.
+  suggestRival: a
+    .mutation()
+    .arguments({
+      title: a.string().required(),
+      hypothesis: a.string().required(),
+      items: a.json().required(),
+    })
+    .returns(a.json())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(suggestRival)),
   widenSearch: a
     .query()
     .arguments({ term: a.string().required() })

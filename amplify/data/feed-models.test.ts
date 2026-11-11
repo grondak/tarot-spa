@@ -99,3 +99,27 @@ describe('Observation Window case tags', () => {
     expect(block).not.toMatch(/title|hypothesis|context|summary|content|note|reason/i);
   });
 });
+
+describe('rival hypothesis wiring', () => {
+  it('Case can hold a kept rival, and the owner still cannot change who owns it', () => {
+    const block = modelBlock('Case');
+    expect(block).toMatch(/rivalHypothesis:\s*a\.string\(\)/);
+    expect(block).toMatch(/owner:[^\n]*\.to\(\['read', 'delete'\]\)/);
+  });
+
+  it('suggestRival is a signed-in mutation that returns json and keeps nothing', () => {
+    const start = resourceSource.indexOf('suggestRival: a');
+    const block = resourceSource.slice(start, resourceSource.indexOf('widenSearch: a', start));
+    expect(block).toContain('.mutation()');
+    expect(block).toContain('allow.authenticated()');
+    expect(block).toContain('a.handler.function(suggestRival)');
+  });
+
+  it('suggest-rival gets only its spend rows and one small model, never the Guide model', () => {
+    expect(backendSource).toContain('monthlySpendTable.grantReadWriteData(suggestRivalLambda)');
+    const start = backendSource.indexOf('suggestRivalLambda.addToRolePolicy');
+    const policy = backendSource.slice(start, backendSource.indexOf('redemptionLambda (postConfirmation)', start));
+    expect(policy).toContain('claude-haiku-4-5');
+    expect(policy).not.toContain('opus');
+  });
+});

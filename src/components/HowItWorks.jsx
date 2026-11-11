@@ -120,6 +120,10 @@ export default function HowItWorks({ onBack = () => {} }) {
             the times you opened, handed off and closed each, and which items you tagged as supporting
             or cutting against it. They’re visible only to you and kept until you delete them;
             deleting a case deletes its times and tags too.
+            If you ask for a rival explanation, your case title, hypothesis and up to 12 of the items
+            you chose to show are sent to an AI model for that one answer. The answer isn’t kept
+            unless you choose to keep it, and then it is saved with your case. Each person gets a few
+            of these a day.
             Your daily outside-interest pick is worked out in your browser from your account and
             the date. A word you search is sent on its own to look up synonyms and isn’t saved.
             Which groups you closed and which sources you switched off or dismissed stay in this

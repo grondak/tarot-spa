@@ -22,7 +22,7 @@ async function listAll(model, options = {}) {
   return rows;
 }
 
-const pick = ({ id, title, hypothesis, status }) => ({ id, title, hypothesis: hypothesis ?? '', status });
+const pick = ({ id, title, hypothesis, rivalHypothesis, status }) => ({ id, title, hypothesis: hypothesis ?? '', rivalHypothesis: rivalHypothesis ?? '', status });
 const pickEvent = ({ id, caseId, kind, at }) => ({ id, caseId, kind, at });
 const pickTag = ({ caseId, itemId, itemAt, stance }) => ({ caseId, itemId, itemAt, stance });
 
@@ -45,9 +45,9 @@ export async function openCase({ title, hypothesis }) {
   return made;
 }
 
-export async function saveCaseText(id, { title, hypothesis }) {
+export async function saveCaseText(id, { title, hypothesis, rivalHypothesis }) {
   const client = generateClient();
-  return pick(check(await client.models.Case.update({ id, title, hypothesis })));
+  return pick(check(await client.models.Case.update({ id, title, hypothesis, ...(rivalHypothesis !== undefined && { rivalHypothesis }) })));
 }
 
 export async function setCaseStatus(id, status) {
@@ -120,4 +120,15 @@ export function cycleSummary(events, status) {
   const closed = status === 'CLOSED' ? (times('CLOSED').at(-1) ?? null) : null;
   const span = (ms) => (opened !== null && ms !== null && ms >= opened ? ms - opened : null);
   return { opened, handedOff, closed, toOrient: span(handedOff), toDecide: span(closed) };
+}
+
+// One rival explanation for a case, from the suggest-rival Lambda. Nothing is stored; the user
+// decides whether to keep it. Throws an Error whose message is the server's reason.
+export async function suggestRival({ title, hypothesis, items }) {
+  const client = generateClient();
+  const { data, errors } = await client.mutations.suggestRival({ title, hypothesis, items: JSON.stringify(items) });
+  if (errors?.length) throw new Error(errors[0].message);
+  const result = typeof data === 'string' ? JSON.parse(data) : data;
+  if (typeof result?.rival !== 'string' || !Array.isArray(result?.fits)) throw new Error('RIVAL_UNAVAILABLE');
+  return { rival: result.rival, fits: result.fits };
 }

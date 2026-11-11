@@ -27,6 +27,8 @@ describe('HowItWorks', () => {
     expect(data).toHaveTextContent('What you look at isn’t stored on the server');
     expect(data).toHaveTextContent('The one exception is your cases');
     expect(data).toHaveTextContent('stay in this browser only');
+    expect(data).toHaveTextContent('rival explanation');
+    expect(data).toHaveTextContent('sent to an AI model');
   });
 
   it('draws three live cards and can redraw them', () => {

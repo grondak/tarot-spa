@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { stemmer } from 'stemmer';
-import { caseKeywords, relevantItems, relevantWords, tallyUpTo } from './relevance';
+import { caseKeywords, relevantItems, relevantWords, rivalEvidence, tallyUpTo } from './relevance';
 
 const mk = (id, ms, text) => ({
   id, ms, stems: new Set((text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).map(stemmer)),
@@ -82,5 +82,30 @@ describe('relevantItems and tallyUpTo', () => {
     expect(tallyUpTo(1500, { tags, matches, items })).toEqual({ supports: 1, against: 0, unsorted: 0 });
     const sorted = new Map([...tags, ['b', { itemAt: new Date(2000).toISOString(), stance: 'SUPPORTS' }]]);
     expect(tallyUpTo(5000, { tags: sorted, matches, items }).unsorted).toBe(0);
+  });
+});
+
+describe('rivalEvidence', () => {
+  const row = (id, ms) => ({ id, ms, title: `T${id}`, summary: `S${id}` });
+  const pool = [row('a', 1), row('b', 2), row('c', 3), row('d', 4), row('e', 5)];
+
+  it('puts sorted items first, then unsorted relevant ones, newest first, and skips not-relevant', () => {
+    const tags = new Map([
+      ['a', { stance: 'SUPPORTS' }],
+      ['b', { stance: 'CUTS_AGAINST' }],
+      ['c', { stance: 'NOT_RELEVANT' }],
+    ]);
+    const matches = new Map([['c', ['x']], ['d', ['x']], ['e', ['x']]]);
+    expect(rivalEvidence(pool, { tags, matches })).toEqual([
+      { id: 'b', title: 'Tb', summary: 'Sb', stance: 'cuts against' },
+      { id: 'a', title: 'Ta', summary: 'Sa', stance: 'supports' },
+      { id: 'e', title: 'Te', summary: 'Se', stance: 'unsorted' },
+      { id: 'd', title: 'Td', summary: 'Sd', stance: 'unsorted' },
+    ]);
+  });
+
+  it('stops at the limit', () => {
+    const matches = new Map(pool.map((i) => [i.id, ['x']]));
+    expect(rivalEvidence(pool, { tags: new Map(), matches, limit: 2 }).map((e) => e.id)).toEqual(['e', 'd']);
   });
 });

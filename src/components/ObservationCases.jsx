@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { cycleSummary, formatSpan } from '../utils/observation/cases';
+import { RIVAL_MIN_EVIDENCE } from '../utils/observation/relevance';
 import { formatTime } from '../utils/observation/timeline';
 
 const buttonClass = 'rounded-md border border-gray-800 bg-gray-900 px-2.5 py-1 text-sm text-white hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-40';
@@ -70,7 +71,91 @@ function OpenForm({ cases, hasOpen }) {
   );
 }
 
-function ActiveCase({ cases, item, tally, tallyAt }) {
+const RIVAL_MESSAGES = [
+  ['RIVAL_DAILY_LIMIT', 'You’ve used today’s rival suggestions. Try again tomorrow.'],
+  ['RIVAL_BUDGET_EXHAUSTED', 'Rival suggestions are paused until next month.'],
+  ['RIVAL_UNAVAILABLE', 'No rival that fits your items came back this time. It wasn’t counted against your limit.'],
+];
+
+const rivalMessage = (error) => (
+  RIVAL_MESSAGES.find(([code]) => error?.message?.includes(code))?.[1]
+  ?? 'A rival couldn’t be suggested right now. Try again later.'
+);
+
+// A rival explanation on request. The suggestion lives only in this panel until the user keeps it.
+function RivalSection({ cases, item, evidence }) {
+  const [state, setState] = useState({ phase: 'idle' });
+  const hasHypothesis = item.hypothesis.trim().length > 0;
+  const enough = evidence.length >= RIVAL_MIN_EVIDENCE;
+  const ask = async () => {
+    setState({ phase: 'loading' });
+    try {
+      const result = await cases.suggestRival({ title: item.title, hypothesis: item.hypothesis, items: evidence });
+      setState({ phase: 'offered', ...result });
+    } catch (error) {
+      setState({ phase: 'error', message: rivalMessage(error) });
+    }
+  };
+  const keep = async () => {
+    const saved = await cases.saveText(item.id, { title: item.title, hypothesis: item.hypothesis, rivalHypothesis: state.rival });
+    if (saved) setState({ phase: 'idle' });
+  };
+  const titles = state.phase === 'offered'
+    ? evidence.filter((e) => state.fits.includes(e.id)).map((e) => e.title)
+    : [];
+  return (
+    <div className="space-y-2 border-t border-gray-800 pt-2">
+      {item.rivalHypothesis && (
+        <div>
+          <p className="text-sm text-gray-300">A rival explanation I’m keeping</p>
+          <p className="text-sm text-white" data-testid="kept-rival">{item.rivalHypothesis}</p>
+          <button
+            type="button"
+            className="text-xs text-gray-400 underline"
+            onClick={() => cases.saveText(item.id, { title: item.title, hypothesis: item.hypothesis, rivalHypothesis: '' })}
+          >
+            Remove the rival
+          </button>
+        </div>
+      )}
+      {state.phase === 'offered' && (
+        <div className="space-y-1 rounded-md border border-gray-800 p-2" data-testid="rival-offer">
+          <p className="text-sm text-gray-300">A rival that fits the same items. It is a question to test, not a verdict.</p>
+          <p className="text-sm text-white">{state.rival}</p>
+          {titles.length > 0 && (
+            <p className="text-xs text-gray-400">Fits: {titles.join(' · ')}</p>
+          )}
+          <div className="flex gap-2">
+            <button type="button" className={buttonClass} onClick={keep}>Keep as my second hypothesis</button>
+            <button type="button" className={buttonClass} onClick={() => setState({ phase: 'idle' })}>Dismiss</button>
+          </div>
+        </div>
+      )}
+      {state.phase === 'error' && <p role="alert" className="text-sm text-red-400">{state.message}</p>}
+      {state.phase !== 'offered' && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={!hasHypothesis || !enough || state.phase === 'loading'}
+            onClick={ask}
+          >
+            {state.phase === 'loading' ? 'Looking for a rival…' : 'Suggest a rival explanation'}
+          </button>
+          {!hasHypothesis && <span className="text-xs text-gray-400">Write and save your hypothesis first.</span>}
+          {hasHypothesis && !enough && (
+            <span className="text-xs text-gray-400">Needs at least {RIVAL_MIN_EVIDENCE} items that you’ve sorted or that look relevant.</span>
+          )}
+        </div>
+      )}
+      <p className="text-xs text-gray-400">
+        Sends your case title, hypothesis and up to 12 of those items to the model for this one answer. Nothing is kept unless you keep it.
+      </p>
+    </div>
+  );
+}
+
+function ActiveCase({ cases, item, tally, tallyAt, evidence }) {
   const [hypothesis, setHypothesis] = useState(item.hypothesis);
   const [confirming, setConfirming] = useState(false);
   const dirty = hypothesis !== item.hypothesis;
@@ -96,6 +181,7 @@ function ActiveCase({ cases, item, tally, tallyAt }) {
           {' '}Counts only; the Window doesn’t say whether your hypothesis is true.
         </p>
       )}
+      <RivalSection cases={cases} item={item} evidence={evidence} />
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -121,7 +207,7 @@ function ActiveCase({ cases, item, tally, tallyAt }) {
   );
 }
 
-export default function ObservationCases({ cases, tally = null, tallyAt = 'now' }) {
+export default function ObservationCases({ cases, tally = null, tallyAt = 'now', evidence = [] }) {
   const [confirmAll, setConfirmAll] = useState(false);
   const { status, openCases, closedCases, activeCase } = cases;
   const total = openCases.length + closedCases.length;
@@ -146,7 +232,7 @@ export default function ObservationCases({ cases, tally = null, tallyAt = 'now' 
               </select>
             </label>
           )}
-          {activeCase && <ActiveCase key={activeCase.id} cases={cases} item={activeCase} tally={tally} tallyAt={tallyAt} />}
+          {activeCase && <ActiveCase key={activeCase.id} cases={cases} item={activeCase} tally={tally} tallyAt={tallyAt} evidence={evidence} />}
           <OpenForm cases={cases} hasOpen={Boolean(activeCase)} />
           {closedCases.length > 0 && (
             <details className="text-sm text-gray-300">

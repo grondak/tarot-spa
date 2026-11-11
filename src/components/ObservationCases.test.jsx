@@ -4,12 +4,12 @@ import ObservationCases from './ObservationCases';
 import { fakeCasesApi } from '../utils/observation/fakeCasesApi';
 import { useCases } from '../utils/observation/useCases';
 
-function Harness({ api }) {
-  return <ObservationCases cases={useCases(api)} />;
+function Harness({ api, evidence }) {
+  return <ObservationCases cases={useCases(api)} evidence={evidence} />;
 }
 
-async function renderCases(api = fakeCasesApi()) {
-  render(<Harness api={api} />);
+async function renderCases(api = fakeCasesApi(), evidence = []) {
+  render(<Harness api={api} evidence={evidence} />);
   await waitFor(() => expect(screen.queryByText('Loading your cases…')).toBeNull());
   return api;
 }
@@ -133,5 +133,75 @@ describe('ObservationCases', () => {
     expect(within(alert).getByText(/couldn’t load/)).toBeVisible();
     fireEvent.click(within(alert).getByRole('button', { name: 'Try again' }));
     expect(await screen.findByLabelText('The decision I’m weighing')).toBeVisible();
+  });
+});
+
+describe('rival explanation', () => {
+  const evidence = ['a', 'b', 'c'].map((id) => ({ id, title: `Item ${id}`, summary: '', stance: 'supports' }));
+  const withCase = (extra = {}) => fakeCasesApi({
+    cases: [{ id: 'c1', title: 'A', hypothesis: 'Demand is up', rivalHypothesis: '', status: 'OPEN', ...extra }],
+    events: [{ caseId: 'c1', kind: 'OPENED', at: '2026-11-01T10:00:00Z' }],
+  });
+  const ask = () => screen.getByRole('button', { name: 'Suggest a rival explanation' });
+
+  it('explains in plain text why it is unavailable', async () => {
+    await renderCases(withCase({ hypothesis: '' }), evidence);
+    expect(ask()).toBeDisabled();
+    expect(screen.getByText('Write and save your hypothesis first.')).toBeVisible();
+  });
+
+  it('needs at least three items', async () => {
+    await renderCases(withCase(), evidence.slice(0, 2));
+    expect(ask()).toBeDisabled();
+    expect(screen.getByText(/Needs at least 3 items/)).toBeVisible();
+  });
+
+  it('offers a rival with the items it fits, and can dismiss it', async () => {
+    const api = withCase();
+    api.suggestRival.mockResolvedValueOnce({ rival: 'Imports explain it.', fits: ['a', 'c'] });
+    await renderCases(api, evidence);
+    fireEvent.click(ask());
+
+    const offer = await screen.findByTestId('rival-offer');
+    expect(api.suggestRival).toHaveBeenCalledWith({ title: 'A', hypothesis: 'Demand is up', items: evidence });
+    expect(within(offer).getByText('Imports explain it.')).toBeVisible();
+    expect(within(offer).getByText(/Fits: Item a · Item c/)).toBeVisible();
+    expect(within(offer).getByText(/not a verdict/)).toBeVisible();
+    fireEvent.click(within(offer).getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByTestId('rival-offer')).toBeNull();
+    expect(api.saveCaseText).not.toHaveBeenCalled();
+  });
+
+  it('keeps a rival as the second hypothesis, saved with the case, and can remove it', async () => {
+    const api = withCase();
+    api.suggestRival.mockResolvedValueOnce({ rival: 'Imports explain it.', fits: ['a'] });
+    await renderCases(api, evidence);
+    fireEvent.click(ask());
+    fireEvent.click(await screen.findByRole('button', { name: 'Keep as my second hypothesis' }));
+
+    await waitFor(() => expect(api.saveCaseText).toHaveBeenCalledWith('c1', { title: 'A', hypothesis: 'Demand is up', rivalHypothesis: 'Imports explain it.' }));
+    expect(await screen.findByTestId('kept-rival')).toHaveTextContent('Imports explain it.');
+    expect(screen.queryByTestId('rival-offer')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove the rival' }));
+    await waitFor(() => expect(screen.queryByTestId('kept-rival')).toBeNull());
+  });
+
+  it.each([
+    ['RIVAL_DAILY_LIMIT', /today’s rival suggestions/],
+    ['RIVAL_BUDGET_EXHAUSTED', /paused until next month/],
+    ['RIVAL_UNAVAILABLE', /wasn’t counted/],
+    ['network down', /couldn’t be suggested right now/],
+  ])('says in words what happened on %s', async (code, message) => {
+    const api = withCase();
+    api.suggestRival.mockRejectedValueOnce(new Error(code));
+    await renderCases(api, evidence);
+    fireEvent.click(ask());
+    expect(await screen.findByRole('alert')).toHaveTextContent(message);
+  });
+
+  it('tells the user what is sent', async () => {
+    await renderCases(withCase(), evidence);
+    expect(screen.getByText(/Sends your case title, hypothesis and up to 12 of those items/)).toBeVisible();
   });
 });

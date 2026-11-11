@@ -68,6 +68,7 @@ export function useCases(api = defaultCasesApi) {
     events: state.events,
     tags: state.tags,
     reload,
+    suggestRival: (input) => api.suggestRival(input),
     select: setActiveId,
     open: (input) => attempt(async () => {
       const made = await api.openCase(input);
@@ -76,7 +77,10 @@ export function useCases(api = defaultCasesApi) {
       setActiveId(made.id);
       return made;
     }),
-    saveText: (id, input) => attempt(async () => replace(await api.saveCaseText(id, input))),
+    saveText: (id, input) => attempt(async () => {
+      replace(await api.saveCaseText(id, input));
+      return true;
+    }),
     close: (id) => attempt(async () => {
       replace(await api.setCaseStatus(id, 'CLOSED'));
       addEvent(id, 'CLOSED');

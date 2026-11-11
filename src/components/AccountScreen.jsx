@@ -105,7 +105,8 @@ export default function AccountScreen({
           <p className="mt-1 text-gray-400">
             Nothing about what you look at in the Observation Window is stored on our servers,
             except your cases: the decisions and hypotheses you wrote, the times you opened,
-            handed off and closed them, and which items you tagged. Only you can see them, and they stay until you delete them.
+            handed off and closed them, and which items you tagged, plus a rival explanation if you chose to keep one. Only you can see them, and they stay until you delete them.
+            Asking for a rival explanation sends your case words and a few items to an AI model once; the answer isn’t kept unless you keep it.
             This browser also remembers which groups you closed and which sources you switched off
             or dismissed. Clear that here, or from the Window itself.
           </p>
