@@ -4,7 +4,7 @@ import ObservationWindow from './ObservationWindow';
 import { HOUR } from '../utils/observation/timeline';
 import { fakeCasesApi } from '../utils/observation/fakeCasesApi';
 import {
-  NOW, feedRows, hoursAgo, itemRow, itemRows, poolFeedRows, poolItemRows, runRows,
+  NOW, countRows, feedRows, hoursAgo, longRunRows, itemRow, itemRows, poolFeedRows, poolItemRows, runRows,
 } from '../utils/observation/fixtures';
 
 const data = { feeds: feedRows, items: itemRows, runs: runRows };
@@ -551,6 +551,21 @@ describe('ObservationWindow cases and the handoff', () => {
     await renderWindow({ casesApi });
     expect(await screen.findByText(/Your cases couldn’t load/)).toBeVisible();
     expect(cards().length).toBeGreaterThan(0);
+  });
+});
+
+describe('ObservationWindow volume against normal', () => {
+  it('has no normal to show until the daily counts reach back far enough', async () => {
+    await renderWindow();
+    expect(screen.getByTestId('baseline-summary')).toHaveTextContent('Not enough history yet');
+  });
+
+  it('shows each lane against its normal once there is history', async () => {
+    await renderWindow({ loadFn: vi.fn().mockResolvedValue({ ...data, runs: longRunRows, counts: countRows }) });
+    expect(screen.getByTestId('baseline-summary')).toHaveTextContent(/lane|Every lane/);
+    fireEvent.click(screen.getByRole('button', { name: 'Show lanes' }));
+    expect(screen.getByTestId('volume-bbc')).toBeInTheDocument();
+    expect(screen.getByTestId('volume-lr')).toBeInTheDocument();
   });
 });
 

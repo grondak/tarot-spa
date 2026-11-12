@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { stemmer } from 'stemmer';
 import ObservationCards from './ObservationCards';
+import ObservationBaseline from './ObservationBaseline';
 import ObservationCases from './ObservationCases';
 import ObservationSources from './ObservationSources';
 import ObservationTimeline from './ObservationTimeline';
@@ -362,6 +363,8 @@ export default function ObservationWindow({
           onJump={scrubTo}
           stakes={stakes}
         />
+
+        <ObservationBaseline model={model} view={view} />
 
         {view.level > 0 && (
           <div className="mt-3 text-sm text-gray-400" data-testid="widened">

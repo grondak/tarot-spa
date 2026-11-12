@@ -58,3 +58,13 @@ export const poolItemRows = ['nature', 'aeon', 'nasa'].flatMap((feed) => [5, 29,
   publishedAt: hoursAgo(h),
   sources: [feed],
 })));
+
+// Items per source per UTC day for the 22 days before NOW's day: BBC usually 2 a day, Light Reading 1.
+export const countRows = ['bbc', 'lr'].flatMap((feedId) => Array.from({ length: 22 }, (_, i) => ({
+  feedId,
+  day: new Date(Date.UTC(2026, 9, 10 + i)).toISOString().slice(0, 10),
+  count: feedId === 'bbc' ? 2 : 1,
+})));
+
+// A collector that has been running since before the counts start, so baselines have history.
+export const longRunRows = [{ startedAt: new Date(Date.UTC(2026, 9, 9, 6)).toISOString(), finishedAt: new Date(Date.UTC(2026, 9, 9, 6, 6)).toISOString() }, ...runRows];

@@ -22,13 +22,15 @@ async function listAll(modelName, options = {}) {
 }
 
 export async function loadObservationData() {
-  const [feeds, items, runs] = await Promise.all([
+  const [feeds, items, runs, counts] = await Promise.all([
     listAll('Feed'),
     listAll('FeedItem'),
     // Only the times: the per-feed results can be large, and gaps need just start and finish.
     listAll('CollectorRun', { selectionSet: ['startedAt', 'finishedAt'] }),
+    // Items per source per day, kept after the items expire; no text. These say what is normal.
+    listAll('FeedDailyCount', { selectionSet: ['feedId', 'day', 'count'] }),
   ]);
-  return { feeds, items, runs };
+  return { feeds, items, runs, counts };
 }
 
 // WordNet synonyms and broader terms for one word, from the widen-search Lambda.

@@ -63,7 +63,7 @@ function findGaps(runs) {
 // their own. Each day one pooled item is picked for this user (see injection.js) and shown in the
 // "outside your interests" group, unless the user has dismissed that source.
 export function buildModel({
-  feeds: feedRows, items: itemRows, runs, now, stem, userId = '', dismissed = new Set(), disabled = new Set(),
+  feeds: feedRows, items: itemRows, runs, counts: countRows = [], now, stem, userId = '', dismissed = new Set(), disabled = new Set(),
 }) {
   const poolRows = feedRows.filter((feed) => feed.kind === 'pool');
   const poolIds = new Set(poolRows.map((feed) => feed.id));
@@ -163,7 +163,20 @@ export function buildModel({
   }
   if (poolRows.length > 0) catalog.push({ name: INJECTED_GROUP, feeds: [], injected: true });
 
-  return { feeds, items, groups, catalog, stemDf, start, end, gaps: findGaps(runs) };
+  // Items per source per day, for the baseline (epic S5.3): source id to (UTC day to count).
+  const counts = new Map();
+  for (const { feedId, day, count } of countRows) {
+    if (typeof feedId !== 'string' || typeof day !== 'string' || !Number.isFinite(count)) continue;
+    if (!counts.has(feedId)) counts.set(feedId, new Map());
+    counts.get(feedId).set(day, count);
+  }
+
+  // Counts from before the collector first ran are archive items a feed still listed, not real
+  // volume, so the baseline starts after the day of the collector's first run.
+  const runStarts = runs.map((run) => parseMs(run.startedAt)).filter((ms) => ms !== null);
+  const collectorSince = runStarts.length ? Math.min(...runStarts) : null;
+
+  return { feeds, items, groups, catalog, stemDf, counts, collectorSince, start, end, gaps: findGaps(runs) };
 }
 
 export const percentAlong = (model, ms) => ((ms - model.start) / (model.end - model.start)) * 100;
