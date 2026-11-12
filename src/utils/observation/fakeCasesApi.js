@@ -1,12 +1,20 @@
 import { vi } from 'vitest';
 
 // An in-memory stand-in for the owner-only tables.
-export function fakeCasesApi({ cases = [], events = [], tags = [] } = {}) {
-  const db = { cases: [...cases], events: [...events], tags: [...tags], next: 1 };
+export function fakeCasesApi({ cases = [], events = [], tags = [], expected = [] } = {}) {
+  const db = { cases: [...cases], events: [...events], tags: [...tags], expected: [...expected], next: 1 };
   const now = () => new Date().toISOString();
   return {
     db,
-    loadCases: vi.fn(async () => ({ cases: [...db.cases], events: [...db.events], tags: [...db.tags] })),
+    loadCases: vi.fn(async () => ({
+      cases: [...db.cases], events: [...db.events], tags: [...db.tags], expected: [...db.expected],
+    })),
+    createExpectedEvent: vi.fn(async (input) => {
+      const made = { id: `x${db.next++}`, ...input };
+      db.expected.push(made);
+      return { ...made };
+    }),
+    deleteExpectedEvent: vi.fn(async (id) => { db.expected = db.expected.filter((e) => e.id !== id); }),
     openCase: vi.fn(async ({ title, hypothesis }) => {
       const made = { id: `c${db.next++}`, title, hypothesis, status: 'OPEN' };
       db.cases.push(made);
@@ -37,7 +45,8 @@ export function fakeCasesApi({ cases = [], events = [], tags = [] } = {}) {
       db.cases = db.cases.filter((c) => c.id !== id);
       db.events = db.events.filter((e) => e.caseId !== id);
       db.tags = db.tags.filter((t) => t.caseId !== id);
+      db.expected = db.expected.filter((e) => e.caseId !== id);
     }),
-    deleteAllCases: vi.fn(async () => { db.cases = []; db.events = []; db.tags = []; }),
+    deleteAllCases: vi.fn(async () => { db.cases = []; db.events = []; db.tags = []; db.expected = []; }),
   };
 }

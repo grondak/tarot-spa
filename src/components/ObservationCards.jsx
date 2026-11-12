@@ -1,3 +1,4 @@
+import { formatDay } from '../utils/observation/expected';
 import { formatTime, laneColor, safeHref } from '../utils/observation/timeline';
 import { emptyMessage, metaText, relatedReason } from '../utils/observation/view';
 
@@ -110,7 +111,21 @@ function Card({ item, model, view, onDismiss, tagging }) {
   );
 }
 
-export default function ObservationCards({ model, view, search, onDismiss, onOrient, orientBlocked = false, tagging = null }) {
+// An event the user expected for the open case that did not arrive (S5.5): the dog that didn't bark.
+function AbsenceCard({ absence }) {
+  const { event } = absence;
+  return (
+    <article className="rounded-lg border border-dashed border-gray-500 bg-gray-900 px-3 py-2.5" data-testid="absence-card">
+      <div className="text-xs text-gray-400">Expected around {formatDay(absence.expectedMs)}, give or take {event.tolerance} {event.tolerance === 1 ? 'day' : 'days'}</div>
+      <p className="mt-0.5 font-semibold text-white">{event.name}</p>
+      <p className="mt-1 text-sm text-gray-300"><strong>Expected, didn’t happen.</strong> No item with “{event.words}” from any source.</p>
+    </article>
+  );
+}
+
+export default function ObservationCards({
+  model, view, search, onDismiss, onOrient, orientBlocked = false, tagging = null, absences = [],
+}) {
   const shown = view.inWin.slice(0, view.cardCount);
   const rest = view.inWin.slice(view.cardCount);
   return (
@@ -132,8 +147,9 @@ export default function ObservationCards({ model, view, search, onDismiss, onOri
           <p className="text-sm text-gray-400">A Guide is in progress or on screen. Finish or redraw it in Orient first.</p>
         )}
       </div>
-      {view.inWin.length === 0 && <p className="py-6 text-gray-400">{emptyMessage(view, search)}</p>}
+      {view.inWin.length === 0 && absences.length === 0 && <p className="py-6 text-gray-400">{emptyMessage(view, search)}</p>}
       <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
+        {absences.map((absence) => <AbsenceCard key={`${absence.event.id}-${absence.expectedMs}`} absence={absence} />)}
         {shown.map((item) => <Card key={item.id} item={item} model={model} view={view} onDismiss={onDismiss} tagging={tagging} />)}
       </div>
       {rest.length > 0 && (

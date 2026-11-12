@@ -5,7 +5,9 @@ import { fakeCasesApi } from '../utils/observation/fakeCasesApi';
 import { useCases } from '../utils/observation/useCases';
 
 function Harness({ api, evidence }) {
-  return <ObservationCases cases={useCases(api)} evidence={evidence} />;
+  const cases = useCases(api);
+  const expected = { events: cases.expected.filter((e) => e.caseId === cases.activeCase?.id), occ: new Map() };
+  return <ObservationCases cases={cases} evidence={evidence} expected={expected} />;
 }
 
 async function renderCases(api = fakeCasesApi(), evidence = []) {
@@ -203,5 +205,68 @@ describe('rival explanation', () => {
   it('tells the user what is sent', async () => {
     await renderCases(withCase(), evidence);
     expect(screen.getByText(/Sends your case title, hypothesis and up to 12 of those items/)).toBeVisible();
+  });
+});
+
+describe('expected events', () => {
+  const withCase = (expected = []) => fakeCasesApi({
+    cases: [{ id: 'c1', title: 'A', hypothesis: 'h', status: 'OPEN' }],
+    events: [{ caseId: 'c1', kind: 'OPENED', at: '2026-11-01T10:00:00Z' }],
+    expected,
+  });
+  const add = () => screen.getByRole('button', { name: 'Add expected event' });
+  const fill = (name, words, day = '15', tolerance = '3') => {
+    fireEvent.change(screen.getByLabelText('What is it called?'), { target: { value: name } });
+    fireEvent.change(screen.getByLabelText(/Words an item about it would hold/), { target: { value: words } });
+    fireEvent.change(screen.getByLabelText('Day of the month'), { target: { value: day } });
+    fireEvent.change(screen.getByLabelText('Give or take (days)'), { target: { value: tolerance } });
+  };
+
+  it('needs a name, words and a real day before it can be added', async () => {
+    await renderCases(withCase());
+    expect(add()).toBeDisabled();
+    fill('Berry price report', 'berry price report', '15', '3');
+    expect(add()).toBeEnabled();
+    fill('Berry price report', 'berry price report', '32', '3');
+    expect(add()).toBeDisabled();
+    fill('Berry price report', 'berry price report', '15', '9');
+    expect(add()).toBeDisabled();
+    fill('Berry price report', ' , ', '15', '3');
+    expect(add()).toBeDisabled();
+  });
+
+  it('adds an event for the open case with the user\'s own words, and lists it', async () => {
+    const api = await renderCases(withCase());
+    fill('  Berry price report ', ' berry price report ', '15', '3');
+    fireEvent.click(add());
+
+    await waitFor(() => expect(api.createExpectedEvent).toHaveBeenCalledWith({
+      caseId: 'c1', name: 'Berry price report', words: 'berry price report', dayOfMonth: 15, tolerance: 3,
+    }));
+    const list = await screen.findByTestId('expected-list');
+    expect(list).toHaveTextContent('Berry price report');
+    expect(list).toHaveTextContent('“berry price report” · around the 15th, give or take 3 days');
+    expect(list).toHaveTextContent('not enough collected history to check yet');
+    expect(screen.getByLabelText('What is it called?')).toHaveValue('');
+  });
+
+  it('removes an event', async () => {
+    const api = await renderCases(withCase([{ id: 'x1', caseId: 'c1', name: 'Report', words: 'report', dayOfMonth: 1, tolerance: 1 }]));
+    expect(await screen.findByTestId('expected-list')).toHaveTextContent('around the 1st, give or take 1 day');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove “Report”' }));
+    await waitFor(() => expect(screen.queryByTestId('expected-list')).toBeNull());
+    expect(api.deleteExpectedEvent).toHaveBeenCalledWith('x1');
+  });
+
+  it('says it matches on the user\'s words from any source', async () => {
+    await renderCases(withCase());
+    expect(screen.getByText(/Matched on your words alone, from any source/)).toBeInTheDocument();
+  });
+
+  it('deleting the case takes its expected events with it', async () => {
+    const api = await renderCases(withCase([{ id: 'x1', caseId: 'c1', name: 'Report', words: 'report', dayOfMonth: 1, tolerance: 1 }]));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete case' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete this case' }));
+    await waitFor(() => expect(api.db.expected).toEqual([]));
   });
 });

@@ -569,6 +569,67 @@ describe('ObservationWindow volume against normal', () => {
   });
 });
 
+describe('ObservationWindow expected events and absences', () => {
+  const openCase = { id: 'c1', title: 'Steel supply', hypothesis: 'Imports are tight', status: 'OPEN' };
+  const missingEvent = { id: 'x1', caseId: 'c1', name: 'Steel report', words: 'steel report', dayOfMonth: 30, tolerance: 1 };
+  const arrivedEvent = { id: 'x2', caseId: 'c1', name: 'Chip news', words: 'chip supply', dayOfMonth: 30, tolerance: 1 };
+
+  async function withEvents(expected, cases = [openCase]) {
+    const casesApi = fakeCasesApi({
+      cases,
+      events: [{ caseId: 'c1', kind: 'OPENED', at: hoursAgo(48) }],
+      expected,
+    });
+    await renderWindow({
+      casesApi,
+      loadFn: vi.fn().mockResolvedValue({ ...data, runs: longRunRows }),
+    });
+    await screen.findByTestId('tally');
+    return casesApi;
+  }
+
+  it('draws a hollow marker and, at that moment, a card for an event that did not happen', async () => {
+    await withEvents([missingEvent]);
+    expect(screen.getByTestId('absence-row')).toHaveTextContent('Expected, didn’t happen');
+    expect(screen.getAllByTestId('absence-marker')).toHaveLength(1);
+    expect(screen.queryByTestId('absence-card')).toBeNull();
+
+    fireEvent.change(slider(), { target: { value: String(Date.UTC(2026, 9, 30)) } });
+
+    const card = await screen.findByTestId('absence-card');
+    expect(card).toHaveTextContent('Steel report');
+    expect(card).toHaveTextContent('Expected, didn’t happen. No item with “steel report” from any source.');
+    expect(card).toHaveTextContent('Expected around Oct 30, give or take 1 day');
+  });
+
+  it('draws nothing for an event that arrived', async () => {
+    await withEvents([arrivedEvent]);
+    expect(screen.queryByTestId('absence-row')).toBeNull();
+    expect(screen.getByTestId('expected-list')).toHaveTextContent('last: arrived (Oct 30)');
+  });
+
+  it('says the last check in the case list', async () => {
+    await withEvents([missingEvent]);
+    expect(screen.getByTestId('expected-list')).toHaveTextContent('last: didn’t happen (Oct 30) · next around Nov 30');
+  });
+
+  it('shows no absences when no case is open', async () => {
+    await renderWindow({
+      casesApi: fakeCasesApi({ cases: [], expected: [missingEvent] }),
+      loadFn: vi.fn().mockResolvedValue({ ...data, runs: longRunRows }),
+    });
+    expect(screen.queryByTestId('absence-row')).toBeNull();
+  });
+
+  it('shows the events of the case in view, not another case\'s', async () => {
+    const other = { id: 'c2', title: 'Other thing', hypothesis: 'x', status: 'OPEN' };
+    await withEvents([{ ...missingEvent, caseId: 'c2' }], [openCase, other]);
+    expect(screen.queryByTestId('absence-row')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Working on'), { target: { value: 'c2' } });
+    await waitFor(() => expect(screen.getByTestId('absence-row')).toBeInTheDocument());
+  });
+});
+
 describe('ObservationWindow stakes for a case', () => {
   const openCase = { id: 'c1', title: 'Tariffs on steel imports', hypothesis: 'A duty raises costs', status: 'OPEN' };
   const cardFor = (title) => cards().find((card) => within(card).queryByText(title));

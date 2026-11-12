@@ -66,5 +66,13 @@ export const countRows = ['bbc', 'lr'].flatMap((feedId) => Array.from({ length: 
   count: feedId === 'bbc' ? 2 : 1,
 })));
 
-// A collector that has been running since before the counts start, so baselines have history.
-export const longRunRows = [{ startedAt: new Date(Date.UTC(2026, 9, 9, 6)).toISOString(), finishedAt: new Date(Date.UTC(2026, 9, 9, 6, 6)).toISOString() }, ...runRows];
+// A collector that has run every hour since Oct 9, so baselines and expected events have history
+// with no outage in it; the last stretch is the usual runs above, with their gap.
+const firstHour = Date.UTC(2026, 9, 9, 6);
+export const longRunRows = [
+  ...Array.from({ length: Math.floor((NOW - 11 * HOUR - firstHour) / HOUR) }, (_, i) => ({
+    startedAt: new Date(firstHour + i * HOUR).toISOString(),
+    finishedAt: new Date(firstHour + i * HOUR + 6 * 60e3).toISOString(),
+  })),
+  ...runRows,
+];

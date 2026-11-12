@@ -236,6 +236,19 @@ const schema = a.schema({
     })
     .identifier(['caseId', 'itemId'])
     .authorization((allow) => [allow.owner().identityClaim('sub')]),
+  // An event the user expects to recur (S5.4), for one case: what to call it, the words that would
+  // be in it, and when each month it should show up. The user's own words, owner-only, same locked
+  // `owner`. It matches items from any source; whether one is missing is worked out in the browser.
+  ExpectedEvent: a
+    .model({
+      caseId: a.string().required(),
+      name: a.string().required(),
+      words: a.string().required(),
+      dayOfMonth: a.integer().required(),
+      tolerance: a.integer().required(),
+      owner: a.string().authorization((allow) => [allow.owner().identityClaim('sub').to(['read', 'delete'])]),
+    })
+    .authorization((allow) => [allow.owner().identityClaim('sub')]),
   checkInviteKey: a
     .query()
     .arguments({ code: a.string().required() })

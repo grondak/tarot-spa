@@ -70,7 +70,7 @@ describe('Observation Window backend wiring', () => {
 });
 
 describe('Observation Window case models', () => {
-  for (const name of ['Case', 'CycleEvent', 'CaseTag']) {
+  for (const name of ['Case', 'CycleEvent', 'CaseTag', 'ExpectedEvent']) {
     it(`${name} is owner-only, with the owner field read and delete only`, () => {
       const block = modelBlock(name);
 
@@ -97,6 +97,18 @@ describe('Observation Window case tags', () => {
     expect(block).toMatch(/itemAt: a\.datetime\(\)\.required\(\)/);
     expect(block).toMatch(/stance: a\.enum\(\['SUPPORTS', 'CUTS_AGAINST', 'NOT_RELEVANT'\]\)/);
     expect(block).not.toMatch(/title|hypothesis|context|summary|content|note|reason/i);
+  });
+});
+
+describe('expected events', () => {
+  it('ExpectedEvent belongs to a case and holds the user\'s name and words, a day and a tolerance, not a source', () => {
+    const block = modelBlock('ExpectedEvent');
+    expect(block).toMatch(/caseId: a\.string\(\)\.required\(\)/);
+    expect(block).toMatch(/name: a\.string\(\)\.required\(\)/);
+    expect(block).toMatch(/words: a\.string\(\)\.required\(\)/);
+    expect(block).toMatch(/dayOfMonth: a\.integer\(\)\.required\(\)/);
+    expect(block).toMatch(/tolerance: a\.integer\(\)\.required\(\)/);
+    expect(block).not.toMatch(/feed|source|lane/i);
   });
 });
 

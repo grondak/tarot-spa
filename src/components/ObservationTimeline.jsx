@@ -2,6 +2,7 @@ import { memo } from 'react';
 import {
   axisMarks, formatTime, laneColor, percentAlong,
 } from '../utils/observation/timeline';
+import { formatDay } from '../utils/observation/expected';
 import { soloKey } from '../utils/observation/view';
 
 const rowGrid = { gridTemplateColumns: 'var(--ow-label) 1fr' };
@@ -56,7 +57,7 @@ function SoloButton({ keyName, what, on, onToggle }) {
 }
 
 export default function ObservationTimeline({
-  model, view, solo, collapsed, onToggleCollapsed, onToggleSolo, onJump, stakes = null,
+  model, view, solo, collapsed, onToggleCollapsed, onToggleSolo, onJump, stakes = null, absences = [],
 }) {
   const dotsFor = (items) => items.map((item) => (
     <Dot
@@ -141,6 +142,26 @@ export default function ObservationTimeline({
           </div>
         );
       })}
+
+      {/* Events the user expected for the open case that did not happen: hollow markers. */}
+      {absences.length > 0 && (
+        <div data-testid="absence-row" className="grid h-6 items-center border-t border-gray-800" style={rowGrid}>
+          <div className="truncate px-2 text-xs text-gray-300">Expected, didn’t happen</div>
+          <div className="relative h-full">
+            {absences.filter((o) => o.expectedMs >= model.start && o.expectedMs <= model.end).map((o) => (
+              <div
+                key={`${o.event.id}-${o.expectedMs}`}
+                aria-hidden="true"
+                data-testid="absence-marker"
+                title={`Expected, didn’t happen: ${o.event.name}\nAround ${formatDay(o.expectedMs)}`}
+                className="absolute top-[5px] -ml-[6px] size-[13px] cursor-pointer rounded-full border-2 border-white bg-transparent"
+                style={{ left: `${percentAlong(model, o.expectedMs)}%` }}
+                onClick={() => onJump(o.expectedMs)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Over the dot area: five-day ticks, collector gaps, the window band and the needle. */}
       <div className="pointer-events-none absolute bottom-[18px] right-0 top-0" style={{ left: 'var(--ow-label)' }}>

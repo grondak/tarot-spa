@@ -24,6 +24,7 @@ async function listAll(model, options = {}) {
 
 const pick = ({ id, title, hypothesis, rivalHypothesis, status }) => ({ id, title, hypothesis: hypothesis ?? '', rivalHypothesis: rivalHypothesis ?? '', status });
 const pickEvent = ({ id, caseId, kind, at }) => ({ id, caseId, kind, at });
+const pickExpected = ({ id, caseId, name, words, dayOfMonth, tolerance }) => ({ id, caseId, name, words, dayOfMonth, tolerance });
 const pickTag = ({ caseId, itemId, itemAt, stance, stakes }) => ({
   caseId, itemId, itemAt, stance: stance ?? undefined, stakes: Number.isInteger(stakes) ? stakes : undefined,
 });
@@ -34,10 +35,13 @@ async function recordEvent(client, caseId, kind) {
 
 export async function loadCases() {
   const client = generateClient();
-  const [cases, events, tags] = await Promise.all([
+  const [cases, events, tags, expected] = await Promise.all([
     listAll(client.models.Case), listAll(client.models.CycleEvent), listAll(client.models.CaseTag),
+    listAll(client.models.ExpectedEvent),
   ]);
-  return { cases: cases.map(pick), events: events.map(pickEvent), tags: tags.map(pickTag) };
+  return {
+    cases: cases.map(pick), events: events.map(pickEvent), tags: tags.map(pickTag), expected: expected.map(pickExpected),
+  };
 }
 
 export async function openCase({ title, hypothesis }) {
@@ -77,10 +81,12 @@ export async function recordHandoff(caseId) {
 // A deleted case takes its timestamps and tags with it (default pending the S4.8 / S8.4 open question).
 export async function deleteCase(id) {
   const client = generateClient();
-  const [events, tags] = await Promise.all([
+  const [events, tags, expected] = await Promise.all([
     listAll(client.models.CycleEvent, { filter: { caseId: { eq: id } } }),
     listAll(client.models.CaseTag, { filter: { caseId: { eq: id } } }),
+    listAll(client.models.ExpectedEvent, { filter: { caseId: { eq: id } } }),
   ]);
+  await Promise.all(expected.map((one) => client.models.ExpectedEvent.delete({ id: one.id }).then(check)));
   await Promise.all(events.map((event) => client.models.CycleEvent.delete({ id: event.id }).then(check)));
   await Promise.all(tags.map((tag) => client.models.CaseTag.delete({ caseId: tag.caseId, itemId: tag.itemId }).then(check)));
   check(await client.models.Case.delete({ id }));
@@ -88,9 +94,11 @@ export async function deleteCase(id) {
 
 export async function deleteAllCases() {
   const client = generateClient();
-  const [cases, events, tags] = await Promise.all([
+  const [cases, events, tags, expected] = await Promise.all([
     listAll(client.models.Case), listAll(client.models.CycleEvent), listAll(client.models.CaseTag),
+    listAll(client.models.ExpectedEvent),
   ]);
+  await Promise.all(expected.map((one) => client.models.ExpectedEvent.delete({ id: one.id }).then(check)));
   await Promise.all(events.map((event) => client.models.CycleEvent.delete({ id: event.id }).then(check)));
   await Promise.all(tags.map((tag) => client.models.CaseTag.delete({ caseId: tag.caseId, itemId: tag.itemId }).then(check)));
   await Promise.all(cases.map((one) => client.models.Case.delete({ id: one.id }).then(check)));
@@ -133,4 +141,15 @@ export async function suggestRival({ title, hypothesis, items }) {
   const result = typeof data === 'string' ? JSON.parse(data) : data;
   if (typeof result?.rival !== 'string' || !Array.isArray(result?.fits)) throw new Error('RIVAL_UNAVAILABLE');
   return { rival: result.rival, fits: result.fits };
+}
+
+// An event the user expects to recur for a case (S5.4): their own name and words, and the day of the
+// month it should arrive, give or take `tolerance` days.
+export async function createExpectedEvent({ caseId, name, words, dayOfMonth, tolerance }) {
+  const client = generateClient();
+  return pickExpected(check(await client.models.ExpectedEvent.create({ caseId, name, words, dayOfMonth, tolerance })));
+}
+
+export async function deleteExpectedEvent(id) {
+  check(await generateClient().models.ExpectedEvent.delete({ id }));
 }

@@ -5,7 +5,7 @@ export const defaultCasesApi = realApi;
 
 // The user's cases and cycle timestamps. A failed action leaves the list as it was and says so.
 export function useCases(api = defaultCasesApi) {
-  const [state, setState] = useState({ status: 'loading', cases: [], events: [], tags: [] });
+  const [state, setState] = useState({ status: 'loading', cases: [], events: [], tags: [], expected: [] });
   const [activeId, setActiveId] = useState(null);
   const [failed, setFailed] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -17,16 +17,18 @@ export function useCases(api = defaultCasesApi) {
     let active = true;
     api.loadCases()
       .then((data) => {
-        if (active) setState({ status: 'ready', cases: data.cases, events: data.events, tags: data.tags ?? [] });
+        if (active) setState({
+          status: 'ready', cases: data.cases, events: data.events, tags: data.tags ?? [], expected: data.expected ?? [],
+        });
       })
       .catch(() => {
-        if (active) setState({ status: 'error', cases: [], events: [], tags: [] });
+        if (active) setState({ status: 'error', cases: [], events: [], tags: [], expected: [] });
       });
     return () => { active = false; };
   }, [api, revision]);
 
   const reload = () => {
-    setState({ status: 'loading', cases: [], events: [], tags: [] });
+    setState({ status: 'loading', cases: [], events: [], tags: [], expected: [] });
     setRevision((n) => n + 1);
   };
 
@@ -89,6 +91,7 @@ export function useCases(api = defaultCasesApi) {
     activeCase,
     events: state.events,
     tags: state.tags,
+    expected: state.expected,
     reload,
     suggestRival: (input) => api.suggestRival(input),
     select: setActiveId,
@@ -119,16 +122,26 @@ export function useCases(api = defaultCasesApi) {
         cases: s.cases.filter((c) => c.id !== id),
         events: s.events.filter((e) => e.caseId !== id),
         tags: s.tags.filter((t) => t.caseId !== id),
+        expected: s.expected.filter((e) => e.caseId !== id),
       }));
     }),
     removeAll: () => attempt(async () => {
       await api.deleteAllCases();
-      setState((s) => ({ ...s, cases: [], events: [], tags: [] }));
+      setState((s) => ({ ...s, cases: [], events: [], tags: [], expected: [] }));
     }),
     tagItem: (caseId, item, stance) => saveTag(caseId, item, { stance }),
     // Stakes 0 to 3 the user set by hand; null goes back to what the rules say.
     rateItem: (caseId, item, stakes) => saveTag(caseId, item, { stakes }),
     untagItem: (caseId, item) => saveTag(caseId, item, { stance: null }),
+    addExpected: (input) => attempt(async () => {
+      const made = await api.createExpectedEvent(input);
+      setState((s) => ({ ...s, expected: [...s.expected, made] }));
+      return true;
+    }),
+    removeExpected: (id) => attempt(async () => {
+      await api.deleteExpectedEvent(id);
+      setState((s) => ({ ...s, expected: s.expected.filter((e) => e.id !== id) }));
+    }),
     // Best effort: measuring the cycle never stands in the way of the handoff itself.
     handedOff: (id) => {
       api.recordHandoff(id).then(() => {

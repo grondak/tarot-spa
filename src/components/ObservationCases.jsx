@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { cycleSummary, formatSpan } from '../utils/observation/cases';
+import { MAX_TOLERANCE, expectedWords, formatDay } from '../utils/observation/expected';
 import { RIVAL_MIN_EVIDENCE } from '../utils/observation/relevance';
 import { formatTime } from '../utils/observation/timeline';
 
@@ -155,7 +156,102 @@ function RivalSection({ cases, item, evidence }) {
   );
 }
 
-function ActiveCase({ cases, item, tally, tallyAt, evidence }) {
+const ordinal = (n) => {
+  const rest = n % 100;
+  if (rest >= 11 && rest <= 13) return `${n}th`;
+  return `${n}${{ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] ?? 'th'}`;
+};
+
+function expectedLine(occurrences = []) {
+  const decided = occurrences.filter((o) => o.status !== 'pending');
+  const last = decided.at(-1);
+  const next = occurrences.find((o) => o.status === 'pending');
+  const parts = [];
+  if (last) parts.push(last.status === 'arrived' ? `last: arrived (${formatDay(last.expectedMs)})` : `last: didn’t happen (${formatDay(last.expectedMs)})`);
+  else parts.push('not enough collected history to check yet');
+  if (next) parts.push(`next around ${formatDay(next.expectedMs)}`);
+  return parts.join(' · ');
+}
+
+// Events the user expects to recur for this case, such as a monthly report. Their absence is
+// shown on the timeline and as a card. Matching is on the user's words, from any source.
+function ExpectedSection({ cases, item, expected }) {
+  const mine = expected.events;
+  const [name, setName] = useState('');
+  const [words, setWords] = useState('');
+  const [day, setDay] = useState('15');
+  const [tolerance, setTolerance] = useState('3');
+  const [busy, setBusy] = useState(false);
+  const dayNumber = Number(day);
+  const toleranceNumber = Number(tolerance);
+  const valid = name.trim() && expectedWords(words).length > 0
+    && Number.isInteger(dayNumber) && dayNumber >= 1 && dayNumber <= 31
+    && Number.isInteger(toleranceNumber) && toleranceNumber >= 0 && toleranceNumber <= MAX_TOLERANCE;
+  const add = async (e) => {
+    e.preventDefault();
+    if (!valid || busy) return;
+    setBusy(true);
+    const made = await cases.addExpected({
+      caseId: item.id, name: name.trim(), words: words.trim(), dayOfMonth: dayNumber, tolerance: toleranceNumber,
+    });
+    setBusy(false);
+    if (made) {
+      setName('');
+      setWords('');
+    }
+  };
+  return (
+    <div className="space-y-2 border-t border-gray-800 pt-2">
+      <p className="text-sm text-gray-300">Events I expect each month</p>
+      {mine.length > 0 && (
+        <ul className="space-y-1.5" data-testid="expected-list">
+          {mine.map((event) => (
+            <li key={event.id} className="flex flex-wrap items-start justify-between gap-2 text-sm">
+              <span>
+                <span className="block text-gray-100">{event.name}</span>
+                <span className="block text-xs text-gray-400">
+                  “{event.words}” · around the {ordinal(event.dayOfMonth)}, give or take {event.tolerance} {event.tolerance === 1 ? 'day' : 'days'}
+                  {' · '}{expectedLine(expected.occ.get(event.id))}
+                </span>
+              </span>
+              <button type="button" className={buttonClass} aria-label={`Remove “${event.name}”`} onClick={() => cases.removeExpected(event.id)}>Remove</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <details className="text-sm text-gray-300">
+        <summary className="cursor-pointer">Add an expected event</summary>
+        <form onSubmit={add} className="mt-2 space-y-2">
+          <label className="block">
+            What is it called?
+            <input className={`mt-1 ${fieldClass}`} value={name} maxLength={100} onChange={(e) => setName(e.target.value)} placeholder="e.g. Berry price report" />
+          </label>
+          <label className="block">
+            Words an item about it would hold (all of them)
+            <input className={`mt-1 ${fieldClass}`} value={words} maxLength={100} onChange={(e) => setWords(e.target.value)} placeholder="e.g. berry price report" />
+          </label>
+          <div className="flex flex-wrap gap-3">
+            <label>
+              Day of the month
+              <input type="number" min="1" max="31" className={`mt-1 w-20 ${fieldClass}`} value={day} onChange={(e) => setDay(e.target.value)} />
+            </label>
+            <label>
+              Give or take (days)
+              <input type="number" min="0" max={MAX_TOLERANCE} className={`mt-1 w-20 ${fieldClass}`} value={tolerance} onChange={(e) => setTolerance(e.target.value)} />
+            </label>
+          </div>
+          <button type="submit" className={buttonClass} disabled={!valid || busy}>Add expected event</button>
+          <p className="text-xs text-gray-400">
+            Matched on your words alone, from any source. An event is called missing only after its last day has passed
+            and the collector was running the whole time.
+          </p>
+        </form>
+      </details>
+    </div>
+  );
+}
+
+function ActiveCase({ cases, item, tally, tallyAt, evidence, expected }) {
   const [hypothesis, setHypothesis] = useState(item.hypothesis);
   const [confirming, setConfirming] = useState(false);
   const dirty = hypothesis !== item.hypothesis;
@@ -182,6 +278,7 @@ function ActiveCase({ cases, item, tally, tallyAt, evidence }) {
         </p>
       )}
       <RivalSection cases={cases} item={item} evidence={evidence} />
+      <ExpectedSection cases={cases} item={item} expected={expected} />
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -207,7 +304,11 @@ function ActiveCase({ cases, item, tally, tallyAt, evidence }) {
   );
 }
 
-export default function ObservationCases({ cases, tally = null, tallyAt = 'now', evidence = [] }) {
+const NO_EXPECTED = { events: [], occ: new Map() };
+
+export default function ObservationCases({
+  cases, tally = null, tallyAt = 'now', evidence = [], expected = NO_EXPECTED,
+}) {
   const [confirmAll, setConfirmAll] = useState(false);
   const { status, openCases, closedCases, activeCase } = cases;
   const total = openCases.length + closedCases.length;
@@ -232,7 +333,7 @@ export default function ObservationCases({ cases, tally = null, tallyAt = 'now',
               </select>
             </label>
           )}
-          {activeCase && <ActiveCase key={activeCase.id} cases={cases} item={activeCase} tally={tally} tallyAt={tallyAt} evidence={evidence} />}
+          {activeCase && <ActiveCase key={activeCase.id} cases={cases} item={activeCase} tally={tally} tallyAt={tallyAt} evidence={evidence} expected={expected} />}
           <OpenForm cases={cases} hasOpen={Boolean(activeCase)} />
           {closedCases.length > 0 && (
             <details className="text-sm text-gray-300">

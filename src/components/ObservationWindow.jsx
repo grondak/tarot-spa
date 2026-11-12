@@ -7,6 +7,7 @@ import ObservationSources from './ObservationSources';
 import ObservationTimeline from './ObservationTimeline';
 import { defaultCasesApi, useCases } from '../utils/observation/useCases';
 import { observedEvents } from '../utils/observation/handoff';
+import { absences as missingEvents, occurrencesByEvent } from '../utils/observation/expected';
 import { caseKeywords, caseTitleWords, relevantItems, rivalEvidence, stakesFor, stakesMap, tallyUpTo } from '../utils/observation/relevance';
 import { loadObservationData, widenSearchTerm } from '../utils/observation/data';
 import {
@@ -133,6 +134,16 @@ export default function ObservationWindow({
     () => (model && activeCase ? tallyUpTo(t, { tags: caseTagMap, matches: caseMatches, items: model.items }) : null),
     [model, activeCase, t, caseTagMap, caseMatches],
   );
+  // Events the user expects for the open case, and the ones that did not happen.
+  const expectedEvents = useMemo(
+    () => cases.expected.filter((e) => e.caseId === activeCase?.id),
+    [cases.expected, activeCase?.id],
+  );
+  const expectedOcc = useMemo(
+    () => (model ? occurrencesByEvent(expectedEvents, model, stemmer) : new Map()),
+    [model, expectedEvents],
+  );
+  const missing = useMemo(() => missingEvents(expectedOcc), [expectedOcc]);
   const evidence = useMemo(
     () => (model && activeCase ? rivalEvidence(model.items, { tags: caseTagMap, matches: caseMatches }) : []),
     [model, activeCase, caseTagMap, caseMatches],
@@ -291,7 +302,7 @@ export default function ObservationWindow({
           {' '}Last collected {lastRun ? formatTime(lastRun) : 'never'}. Ranking is source order.
         </p>
 
-        <ObservationCases cases={cases} tally={tally} evidence={evidence} tallyAt={view.live ? 'now' : formatTime(t)} />
+        <ObservationCases cases={cases} tally={tally} evidence={evidence} expected={{ events: expectedEvents, occ: expectedOcc }} tallyAt={view.live ? 'now' : formatTime(t)} />
 
         <input
           type="range"
@@ -362,6 +373,7 @@ export default function ObservationWindow({
           onToggleSolo={toggleSolo}
           onJump={scrubTo}
           stakes={stakes}
+          absences={missing}
         />
 
         <ObservationBaseline model={model} view={view} />
@@ -400,6 +412,7 @@ export default function ObservationWindow({
           onDismiss={dismissSource}
           orientBlocked={orientBlocked}
           tagging={tagging}
+          absences={missing.filter((o) => o.expectedMs >= view.lo && o.expectedMs <= view.hi)}
           onOrient={onOrient && ((items) => {
             if (activeCase) cases.handedOff(activeCase.id);
             onOrient(observedEvents(model, items), activeCase);
@@ -410,7 +423,7 @@ export default function ObservationWindow({
           <p>
             The news here is shared by everyone and kept 30 days. Your cases, with the hypotheses you
             wrote, are stored on our servers, visible only to you, until you delete them, along with the
-            times you opened, handed off and closed them which items you tagged and any stakes you set. A rival explanation sends your case words and a few items to an AI model once, and is kept only if you keep it. Nothing else about what you look at is stored
+            times you opened, handed off and closed them which items you tagged, any stakes you set and the events you expect. A rival explanation sends your case words and a few items to an AI model once, and is kept only if you keep it. Nothing else about what you look at is stored
             on our servers. The only other things remembered are your open and closed groups, the sources
             you switched off and the ones you dismissed, and only in this browser.
           </p>
