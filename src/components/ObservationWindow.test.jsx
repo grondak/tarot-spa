@@ -333,7 +333,7 @@ describe('ObservationWindow cards', () => {
   it('truncates a long summary and shows text as text, not markup', async () => {
     const items = [itemRow({ title: '<b>bold</b>', summary: `<i>x</i>${'y'.repeat(400)}`, publishedAt: hoursAgo(1) })];
     await renderWindow({ loadFn: vi.fn().mockResolvedValue({ ...data, items }) });
-    expect(screen.getByText('<b>bold</b>')).toBeVisible();
+    expect(within(screen.getByRole('article')).getByText('<b>bold</b>')).toBeVisible();
     expect(document.querySelector('article b, article i')).toBeNull();
     expect(screen.getByText(/^<i>x<\/i>y+$/).textContent).toHaveLength(220);
   });
@@ -824,5 +824,16 @@ describe('ObservationWindow tagging evidence for a case', () => {
     fireEvent.click(within(cardFor('Tariffs rise on steel')).getByRole('button', { name: 'Supports' }));
     expect(await screen.findByText(/That didn’t save/)).toBeVisible();
     expect(cardFor('Tariffs rise on steel')).not.toHaveTextContent('Set by you');
+  });
+});
+
+describe('ObservationWindow dense lanes', () => {
+  it('titles a few items on the timeline and leaves a crowded lane mostly as markers', async () => {
+    const crowded = Array.from({ length: 12 }, (_, i) => itemRow({ title: `Crowded story ${i}`, publishedAt: hoursAgo(1 + i * 0.5), sources: ['bbc'] }));
+    await renderWindow({ loadFn: vi.fn().mockResolvedValue({ ...data, items: crowded }) });
+    const titled = screen.getAllByTestId('lane-title');
+    expect(titled.length).toBeGreaterThanOrEqual(1);
+    expect(titled.length).toBeLessThanOrEqual(5);
+    expect(within(screen.getByTestId('lane-bbc')).getAllByTestId('lane-title')).toHaveLength(titled.length);
   });
 });

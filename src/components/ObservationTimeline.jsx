@@ -4,6 +4,7 @@ import {
 } from '../utils/observation/timeline';
 import { formatDay } from '../utils/observation/expected';
 import { soloKey } from '../utils/observation/view';
+import { laneTitles } from '../utils/observation/labels';
 
 const rowGrid = { gridTemplateColumns: 'var(--ow-label) 1fr' };
 
@@ -135,7 +136,20 @@ export default function ObservationTimeline({
                     </span>
                     <SoloButton keyName={soloKey.feed(feed.id)} what={feed.name} on={feedSolo(lane)} onToggle={onToggleSolo} />
                   </div>
-                  <div className="relative h-full">{dotsFor(model.items.filter((i) => i.lane === lane))}</div>
+                  <div className="relative h-full">
+                    {dotsFor(model.items.filter((i) => i.lane === lane))}
+                    {/* Only the lane's top few items in the window carry a title; the rest are markers. */}
+                    {laneTitles(model, view, lane).map(({ item, left, width }) => (
+                      <span
+                        key={item.id}
+                        data-testid="lane-title"
+                        className="pointer-events-none absolute top-1 z-[1] truncate text-[10px] leading-4 text-gray-300"
+                        style={{ left: `calc(${left}% + 10px)`, width: `calc(${width}% - 10px)` }}
+                      >
+                        {item.title}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               );
             })}
