@@ -436,16 +436,16 @@ apiKeyAlertLambda.addToRolePolicy(new PolicyStatement({
     dataStack.formatArn({ service: 'ses', resource: 'identity', resourceName: '*' }),
   ],
 }));
-// ListApiKeys is scoped to the GraphQL API resource itself (apis/{apiId}) per AWS's IAM
-// resource-type reference for appsync actions — individual API keys are not separately
-// IAM-addressable, so a sub-resource ARN here would never match and would AccessDeny.
+// AppSync authorizes ListApiKeys against /v1/apis/{apiId}/apikeys, not the bare apis/{apiId}
+// ARN from the IAM reference. The bare ARN never matched and the Lambda hit AccessDenied on
+// every run (seen in the staging logs 2026-11-24).
 apiKeyAlertLambda.addToRolePolicy(new PolicyStatement({
   actions: ['appsync:ListApiKeys'],
   resources: [
     dataStack.formatArn({
       service: 'appsync',
-      resource: 'apis',
-      resourceName: backend.data.resources.graphqlApi.apiId,
+      resource: '/v1/apis',
+      resourceName: `${backend.data.resources.graphqlApi.apiId}/apikeys`,
     }),
   ],
 }));
